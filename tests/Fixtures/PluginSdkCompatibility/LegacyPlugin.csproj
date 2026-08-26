@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <RootNamespace>LegacyPlugin</RootNamespace>
+    <AssemblyName>LegacyPlugin</AssemblyName>
+    <GenerateDependencyFile>true</GenerateDependencyFile>
+    <Version>0.1.0</Version>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Remove="LegacyPluginSdk\**\*.cs" />
+    <None Remove="LegacyPluginSdk\**\*.cs" />
+    <ProjectReference Include="LegacyPluginSdk\LegacyPluginSdk.csproj">
+      <Private>false</Private>
+    </ProjectReference>
+    <None Include="manifest.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+</Project>

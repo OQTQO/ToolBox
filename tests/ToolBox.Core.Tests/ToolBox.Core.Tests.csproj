@@ -1,0 +1,123 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+    <AssemblyName>ToolBox.Core.Tests</AssemblyName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.12.0" />
+    <PackageReference Include="xunit" Version="2.9.2" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\ToolBox.Core\ToolBox.Core.csproj" />
+    <ProjectReference Include="..\..\src\ToolBox.PluginSdk\ToolBox.PluginSdk.csproj" />
+    <ProjectReference Include="..\Fixtures\HappyPathPlugin\HappyPathPlugin.csproj" />
+    <ProjectReference Include="..\Fixtures\PluginSdkCompatibility\LegacyPlugin.csproj"
+                      ReferenceOutputAssembly="false"
+                      AdditionalProperties="Configuration=$(Configuration)" />
+    <ProjectReference Include="..\Fixtures\CrashPlugin\CrashPlugin.csproj" />
+    <ProjectReference Include="..\Fixtures\HangPlugin\HangPlugin.csproj" />
+    <ProjectReference Include="..\Fixtures\UnloadLeakPlugin\UnloadLeakPlugin.csproj" />
+    <ProjectReference Include="..\Fixtures\WorkerChildProcessPlugin\WorkerChildProcessPlugin.csproj" />
+    <ProjectReference Include="..\Fixtures\ProtocolMismatchWorker\ProtocolMismatchWorker.csproj"
+                      ReferenceOutputAssembly="false" />
+    <ProjectReference Include="..\..\src\ToolBox.PluginWorker\ToolBox.PluginWorker.csproj"
+                      ReferenceOutputAssembly="false" />
+    <ProjectReference Include="..\..\spikes\KeyboardTest\KeyboardTest.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="..\Fixtures\HappyPathPlugin\manifest.json"
+          Link="HappyPathPlugin.manifest.json"
+          CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\..\spikes\KeyboardTest\manifest.json"
+          Link="KeyboardTest.manifest.json"
+          CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\Fixtures\WorkerChildProcessPlugin\manifest.json"
+          Link="WorkerChildProcessPlugin.manifest.json"
+          CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\Fixtures\CrashPlugin\manifest.json"
+          Link="CrashPlugin.manifest.json"
+          CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\Fixtures\HangPlugin\manifest.json"
+          Link="HangPlugin.manifest.json"
+          CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\Fixtures\UnloadLeakPlugin\manifest.json"
+          Link="UnloadLeakPlugin.manifest.json"
+          CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <Target Name="CopyPluginWorkerRuntime" AfterTargets="Build">
+    <PropertyGroup>
+      <PluginWorkerBuildDirectory>$(MSBuildProjectDirectory)\..\..\src\ToolBox.PluginWorker\bin\$(Configuration)\net8.0</PluginWorkerBuildDirectory>
+    </PropertyGroup>
+
+    <ItemGroup>
+      <PluginWorkerRuntimeFiles Include="$(PluginWorkerBuildDirectory)\ToolBox.PluginWorker.*" />
+    </ItemGroup>
+
+    <Copy SourceFiles="@(PluginWorkerRuntimeFiles)"
+          DestinationFolder="$(OutDir)"
+          SkipUnchangedFiles="true" />
+  </Target>
+
+  <Target Name="CopyPhase5Fixtures" AfterTargets="Build">
+    <PropertyGroup>
+      <WorkerChildFixtureBuildDirectory>$(MSBuildProjectDirectory)\..\Fixtures\WorkerChildProcessPlugin\bin\$(Configuration)\net8.0</WorkerChildFixtureBuildDirectory>
+      <ProtocolMismatchWorkerBuildDirectory>$(MSBuildProjectDirectory)\..\Fixtures\ProtocolMismatchWorker\bin\$(Configuration)\net8.0</ProtocolMismatchWorkerBuildDirectory>
+      <CrashFixtureBuildDirectory>$(MSBuildProjectDirectory)\..\Fixtures\CrashPlugin\bin\$(Configuration)\net8.0</CrashFixtureBuildDirectory>
+      <HangFixtureBuildDirectory>$(MSBuildProjectDirectory)\..\Fixtures\HangPlugin\bin\$(Configuration)\net8.0</HangFixtureBuildDirectory>
+      <UnloadLeakFixtureBuildDirectory>$(MSBuildProjectDirectory)\..\Fixtures\UnloadLeakPlugin\bin\$(Configuration)\net8.0</UnloadLeakFixtureBuildDirectory>
+    </PropertyGroup>
+
+    <ItemGroup>
+      <WorkerChildFixtureRuntimeFiles Include="$(WorkerChildFixtureBuildDirectory)\WorkerChildProcessPlugin.*" />
+      <ProtocolMismatchWorkerRuntimeFiles Include="$(ProtocolMismatchWorkerBuildDirectory)\ProtocolMismatchWorker.*" />
+      <CrashFixtureRuntimeFiles Include="$(CrashFixtureBuildDirectory)\CrashPlugin.*" />
+      <HangFixtureRuntimeFiles Include="$(HangFixtureBuildDirectory)\HangPlugin.*" />
+      <UnloadLeakFixtureRuntimeFiles Include="$(UnloadLeakFixtureBuildDirectory)\UnloadLeakPlugin.*" />
+    </ItemGroup>
+
+    <Copy SourceFiles="@(WorkerChildFixtureRuntimeFiles)"
+          DestinationFolder="$(OutDir)"
+          SkipUnchangedFiles="true" />
+    <Copy SourceFiles="@(ProtocolMismatchWorkerRuntimeFiles)"
+          DestinationFolder="$(OutDir)"
+          SkipUnchangedFiles="true" />
+    <Copy SourceFiles="@(CrashFixtureRuntimeFiles)"
+          DestinationFolder="$(OutDir)"
+          SkipUnchangedFiles="true" />
+    <Copy SourceFiles="@(HangFixtureRuntimeFiles)"
+          DestinationFolder="$(OutDir)"
+          SkipUnchangedFiles="true" />
+    <Copy SourceFiles="@(UnloadLeakFixtureRuntimeFiles)"
+          DestinationFolder="$(OutDir)"
+          SkipUnchangedFiles="true" />
+  </Target>
+
+  <Target Name="CopyPluginSdkCompatibilityFixture" AfterTargets="Build">
+    <PropertyGroup>
+      <LegacyPluginBuildDirectory>$(MSBuildProjectDirectory)\..\Fixtures\PluginSdkCompatibility\bin\$(Configuration)\net8.0</LegacyPluginBuildDirectory>
+      <PluginSdkCompatibilityOutputDirectory>$(OutDir)PluginSdkCompatibility</PluginSdkCompatibilityOutputDirectory>
+    </PropertyGroup>
+
+    <ItemGroup>
+      <LegacyPluginRuntimeFiles Include="$(LegacyPluginBuildDirectory)\LegacyPlugin.*" />
+    </ItemGroup>
+
+    <MakeDir Directories="$(PluginSdkCompatibilityOutputDirectory)" />
+    <Copy SourceFiles="@(LegacyPluginRuntimeFiles)"
+          DestinationFolder="$(PluginSdkCompatibilityOutputDirectory)"
+          SkipUnchangedFiles="true" />
+    <Copy SourceFiles="$(MSBuildProjectDirectory)\..\Fixtures\PluginSdkCompatibility\manifest.json"
+          DestinationFolder="$(PluginSdkCompatibilityOutputDirectory)"
+          SkipUnchangedFiles="true" />
+  </Target>
+</Project>

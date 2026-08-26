@@ -1,0 +1,18 @@
+{
+  "formatVersion": 1,
+  "id": "com.toolbox.plugin-sdk-compatibility",
+  "name": "PluginSdk Compatibility Fixture",
+  "version": "0.0.1",
+  "pluginApiMajor": 1,
+  "publisher": "toolbox.tests",
+  "platform": {
+    "os": "windows",
+    "arch": "x64"
+  },
+  "runtime": {
+    "supportedModes": ["inProcess"],
+    "preferredMode": "inProcess",
+    "background": false
+  },
+  "entryPoint": "LegacyPlugin.LegacyPlugin, LegacyPlugin"
+}

@@ -1,0 +1,18 @@
+{
+  "formatVersion": 1,
+  "id": "com.toolbox.happy-path",
+  "name": "Happy Path Plugin",
+  "version": "0.1.0",
+  "pluginApiMajor": 1,
+  "publisher": "toolbox.tests",
+  "platform": {
+    "os": "windows",
+    "arch": "x64"
+  },
+  "runtime": {
+    "supportedModes": ["inProcess"],
+    "preferredMode": "inProcess",
+    "background": false
+  },
+  "entryPoint": "HappyPathPlugin.HappyPathPlugin, HappyPathPlugin"
+}

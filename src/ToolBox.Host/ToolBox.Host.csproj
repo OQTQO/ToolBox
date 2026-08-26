@@ -1,0 +1,33 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+    <UseWPF>true</UseWPF>
+    <RootNamespace>ToolBox.Host</RootNamespace>
+    <AssemblyName>ToolBox.Host</AssemblyName>
+    <Version>0.1.0</Version>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\ToolBox.Core\ToolBox.Core.csproj" />
+    <ProjectReference Include="..\ToolBox.PluginSdk\ToolBox.PluginSdk.csproj" />
+    <ProjectReference Include="..\ToolBox.PluginWorker\ToolBox.PluginWorker.csproj"
+                      ReferenceOutputAssembly="false" />
+  </ItemGroup>
+
+  <Target Name="CopyPluginWorkerRuntime" AfterTargets="Build">
+    <PropertyGroup>
+      <PluginWorkerBuildDirectory>$(MSBuildProjectDirectory)\..\ToolBox.PluginWorker\bin\$(Configuration)\net8.0</PluginWorkerBuildDirectory>
+    </PropertyGroup>
+
+    <ItemGroup>
+      <PluginWorkerRuntimeFiles Include="$(PluginWorkerBuildDirectory)\ToolBox.PluginWorker.*" />
+    </ItemGroup>
+
+    <Copy SourceFiles="@(PluginWorkerRuntimeFiles)"
+          DestinationFolder="$(OutDir)"
+          SkipUnchangedFiles="true" />
+  </Target>
+
+</Project>

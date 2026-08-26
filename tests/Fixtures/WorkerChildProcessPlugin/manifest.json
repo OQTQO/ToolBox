@@ -1,0 +1,18 @@
+{
+  "formatVersion": 1,
+  "id": "com.toolbox.worker-child-process",
+  "name": "Worker Child Process Plugin",
+  "version": "0.1.0",
+  "pluginApiMajor": 1,
+  "publisher": "toolbox.tests",
+  "platform": {
+    "os": "windows",
+    "arch": "x64"
+  },
+  "runtime": {
+    "supportedModes": ["outOfProcess"],
+    "preferredMode": "outOfProcess",
+    "background": false
+  },
+  "entryPoint": "WorkerChildProcessPlugin.WorkerChildProcessPlugin, WorkerChildProcessPlugin"
+}

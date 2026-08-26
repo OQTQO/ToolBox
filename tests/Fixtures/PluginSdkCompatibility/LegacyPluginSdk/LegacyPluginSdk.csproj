@@ -1,0 +1,10 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <RootNamespace>ToolBox.PluginSdk</RootNamespace>
+    <AssemblyName>ToolBox.PluginSdk</AssemblyName>
+    <Version>0.0.1</Version>
+    <AssemblyVersion>0.0.1.0</AssemblyVersion>
+    <FileVersion>0.0.1.0</FileVersion>
+  </PropertyGroup>
+</Project>

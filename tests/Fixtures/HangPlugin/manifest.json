@@ -1,0 +1,18 @@
+{
+  "formatVersion": 1,
+  "id": "com.toolbox.hang",
+  "name": "Hang Plugin",
+  "version": "0.1.0",
+  "pluginApiMajor": 1,
+  "publisher": "toolbox.tests",
+  "platform": {
+    "os": "windows",
+    "arch": "x64"
+  },
+  "runtime": {
+    "supportedModes": ["inProcess", "outOfProcess"],
+    "preferredMode": "inProcess",
+    "background": false
+  },
+  "entryPoint": "HangPlugin.HangPlugin, HangPlugin"
+}

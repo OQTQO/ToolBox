@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <RootNamespace>ToolBox.Core</RootNamespace>
+    <AssemblyName>ToolBox.Core</AssemblyName>
+    <Version>0.1.0</Version>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\ToolBox.PluginSdk\ToolBox.PluginSdk.csproj" />
+  </ItemGroup>
+</Project>

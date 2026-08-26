@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <RootNamespace>HappyPathPlugin</RootNamespace>
+    <AssemblyName>HappyPathPlugin</AssemblyName>
+    <GenerateDependencyFile>true</GenerateDependencyFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\src\ToolBox.PluginSdk\ToolBox.PluginSdk.csproj" />
+    <None Update="manifest.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+</Project>

@@ -1,0 +1,23 @@
+# Visual Studio / Rider
+.vs/
+.idea/
+.agents/
+*.user
+*.suo
+
+# .NET build output
+[Bb]in/
+[Oo]bj/
+TestResults/
+artifacts/
+
+# Local ToolBox runtime data
+logs/
+cache/
+Plugins/
+
+# OS/editor files
+Thumbs.db
+Desktop.ini
+*.tmp
+*.bak
