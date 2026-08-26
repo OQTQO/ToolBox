@@ -1,3 +1,5 @@
+using System.Reflection.Metadata;
+using System.Reflection.PortableExecutable;
 using ToolBox.Core.Plugins;
 using ToolBox.PluginSdk;
 using Xunit;
@@ -21,11 +23,19 @@ public sealed class PluginSdkCompatibilityTests
             File.Exists(Path.Combine(sourceDirectory, "ToolBox.PluginSdk.dll")),
             "The compatibility fixture must resolve the current shared SDK instead of shipping a private SDK copy.");
 
-        var dependencyMetadata = await File.ReadAllTextAsync(legacyDepsPath);
-        Assert.Contains(
-            "\"ToolBox.PluginSdk\": \"0.0.1\"",
-            dependencyMetadata,
-            StringComparison.Ordinal);
+        await using (var legacyAssembly = File.OpenRead(legacyAssemblyPath))
+        using (var peReader = new PEReader(legacyAssembly))
+        {
+            var metadata = peReader.GetMetadataReader();
+            var sdkReference = metadata.AssemblyReferences
+                .Select(metadata.GetAssemblyReference)
+                .Single(reference => string.Equals(
+                    metadata.GetString(reference.Name),
+                    "ToolBox.PluginSdk",
+                    StringComparison.Ordinal));
+
+            Assert.Equal(new Version(0, 0, 1, 0), sdkReference.Version);
+        }
 
         var root = Path.Combine(
             Path.GetTempPath(),
