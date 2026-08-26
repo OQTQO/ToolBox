@@ -14,7 +14,7 @@ artifacts/
 # Local ToolBox runtime data
 logs/
 cache/
-Plugins/
+/Plugins/
 
 # OS/editor files
 Thumbs.db
