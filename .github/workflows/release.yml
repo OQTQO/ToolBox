@@ -52,21 +52,41 @@ jobs:
             -OutputDirectory .\artifacts
           Copy-Item -LiteralPath artifacts/publish/ToolBox.Host.exe `
             -Destination "artifacts/ToolBox-Host-$env:RELEASE_TAG-win-x64.exe"
-          Get-FileHash -Algorithm SHA256 `
-            -LiteralPath "artifacts/ToolBox-Host-$env:RELEASE_TAG-win-x64.exe", "artifacts/KeyboardMouse-$version.tpk" | `
-            Set-Content -LiteralPath "artifacts/SHA256SUMS-$env:RELEASE_TAG.txt"
+          $releaseArtifacts = @(
+            "artifacts/ToolBox-Host-$env:RELEASE_TAG-win-x64.exe"
+            "artifacts/KeyboardMouse-$version.tpk"
+          )
+          $checksumLines = foreach ($artifact in $releaseArtifacts) {
+            $fileHash = Get-FileHash -Algorithm SHA256 -LiteralPath $artifact
+            "{0}  {1}" -f $fileHash.Hash.ToLowerInvariant(), (Split-Path -Leaf $fileHash.Path)
+          }
+          $checksumLines | Set-Content `
+            -LiteralPath "artifacts/SHA256SUMS-$env:RELEASE_TAG.txt" `
+            -Encoding ascii
 
-      - name: Create GitHub Release
+      - name: Create or update GitHub Release
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_TAG: ${{ github.ref_name }}
         run: |
           $version = $env:RELEASE_TAG.TrimStart('v')
-          gh release create $env:RELEASE_TAG `
-            "artifacts/ToolBox-Host-$env:RELEASE_TAG-win-x64.exe" `
-            "artifacts/KeyboardMouse-$version.tpk" `
-            "artifacts/SHA256SUMS-$env:RELEASE_TAG.txt" `
-            --title "ToolBox $env:RELEASE_TAG" `
-            --generate-notes `
-            --verify-tag
+          $releaseAssets = @(
+            "artifacts/ToolBox-Host-$env:RELEASE_TAG-win-x64.exe"
+            "artifacts/KeyboardMouse-$version.tpk"
+            "artifacts/SHA256SUMS-$env:RELEASE_TAG.txt"
+          )
+
+          gh release view $env:RELEASE_TAG --repo $env:GITHUB_REPOSITORY *> $null
+          if ($LASTEXITCODE -ne 0) {
+            gh release create $env:RELEASE_TAG `
+              --repo $env:GITHUB_REPOSITORY `
+              --title "ToolBox $env:RELEASE_TAG" `
+              --generate-notes `
+              --verify-tag
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
+
+          gh release upload $env:RELEASE_TAG @releaseAssets `
+            --repo $env:GITHUB_REPOSITORY `
+            --clobber
