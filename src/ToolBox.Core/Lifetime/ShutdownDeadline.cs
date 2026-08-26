@@ -26,6 +26,9 @@ public sealed class ShutdownDeadline : IDisposable
 
     public bool IsExternallyCancelled => _externalCancellation.IsCancellationRequested;
 
+    public bool IsTimedOut => !IsExternallyCancelled
+        && (_cancellation.IsCancellationRequested || IsExpired);
+
     public TimeSpan Remaining
     {
         get

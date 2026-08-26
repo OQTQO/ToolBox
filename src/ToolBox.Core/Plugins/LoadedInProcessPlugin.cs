@@ -342,7 +342,7 @@ public sealed class LoadedInProcessPlugin : IAsyncDisposable
             return loadException.ErrorCode;
         }
 
-        if (deadline.IsExpired && !deadline.IsExternallyCancelled)
+        if (deadline.IsTimedOut)
         {
             return "PLUGIN_SHUTDOWN_TIMEOUT";
         }

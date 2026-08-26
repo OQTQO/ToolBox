@@ -195,8 +195,7 @@ public sealed class OutOfProcessPluginSession : IAsyncDisposable
         catch (Exception exception)
         {
             var surfacedException = exception is OperationCanceledException
-                && deadline.IsExpired
-                && !deadline.IsExternallyCancelled
+                && deadline.IsTimedOut
                 ? new WorkerProtocolException(
                     "PLUGIN_SHUTDOWN_TIMEOUT",
                     "The OutOfProcess plugin did not stop before the shutdown deadline.")
@@ -425,7 +424,7 @@ public sealed class OutOfProcessPluginSession : IAsyncDisposable
 
     private static string GetFailureCode(Exception exception, ShutdownDeadline deadline)
     {
-        if (deadline.IsExpired && !deadline.IsExternallyCancelled)
+        if (deadline.IsTimedOut)
         {
             return "PLUGIN_SHUTDOWN_TIMEOUT";
         }

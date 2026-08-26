@@ -52,8 +52,24 @@ public sealed class LifetimePolicyTests
         Assert.True(deadline.Remaining < initialRemaining);
         await Assert.ThrowsAnyAsync<OperationCanceledException>(
             async () => await Task.Delay(Timeout.InfiniteTimeSpan, deadline.Token));
+        Assert.True(deadline.IsTimedOut);
         Assert.True(deadline.IsExpired);
         Assert.Equal(TimeSpan.Zero, deadline.Remaining);
+    }
+
+    [Fact]
+    public void ShutdownDeadlineDoesNotClassifyExternalCancellationAsTimeout()
+    {
+        using var cancellation = new CancellationTokenSource();
+        using var deadline = ShutdownDeadline.Start(
+            new PluginShutdownOptions(TimeSpan.FromSeconds(5)),
+            cancellation.Token);
+
+        cancellation.Cancel();
+
+        Assert.True(deadline.Token.IsCancellationRequested);
+        Assert.True(deadline.IsExternallyCancelled);
+        Assert.False(deadline.IsTimedOut);
     }
 
     [Fact]
