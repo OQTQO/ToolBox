@@ -26,8 +26,6 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "HangPlugin", "tests\Fixture
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "UnloadLeakPlugin", "tests\Fixtures\UnloadLeakPlugin\UnloadLeakPlugin.csproj", "{C6EAB4D3-9F50-40B8-D7C2-A3F4E8B6C112}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "LegacyPluginSdk", "tests\Fixtures\PluginSdkCompatibility\LegacyPluginSdk\LegacyPluginSdk.csproj", "{D7B2F9D4-0A4E-4C45-9B1D-6F0E3A7C2214}"
-EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "LegacyPlugin", "tests\Fixtures\PluginSdkCompatibility\LegacyPlugin.csproj", "{E8C3A0E5-1B5F-4D56-A2E2-7A1F4B8D3325}"
 EndProject
 Global
@@ -84,10 +82,6 @@ Global
 		{C6EAB4D3-9F50-40B8-D7C2-A3F4E8B6C112}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{C6EAB4D3-9F50-40B8-D7C2-A3F4E8B6C112}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{C6EAB4D3-9F50-40B8-D7C2-A3F4E8B6C112}.Release|Any CPU.Build.0 = Release|Any CPU
-		{D7B2F9D4-0A4E-4C45-9B1D-6F0E3A7C2214}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{D7B2F9D4-0A4E-4C45-9B1D-6F0E3A7C2214}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{D7B2F9D4-0A4E-4C45-9B1D-6F0E3A7C2214}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{D7B2F9D4-0A4E-4C45-9B1D-6F0E3A7C2214}.Release|Any CPU.Build.0 = Release|Any CPU
 		{E8C3A0E5-1B5F-4D56-A2E2-7A1F4B8D3325}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
 		{E8C3A0E5-1B5F-4D56-A2E2-7A1F4B8D3325}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{E8C3A0E5-1B5F-4D56-A2E2-7A1F4B8D3325}.Release|Any CPU.ActiveCfg = Release|Any CPU
