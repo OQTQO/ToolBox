@@ -36,6 +36,10 @@ public sealed class PluginApiV1CompatibilityTests
 
     private static readonly string[] FrozenExperimentalTypeNames =
     [
+        "ToolBox.PluginSdk.Experimental.AudioRelayDevice",
+        "ToolBox.PluginSdk.Experimental.AudioRelaySnapshot",
+        "ToolBox.PluginSdk.Experimental.AudioRelayStatus",
+        "ToolBox.PluginSdk.Experimental.IAudioRelayPlugin",
         "ToolBox.PluginSdk.Experimental.IKeyboardTestPlugin",
         "ToolBox.PluginSdk.Experimental.KeyboardTestMouseButton",
         "ToolBox.PluginSdk.Experimental.KeyboardTestSettings",

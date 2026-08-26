@@ -28,6 +28,10 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "UnloadLeakPlugin", "tests\F
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "LegacyPlugin", "tests\Fixtures\PluginSdkCompatibility\LegacyPlugin.csproj", "{E8C3A0E5-1B5F-4D56-A2E2-7A1F4B8D3325}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AudioRelay", "spikes\AudioRelay\AudioRelay.csproj", "{1F0D66F5-2F4E-4D29-A8DD-2B77506F41A1}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AudioRelay.Tests", "tests\AudioRelay.Tests\AudioRelay.Tests.csproj", "{2A6B3413-3F9E-4E64-B624-5DCC01585F62}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -86,6 +90,14 @@ Global
 		{E8C3A0E5-1B5F-4D56-A2E2-7A1F4B8D3325}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{E8C3A0E5-1B5F-4D56-A2E2-7A1F4B8D3325}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{E8C3A0E5-1B5F-4D56-A2E2-7A1F4B8D3325}.Release|Any CPU.Build.0 = Release|Any CPU
+		{1F0D66F5-2F4E-4D29-A8DD-2B77506F41A1}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{1F0D66F5-2F4E-4D29-A8DD-2B77506F41A1}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{1F0D66F5-2F4E-4D29-A8DD-2B77506F41A1}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{1F0D66F5-2F4E-4D29-A8DD-2B77506F41A1}.Release|Any CPU.Build.0 = Release|Any CPU
+		{2A6B3413-3F9E-4E64-B624-5DCC01585F62}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{2A6B3413-3F9E-4E64-B624-5DCC01585F62}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{2A6B3413-3F9E-4E64-B624-5DCC01585F62}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{2A6B3413-3F9E-4E64-B624-5DCC01585F62}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

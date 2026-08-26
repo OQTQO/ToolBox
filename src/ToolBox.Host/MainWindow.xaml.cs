@@ -90,6 +90,59 @@ public partial class MainWindow : Window
         }
     }
 
+    private async void OnAudioRelayToggleClick(object sender, RoutedEventArgs e)
+    {
+        if (DataContext is MainWindowViewModel viewModel)
+        {
+            await viewModel.AudioRelay.ToggleAsync();
+        }
+    }
+
+    private async void OnAudioRelayInstallClick(object sender, RoutedEventArgs e)
+    {
+        if (DataContext is not MainWindowViewModel viewModel)
+        {
+            return;
+        }
+
+        var dialog = new OpenFileDialog
+        {
+            Title = "Install Phone Audio Relay package",
+            Filter = "ToolBox packages (*.tpk)|*.tpk|All files (*.*)|*.*",
+            CheckFileExists = true,
+            Multiselect = false
+        };
+
+        if (dialog.ShowDialog(this) == true)
+        {
+            await viewModel.AudioRelay.InstallPackageAsync(dialog.FileName);
+        }
+    }
+
+    private async void OnAudioRelayRefreshClick(object sender, RoutedEventArgs e)
+    {
+        if (DataContext is MainWindowViewModel viewModel)
+        {
+            await viewModel.AudioRelay.RefreshAsync();
+        }
+    }
+
+    private async void OnAudioRelayConnectClick(object sender, RoutedEventArgs e)
+    {
+        if (DataContext is MainWindowViewModel viewModel)
+        {
+            await viewModel.AudioRelay.ConnectAsync();
+        }
+    }
+
+    private async void OnAudioRelayDisconnectClick(object sender, RoutedEventArgs e)
+    {
+        if (DataContext is MainWindowViewModel viewModel)
+        {
+            await viewModel.AudioRelay.DisconnectAsync();
+        }
+    }
+
     private void OnKeyboardSurfaceKeyDown(object sender, KeyEventArgs e)
     {
         if (DataContext is MainWindowViewModel viewModel)

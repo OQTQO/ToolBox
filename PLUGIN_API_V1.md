@@ -29,9 +29,9 @@ Plugin API 1.x 必须保持二进制和语义兼容：
 - v1 接口不追加必需成员；新能力使用新接口或新的 API major。
 - 不改变现有枚举数值、`PluginContract` 常量和生命周期转移语义。
 - Manifest v1 的 JSON 字段名、字段含义和 `PLUGIN_API_MAJOR_UNSUPPORTED` 错误码保持不变；可选新增字段必须保持旧解析器可读。
-- `ToolBox.PluginSdk.Experimental` 是实验区，不属于 v1 稳定承诺；Keyboard & Mouse Test 当前只把该 contract 作为版本耦合的产品兼容桥接，不把它宣称为稳定 API。
+- `ToolBox.PluginSdk.Experimental` 是实验区，不属于 v1 稳定承诺；Keyboard & Mouse Test 与 Phone Audio Relay 当前只把各自 contract 作为版本耦合的产品兼容桥接，不把它们宣称为稳定 API。
 - Core、Host、Worker、Package Installer 的实现可以演进，但不得把 Core/Host 类型泄漏到 PluginSdk 稳定契约。
 
 ## 已验证路径
 
-冻结后兼容性验证已通过：旧版 LegacyPlugin DLL 能在当前 API v1 Host 中完成加载、启动、停止和 ALC 卸载。其他已验证路径包括 HappyPath、Crash、Hang、UnloadLeak、Worker child-process、Protocol mismatch、Keyboard & Mouse Test 产品包，以及 `.tpk` 安装/卸载和恶意包 Fixture。其他正式产品插件、Updater、权限强制和安全沙箱仍不在 v0.1 范围内。
+冻结后兼容性验证已通过：旧版 LegacyPlugin DLL 能在当前 API v1 Host 中完成加载、启动、停止和 ALC 卸载。其他已验证路径包括 HappyPath、Crash、Hang、UnloadLeak、Worker child-process、Protocol mismatch、Keyboard & Mouse Test、Phone Audio Relay，以及 `.tpk` 安装/卸载和恶意包 Fixture。Updater、权限强制和安全沙箱仍不在当前范围内。

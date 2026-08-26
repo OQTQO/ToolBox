@@ -50,11 +50,16 @@ jobs:
             -Configuration Release `
             -Version $version `
             -OutputDirectory .\artifacts
+          & .\tools\New-AudioRelayPackage.ps1 `
+            -Configuration Release `
+            -Version $version `
+            -OutputDirectory .\artifacts
           Copy-Item -LiteralPath artifacts/publish/ToolBox.Host.exe `
             -Destination "artifacts/ToolBox-Host-$env:RELEASE_TAG-win-x64.exe"
           $releaseArtifacts = @(
             "artifacts/ToolBox-Host-$env:RELEASE_TAG-win-x64.exe"
             "artifacts/KeyboardMouse-$version.tpk"
+            "artifacts/PhoneAudioRelay-$version.tpk"
           )
           $checksumLines = foreach ($artifact in $releaseArtifacts) {
             $fileHash = Get-FileHash -Algorithm SHA256 -LiteralPath $artifact
@@ -74,6 +79,7 @@ jobs:
           $releaseAssets = @(
             "artifacts/ToolBox-Host-$env:RELEASE_TAG-win-x64.exe"
             "artifacts/KeyboardMouse-$version.tpk"
+            "artifacts/PhoneAudioRelay-$version.tpk"
             "artifacts/SHA256SUMS-$env:RELEASE_TAG.txt"
           )
 

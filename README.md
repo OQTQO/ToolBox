@@ -20,8 +20,9 @@ ToolBox 是一个面向 Windows 的插件平台原型。
 - Plugin API v1 稳定公共面、接口签名、枚举/常量、Manifest 字段与兼容性规则冻结；
 - LegacyPlugin 旧版 SDK 编译兼容性 Fixture 的直接加载与卸载验证；
 - Keyboard & Mouse Test 正式产品插件的最小产品化与首轮 hardening 已完成：Host 只读取已提交的激活版本，提供 `.tpk` 安装/更新入口，支持局部输入、设置、资源冲突、升级回退和真实卸载验收。
+- Phone Audio Relay 产品插件：接收已配对 Android 手机的蓝牙 A2DP 媒体音频并送入 Windows 正常输出混音，不接管电脑应用声音；提供设备刷新、选择、连接、断开、状态恢复和 `.tpk` 发布包。
 
-个人学习版发布已完成，不需要服务器或官方认证；下一阶段仅在未来需要公开分发时再考虑 v0.2 签名真实性。Updater、强制权限和安全沙箱仍不在 v0.1 原型范围内。范围见 [PRODUCT_KEYBOARD_MOUSE_SCOPE.md](PRODUCT_KEYBOARD_MOUSE_SCOPE.md)，API 冻结记录见 [PLUGIN_API_V1.md](PLUGIN_API_V1.md)。
+个人学习版发布已完成，不需要服务器或官方认证；下一阶段仅在未来需要公开分发时再考虑 v0.2 签名真实性。Updater、强制权限和安全沙箱仍不在 v0.1 原型范围内。范围见 [PRODUCT_KEYBOARD_MOUSE_SCOPE.md](PRODUCT_KEYBOARD_MOUSE_SCOPE.md) 与 [PHONE_AUDIO_RELAY.md](PHONE_AUDIO_RELAY.md)，API 冻结记录见 [PLUGIN_API_V1.md](PLUGIN_API_V1.md)。
 
 本地 `.tpk` 生成方式与“完整性不等于真实性”的发布边界见 [PACKAGE_RELEASE_POLICY.md](PACKAGE_RELEASE_POLICY.md)。
 
@@ -36,6 +37,13 @@ dotnet restore ToolBox.sln
 dotnet build ToolBox.sln --configuration Release
 dotnet test ToolBox.sln --configuration Release
 dotnet run --project src/ToolBox.Host/ToolBox.Host.csproj
+```
+
+生成 Phone Audio Relay 安装包：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\tools\New-AudioRelayPackage.ps1 `
+  -Configuration Release -Version 0.1.0 -OutputDirectory .\artifacts
 ```
 
 Host 运行日志默认写入：

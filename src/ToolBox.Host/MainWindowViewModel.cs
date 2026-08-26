@@ -26,6 +26,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged, IDisposable
         HostDiagnostics diagnostics,
         IStructuredLogger logger,
         string? keyboardTestPluginDirectory,
+        string? audioRelayPluginDirectory,
         PluginPackageInstaller packageInstaller)
     {
         _diagnostics = diagnostics ?? throw new ArgumentNullException(nameof(diagnostics));
@@ -35,6 +36,10 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged, IDisposable
         KeyboardTest = new KeyboardTestViewModel(
             _logger,
             keyboardTestPluginDirectory,
+            packageInstaller);
+        AudioRelay = new AudioRelayViewModel(
+            _logger,
+            audioRelayPluginDirectory,
             packageInstaller);
 
         RecentEvents = new ObservableCollection<DiagnosticEventViewModel>();
@@ -47,6 +52,8 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged, IDisposable
     public ObservableCollection<DiagnosticEventViewModel> RecentEvents { get; }
 
     public KeyboardTestViewModel KeyboardTest { get; }
+
+    public AudioRelayViewModel AudioRelay { get; }
 
     public string StatusLabel => _snapshot.Stage switch
     {
@@ -106,6 +113,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged, IDisposable
         _disposed = true;
         _diagnostics.Changed -= OnDiagnosticsChanged;
         _logger.EventWritten -= OnEventWritten;
+        AudioRelay.Dispose();
         KeyboardTest.Dispose();
     }
 

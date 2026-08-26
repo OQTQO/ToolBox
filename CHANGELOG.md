@@ -2,6 +2,15 @@
 
 所有重要版本变更都记录在这里。GitHub Release 会以版本 Tag 为准生成对应发布记录。
 
+## [Unreleased]
+
+### Added
+
+- Phone Audio Relay Product 02：接收已配对 Android 手机的 A2DP 媒体音频并送入 Windows 正常输出混音。
+- Host 内配对源刷新/选择、开始/停止接收、连接状态恢复和高 DPI 深色控制台界面。
+- `PhoneAudioRelay-<version>.tpk` 打包脚本、Windows SDK/WinRT 运行依赖、真实平台与 ALC 卸载测试。
+- Release 工作流新增 Phone Audio Relay `.tpk` 与 SHA-256 清单。
+
 ## [0.1.0] - 2026-08-26
 
 ### Added

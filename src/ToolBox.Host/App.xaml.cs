@@ -95,31 +95,26 @@ public partial class App : Application
         _logger = new StructuredLogger(new LoggerOptions(), sessionId, _hostVersion);
 
         string? activeKeyboardTestDirectory = null;
-        try
-        {
-            var pluginsRoot = Path.Combine(AppContext.BaseDirectory, "Plugins");
-            var pluginDataRoot = Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                "ToolBox",
-                "Plugins");
+        string? activeAudioRelayDirectory = null;
+        var pluginsRoot = Path.Combine(AppContext.BaseDirectory, "Plugins");
+        var pluginDataRoot = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            "ToolBox",
+            "Plugins");
 
-            _packageInstaller = new PluginPackageInstaller(pluginsRoot, pluginDataRoot);
-            activeKeyboardTestDirectory = _packageInstaller.GetActiveVersionDirectory(
-                "com.toolbox.keyboard-test");
-        }
-        catch (PluginPackageException exception)
-        {
-            _logger.Error(
-                "Package",
-                "The active Keyboard & Mouse Test package could not be resolved.",
-                errorCode: exception.ErrorCode,
-                exception: exception);
-        }
+        _packageInstaller = new PluginPackageInstaller(pluginsRoot, pluginDataRoot);
+        activeKeyboardTestDirectory = ResolveActiveProductDirectory(
+            "com.toolbox.keyboard-test",
+            "Keyboard & Mouse Test");
+        activeAudioRelayDirectory = ResolveActiveProductDirectory(
+            "com.toolbox.audio-relay",
+            "Phone Audio Relay");
 
         _viewModel = new MainWindowViewModel(
             _diagnostics,
             _logger,
             activeKeyboardTestDirectory,
+            activeAudioRelayDirectory,
             _packageInstaller ?? throw new InvalidOperationException("Package installer was not initialized."));
 
         var mainWindow = new MainWindow(_viewModel);
@@ -130,6 +125,23 @@ public partial class App : Application
         Advance(StartupStage.CoreReady, "Host core services are initialized.");
         Advance(StartupStage.ShellReady, "WPF shell is displayed.");
         Advance(StartupStage.Healthy, "Host is ready for the next platform phase.");
+    }
+
+    private string? ResolveActiveProductDirectory(string pluginId, string productName)
+    {
+        try
+        {
+            return _packageInstaller?.GetActiveVersionDirectory(pluginId);
+        }
+        catch (PluginPackageException exception)
+        {
+            _logger?.Error(
+                "Package",
+                $"The active {productName} package could not be resolved.",
+                errorCode: exception.ErrorCode,
+                exception: exception);
+            return null;
+        }
     }
 
     private void Advance(StartupStage stage, string message)

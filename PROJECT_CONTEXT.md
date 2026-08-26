@@ -6,8 +6,8 @@
 
 ```text
 Checkpoint date: 2026-08-26
-Current phase: Personal learning package release complete
-Next phase: Optional v0.2 package authenticity planning
+Current phase: Phone Audio Relay Product 02 implementation complete
+Next phase: Physical Android phone connection acceptance, then optional v0.2 authenticity planning
 Plugin API: Frozen v1
 Production updater: Deferred to v0.2
 ```
@@ -17,7 +17,7 @@ Production updater: Deferred to v0.2
 - .NET SDK `8.0.424` is installed.
 - `ToolBox.sln` restores successfully.
 - Release build passes with `0` warnings and `0` errors.
-- Release test run passes: `53` passed, `0` failed, `0` skipped.
+- Release test run passes: `59` passed, `0` failed, `0` skipped (`54` Core + `5` Audio Relay).
 - WPF Host smoke test passes: startup, healthy state, graceful shutdown, and shutdown logging were all confirmed.
 - Phase 4 WPF interaction pass: KeyboardTest enabled, mouse events observed, settings applied, then disabled and unloaded to `Disabled`.
 - Keyboard & Mouse Test product packages contain only the product runtime payload and manifest metadata; no duplicate PluginSdk copy is shipped.
@@ -50,6 +50,11 @@ Production updater: Deferred to v0.2
 - Release metadata pass: unsupported package formats and Manifest/package identity mismatches are rejected before installation; the generated package was inspected with matching `0.1.0` metadata and no private SDK copy.
 - Personal learning release pass: the user confirmed no server or official authentication is required; the v0.1 package is approved for personal local learning and is explicitly not presented as a production-signed distribution.
 - GitHub release automation pass: added `CHANGELOG.md`, pull/push CI, and tag-triggered Release workflow that publishes a self-contained Windows x64 Host, `.tpk`, and SHA-256 manifest.
+- Audio Relay platform pass: Product 02 uses `AudioPlaybackConnection` with the official `DeviceWatcher` discovery flow, exclusive `audio.bluetooth.a2dp-sink` ownership, Start/Open/StateChanged handling, and deterministic connection cleanup.
+- Audio Relay package pass: `PhoneAudioRelay-0.1.0.tpk` carries the plugin plus `Microsoft.Windows.SDK.NET.dll` and `WinRT.Runtime.dll`, omits private `ToolBox.PluginSdk.dll`, installs through the real installer, and starts as `Running / Ready` through the collectible ALC.
+- Audio Relay hardware probe pass: the current PC reports Windows A2DP sink API support; no paired A2DP Audio Source is currently present, so discovery correctly normalizes to `Ready / 0 devices` instead of `Faulted`.
+- Audio Relay UI pass: Host Product 02 provides package install/update, enable/disable, paired-source refresh and selection, start/stop receiving, a `PHONE → A2DP → WINDOWS MIX` route, and high-DPI visual QA with a dark native ComboBox.
+- Audio Relay verification pass: Release build is `0` warnings / `0` errors, all `59` tests pass, runtime dependencies are present, real-platform discovery is covered, and start/stop/ALC unload succeeds in C# integration coverage.
 - Build output remains ignored by Git (`bin/`, `obj/`).
 
 Last verification commands:
@@ -153,7 +158,7 @@ dotnet test ToolBox.sln --configuration Release
 - Added the frozen stable API inventory and compatibility rules in [`PLUGIN_API_V1.md`](PLUGIN_API_V1.md).
 - Added reflection and semantic compatibility tests for the stable PluginSdk export set, interface signatures, generic constraints, constants, enum values, Manifest JSON field names, and the `PLUGIN_API_MAJOR_UNSUPPORTED` error code.
 - Added `PluginSdkCompatibility` with a pinned old SDK reference and a legacy-compiled plugin DLL; the fixture is loaded directly by the current ALC instead of being rebuilt against the current SDK.
-- Kept `ToolBox.PluginSdk.Experimental` explicitly outside the v1 compatibility promise; Keyboard & Mouse Test consumes it only as a version-coupled product bridge.
+- Kept `ToolBox.PluginSdk.Experimental` explicitly outside the v1 compatibility promise; Keyboard & Mouse Test and Phone Audio Relay consume it only as version-coupled product bridges.
 
 ### Post-freeze — Keyboard & Mouse Test product scope
 
@@ -190,9 +195,25 @@ dotnet test ToolBox.sln --configuration Release
 - Generated `artifacts/KeyboardMouse-0.1.0.tpk` from the Release output; the directory is Git-ignored and the package can be installed through Host's `Install .tpk` action.
 - Kept the authenticity limitation explicit: SHA-256 protects package integrity only; public distribution would require a future signature contract.
 
-## Next phase: Optional v0.2 package authenticity planning
+### Post-freeze — Phone Audio Relay Product 02
 
-The v0.1 product package path is complete. Any next implementation must be explicitly scoped around the future authenticity contract:
+- Added the experimental `IAudioRelayPlugin` capability, immutable device/snapshot records, and explicit Disabled/Refreshing/Ready/Connecting/Streaming/Unsupported/Error states without changing the frozen stable v1 namespace.
+- Added `com.toolbox.audio-relay` as an in-process Windows x64 plugin targeting Windows 10 build 19041 or later and claiming the exclusive `audio.bluetooth.a2dp-sink` resource.
+- Implemented paired A2DP Audio Source discovery with `AudioPlaybackConnection.GetDeviceSelector()` and `DeviceWatcher`; the local Windows no-source `ERROR_FILE_NOT_FOUND` case is treated as an empty ready list.
+- Implemented `TryCreateFromId → StartAsync → OpenAsync`, open-status/error mapping, connection-state recovery, disconnect, dispose, and Host shutdown cleanup.
+- Added Product 02 Host UX, package identity preflight, device selection, connection controls, status/error diagnostics, Windows-mix safety copy, dark ComboBox styling, and high-DPI window sizing.
+- Added [`tools/New-AudioRelayPackage.ps1`](tools/New-AudioRelayPackage.ps1), [`PHONE_AUDIO_RELAY.md`](PHONE_AUDIO_RELAY.md), Release workflow assets, real-platform tests, fake-transport lifecycle tests, and collectible-ALC start/unload acceptance.
+- Generated `artifacts/PhoneAudioRelay-0.1.0.tpk`; physical audio playback remains to be accepted with a paired Android phone because this machine currently has no paired A2DP Audio Source.
+
+## Next phase: Physical Android acceptance, then optional v0.2 authenticity planning
+
+The implementation and package paths are complete. The next acceptance step requires a paired Android phone:
+
+1. Pair the phone in Windows Bluetooth settings and confirm it appears as an A2DP Audio Source.
+2. Install `PhoneAudioRelay-0.1.0.tpk`, enable the plugin, refresh, select the phone, and start receiving.
+3. Verify phone media and PC application audio are audible together through the current Windows output, then stop/disable and confirm clean release.
+
+After physical acceptance, optional v0.2 work can be scoped around the future authenticity contract:
 
 1. Define the official public-key and signed-update-manifest format.
 2. Decide how signature verification composes with existing package SHA-256 validation.
@@ -200,7 +221,7 @@ The v0.1 product package path is complete. Any next implementation must be expli
 
 仍然不在 v0.1 范围内：
 
-- Dependency solver, marketplace, permissions enforcement, updater, or additional formal product plugins.
+- Dependency solver, marketplace, permissions enforcement, updater, or further formal product plugins.
 - Data channels or security sandbox enforcement.
 - Global input capture, Raw Input, native input, macros, and remote/telemetry features.
 

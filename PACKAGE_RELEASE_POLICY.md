@@ -14,7 +14,7 @@ v0.1 的 `.tpk` 是不可信 ZIP 输入，安装器会执行路径、大小、�
 
 当前包不提供官方身份认证，也不需要服务器；它只明确标注为个人学习版，不宣称生产级签名、生产级自动更新或生产级自动恢复。
 
-## 生成 Keyboard & Mouse Test 包
+## 生成产品包
 
 先完成 Release 构建，再运行：
 
@@ -25,7 +25,16 @@ powershell -ExecutionPolicy Bypass -File .\tools\New-KeyboardMousePackage.ps1 `
   -OutputDirectory .\artifacts
 ```
 
-脚本只复制：
+Phone Audio Relay 使用相同发布边界：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\tools\New-AudioRelayPackage.ps1 `
+  -Configuration Release `
+  -Version 0.1.0 `
+  -OutputDirectory .\artifacts
+```
+
+Keyboard & Mouse 脚本只复制：
 
 - `manifest.json`；
 - `runtime/KeyboardTest.dll`；
@@ -34,7 +43,9 @@ powershell -ExecutionPolicy Bypass -File .\tools\New-KeyboardMousePackage.ps1 `
 
 脚本不会把 `ToolBox.PluginSdk.dll` 私有副本放进包，也不会覆盖已有包，除非显式传入 `-Overwrite`。
 
-GitHub 发布流程已写入 `.github/workflows/release.yml`：推送形如 `v0.1.0` 的 Tag 后，GitHub Actions 会先执行构建和测试，再生成自包含 Windows x64 Host、`.tpk` 和 SHA-256 清单，并创建同名 GitHub Release。
+Phone Audio Relay 包另外携带 `Microsoft.Windows.SDK.NET.dll` 与 `WinRT.Runtime.dll`，它们是调用 Windows A2DP 接收 API 所需的运行时投影依赖；同样不携带私有 `ToolBox.PluginSdk.dll`。
+
+GitHub 发布流程已写入 `.github/workflows/release.yml`：推送形如 `v0.1.0` 的 Tag 后，GitHub Actions 会先执行构建和测试，再生成自包含 Windows x64 Host、Keyboard & Mouse `.tpk`、Phone Audio Relay `.tpk` 和 SHA-256 清单，并创建同名 GitHub Release。
 
 ## 版本与恢复规则
 
