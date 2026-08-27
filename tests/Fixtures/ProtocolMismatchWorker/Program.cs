@@ -50,9 +50,9 @@ public static class Program
         return 0;
     }
 
-    private static string? ReadArgument(IReadOnlyList<string> args, string name)
+    private static string? ReadArgument(string[] args, string name)
     {
-        for (var index = 0; index < args.Count - 1; index++)
+        for (var index = 0; index < args.Length - 1; index++)
         {
             if (string.Equals(args[index], name, StringComparison.Ordinal))
             {

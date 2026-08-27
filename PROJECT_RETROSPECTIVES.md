@@ -117,11 +117,15 @@ The software and packages are released, but physical Android A2DP-source accepta
 
 The first two successful dry-runs produced an identical Host executable but different `.tpk` hashes. Payload hashes inside both packages were identical; only ZIP entry timestamps changed on each build. The packages were semantically valid but not reproducible byte-for-byte, which would make independent release verification and artifact comparison noisy.
 
+The first pull-request CI run then failed the new warnings-as-errors gate on `CA1859` in the ProtocolMismatchWorker fixture. The local SDK and CI SDK reported the same version, but the analyzer diagnostic appeared only on the fresh Windows Server 2025 runner. The previous workflow allowed warnings and the local dry-run did not reproduce this analyzer difference, so the stricter gate correctly exposed an environment-sensitive warning before merge.
+
 ### Root cause and correction
 
 `ZipFile.CreateFromDirectory` preserved staging-file timestamps. Manifest and package metadata files were recreated during each run, and freshly rebuilt plugin files also received new timestamps. The package scripts therefore encoded wall-clock state even when every payload byte was unchanged.
 
 The correction introduced `ToolBox.PackageTools.psm1`, which sorts entries and writes a fixed ZIP timestamp before copying payload bytes. Both package adapters now use that implementation. A second pair of full dry-runs confirmed identical EXE, TPK, and checksum hashes.
+
+The analyzer finding was corrected without suppression by narrowing the fixture helper parameter from `IReadOnlyList<string>` to the actual `string[]` input and using `Length`. The PR workflow was rerun from a fresh commit after local validation.
 
 ### Reusable lessons
 
@@ -130,6 +134,7 @@ The correction introduced `ToolBox.PackageTools.psm1`, which sorts entries and w
 3. CI and Release should remain thin adapters over one locally executable validation module.
 4. Artifact validation must parse and recalculate package contents; checking file existence or nonzero size is insufficient.
 5. Temporary release directories need bounded Windows cleanup retries for both `IOException` and `UnauthorizedAccessException`.
+6. Warnings-as-errors must run on the same fresh runner used for merge; matching SDK version alone does not guarantee identical analyzer results across operating-system images.
 
 ### Remaining boundary
 
