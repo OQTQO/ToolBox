@@ -84,6 +84,12 @@ public sealed class PluginSdkCompatibilityTests
                 GC.WaitForPendingFinalizers();
                 Thread.Sleep(50);
             }
+            catch (UnauthorizedAccessException) when (Directory.Exists(root))
+            {
+                GC.Collect();
+                GC.WaitForPendingFinalizers();
+                Thread.Sleep(50);
+            }
         }
 
         Assert.False(Directory.Exists(root), $"Compatibility fixture could not be cleaned: '{root}'.");
