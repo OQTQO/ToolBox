@@ -61,7 +61,7 @@ public sealed class InProcessPluginRuntime
 
         try
         {
-            var assembly = loadContext.LoadFromAssemblyPath(pluginAssemblyPath);
+            var assembly = loadContext.LoadPluginAssembly(pluginAssemblyPath);
             var pluginType = assembly.GetType(entryPoint.TypeName, throwOnError: false, ignoreCase: false);
 
             if (pluginType is null)

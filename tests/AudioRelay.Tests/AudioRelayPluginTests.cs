@@ -56,25 +56,67 @@ public sealed class AudioRelayPluginTests
 
             var runtime = new InProcessPluginRuntime();
             var discovered = runtime.DiscoverSingle(pluginDirectory);
-            var loaded = runtime.Load(discovered);
 
             Assert.Equal("com.toolbox.audio-relay", discovered.Manifest.Id);
             Assert.DoesNotContain(
                 Directory.EnumerateFiles(pluginDirectory),
                 path => string.Equals(Path.GetFileName(path), "ToolBox.PluginSdk.dll", StringComparison.OrdinalIgnoreCase));
 
-            await loaded.StartAsync();
-            var snapshot = ReadSnapshotWithoutRetainingCapability(loaded);
-
-            Assert.Equal(AudioRelayStatus.Ready, snapshot.Status);
-
-            await loaded.StopAndUnloadAsync();
-            Assert.Equal(PluginLifecycleState.Disabled, loaded.State.LifecycleState);
+            await StartAndUnloadOnceAsync(runtime, discovered);
+            await StartAndUnloadOnceAsync(runtime, discovered);
         }
         finally
         {
-            Directory.Delete(root, recursive: true);
+            DeleteFixtureRoot(root);
         }
+    }
+
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private static async Task StartAndUnloadOnceAsync(
+        InProcessPluginRuntime runtime,
+        DiscoveredPlugin discovered)
+    {
+        await using var loaded = runtime.Load(discovered);
+        var loadContextReference = loaded.LoadContextReference;
+
+        await loaded.StartAsync();
+        var snapshot = ReadSnapshotWithoutRetainingCapability(loaded);
+
+        Assert.Equal(AudioRelayStatus.Ready, snapshot.Status);
+
+        await loaded.StopAndUnloadAsync();
+        Assert.Equal(PluginLifecycleState.Disabled, loaded.State.LifecycleState);
+        Assert.False(loadContextReference.IsAlive);
+    }
+
+    private static void DeleteFixtureRoot(string root)
+    {
+        for (var attempt = 0; attempt < 30 && Directory.Exists(root); attempt++)
+        {
+            try
+            {
+                foreach (var file in Directory.EnumerateFiles(root, "*", SearchOption.AllDirectories))
+                {
+                    File.SetAttributes(file, FileAttributes.Normal);
+                }
+
+                Directory.Delete(root, recursive: true);
+            }
+            catch (IOException) when (Directory.Exists(root))
+            {
+                GC.Collect();
+                GC.WaitForPendingFinalizers();
+                Thread.Sleep(50);
+            }
+            catch (UnauthorizedAccessException) when (Directory.Exists(root))
+            {
+                GC.Collect();
+                GC.WaitForPendingFinalizers();
+                Thread.Sleep(50);
+            }
+        }
+
+        Assert.False(Directory.Exists(root), $"AudioRelay fixture directory could not be cleaned: '{root}'.");
     }
 
     [MethodImpl(MethodImplOptions.NoInlining)]
