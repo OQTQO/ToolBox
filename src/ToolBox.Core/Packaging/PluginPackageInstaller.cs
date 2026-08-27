@@ -726,6 +726,10 @@ public sealed class PluginPackageInstaller : IDisposable
             pluginId,
             "rollback",
             "before-" + beforeVersion);
+        if (Directory.Exists(snapshotRoot) || File.Exists(snapshotRoot))
+        {
+            snapshotRoot += "-" + Guid.NewGuid().ToString("N");
+        }
         var snapshotCreated = false;
 
         try
@@ -737,13 +741,6 @@ public sealed class PluginPackageInstaller : IDisposable
             }
 
             EnsureExistingAncestorsAreSafe(snapshotRoot);
-            if (Directory.Exists(snapshotRoot) || File.Exists(snapshotRoot))
-            {
-                throw new PluginPackageException(
-                    "PACKAGE_SNAPSHOT_FAILED",
-                    $"The Config/State snapshot path '{snapshotRoot}' already exists.");
-            }
-
             EnsureDirectoryRoot(snapshotRoot);
             snapshotCreated = true;
             var configCount = CopyDataDirectory(

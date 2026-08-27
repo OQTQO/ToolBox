@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using System.ComponentModel;
+using System.Globalization;
 using System.IO;
 using System.IO.Compression;
 using System.Runtime.CompilerServices;
@@ -11,6 +12,8 @@ using ToolBox.Core.Packaging;
 using ToolBox.Core.Plugins;
 using ToolBox.PluginSdk;
 using ToolBox.PluginSdk.Experimental;
+using Color = System.Windows.Media.Color;
+using ColorConverter = System.Windows.Media.ColorConverter;
 
 namespace ToolBox.Host;
 
@@ -24,6 +27,7 @@ public sealed class AudioRelayViewModel : INotifyPropertyChanged, IDisposable
 
     private readonly IStructuredLogger _logger;
     private readonly PluginPackageInstaller _packageInstaller;
+    private readonly LocalizationService _localization;
     private readonly InProcessPluginRuntime _runtime = new();
     private readonly Dispatcher _dispatcher;
     private string? _pluginDirectory;
@@ -38,16 +42,27 @@ public sealed class AudioRelayViewModel : INotifyPropertyChanged, IDisposable
     public AudioRelayViewModel(
         IStructuredLogger logger,
         string? pluginDirectory,
-        PluginPackageInstaller packageInstaller)
+        PluginPackageInstaller packageInstaller,
+        LocalizationService localization)
     {
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-        _pluginDirectory = pluginDirectory;
+        _pluginDirectory = Directory.Exists(pluginDirectory) ? pluginDirectory : null;
         _packageInstaller = packageInstaller ?? throw new ArgumentNullException(nameof(packageInstaller));
+        _localization = localization ?? throw new ArgumentNullException(nameof(localization));
         _dispatcher = System.Windows.Application.Current?.Dispatcher ?? Dispatcher.CurrentDispatcher;
         Devices = new ObservableCollection<AudioRelayDeviceOption>();
+        _localization.LanguageChanged += OnLanguageChanged;
     }
 
     public event PropertyChangedEventHandler? PropertyChanged;
+
+    public bool IsInstalled => _pluginDirectory is not null && Directory.Exists(_pluginDirectory);
+
+    public bool IsRuntimeEnabled => IsPluginRunning;
+
+    public string InstalledVersion => IsInstalled
+        ? Path.GetFileName(_pluginDirectory!.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar))
+        : string.Empty;
 
     public ObservableCollection<AudioRelayDeviceOption> Devices { get; }
 
@@ -68,11 +83,25 @@ public sealed class AudioRelayViewModel : INotifyPropertyChanged, IDisposable
         }
     }
 
-    public string ToggleLabel => _loadedPlugin is null ? "Enable relay" : "Disable relay";
+    public string ToggleLabel => RequiresHostRestart
+        ? T("RestartRequiredAction")
+        : _loadedPlugin is null ? T("EnableRelay") : T("DisableRelay");
 
-    public string PackageActionLabel => _pluginDirectory is null ? "Install .tpk" : "Install update";
+    public string RestartActionLabel => T("RestartToolBox");
+
+    public bool RequiresHostRestart => _loadedPlugin?.State.LifecycleState == PluginLifecycleState.RestartRequired;
+
+    public bool IsNormalToggleVisible => !RequiresHostRestart;
+
+    public bool IsRestartActionVisible => RequiresHostRestart;
+
+    public bool IsRestartActionEnabled => RequiresHostRestart && !_operationInProgress;
+
+    public string PackageActionLabel => _pluginDirectory is null ? T("InstallPackage") : T("InstallUpdate");
 
     public bool IsInstallEnabled => !_operationInProgress && _loadedPlugin is null;
+
+    public bool IsUninstallEnabled => IsInstalled && !_operationInProgress && !RequiresHostRestart;
 
     public bool IsToggleEnabled => _pluginDirectory is not null
         && !_operationInProgress
@@ -98,26 +127,26 @@ public sealed class AudioRelayViewModel : INotifyPropertyChanged, IDisposable
         {
             if (_pluginDirectory is null)
             {
-                return "Not installed";
+                return T("StatusNotInstalled");
             }
 
             return _loadedPlugin?.State.LifecycleState switch
             {
-                PluginLifecycleState.Starting => "Starting",
-                PluginLifecycleState.Stopping => "Stopping",
-                PluginLifecycleState.Faulted => "Faulted",
-                PluginLifecycleState.RestartRequired => "Restart required",
+                PluginLifecycleState.Starting => T("StatusStarting"),
+                PluginLifecycleState.Stopping => T("StatusStopping"),
+                PluginLifecycleState.Faulted => T("StatusFaulted"),
+                PluginLifecycleState.RestartRequired => T("StatusRestartRequired"),
                 PluginLifecycleState.Running => _snapshot.Status switch
                 {
-                    AudioRelayStatus.Refreshing => "Scanning",
-                    AudioRelayStatus.Ready => "Ready",
-                    AudioRelayStatus.Connecting => "Connecting",
-                    AudioRelayStatus.Streaming => "Receiving",
-                    AudioRelayStatus.Unsupported => "Unsupported",
-                    AudioRelayStatus.Error => "Needs attention",
-                    _ => "Enabled"
+                    AudioRelayStatus.Refreshing => T("StatusScanning"),
+                    AudioRelayStatus.Ready => T("StatusReady"),
+                    AudioRelayStatus.Connecting => T("StatusConnecting"),
+                    AudioRelayStatus.Streaming => T("StatusReceiving"),
+                    AudioRelayStatus.Unsupported => T("StatusUnsupported"),
+                    AudioRelayStatus.Error => T("StatusNeedsAttention"),
+                    _ => T("StatusEnabled")
                 },
-                _ => "Disabled"
+                _ => T("StatusDisabled")
             };
         }
     }
@@ -128,15 +157,42 @@ public sealed class AudioRelayViewModel : INotifyPropertyChanged, IDisposable
         {
             if (_pluginDirectory is null)
             {
-                return "Install the Phone Audio Relay package, then enable it to discover paired phones.";
+                return T("RelayInstallDescription");
             }
 
             if (_loadedPlugin is null)
             {
-                return "The relay is installed but disabled. PC audio is unchanged.";
+                return T("RelayDisabledDescription");
             }
 
-            return _snapshot.StatusMessage;
+            if (RequiresHostRestart)
+            {
+                return T("RelayRestartRequiredDescription");
+            }
+
+            return _snapshot.Status switch
+            {
+                AudioRelayStatus.Refreshing => T("RelayRefreshingDescription"),
+                AudioRelayStatus.Ready when Devices.Count == 0 => T("RelayNoDevicesDescription"),
+                AudioRelayStatus.Ready => string.Format(
+                    CultureInfo.CurrentCulture,
+                    T("RelayReadyDescription"),
+                    Devices.Count),
+                AudioRelayStatus.Connecting => string.Format(
+                    CultureInfo.CurrentCulture,
+                    T("RelayConnectingDescription"),
+                    _snapshot.SelectedDeviceName ?? T("Phone")),
+                AudioRelayStatus.Streaming => string.Format(
+                    CultureInfo.CurrentCulture,
+                    T("RelayStreamingDescription"),
+                    _snapshot.SelectedDeviceName ?? T("Phone")),
+                AudioRelayStatus.Unsupported => T("RelayUnsupportedDescription"),
+                AudioRelayStatus.Error => string.Format(
+                    CultureInfo.CurrentCulture,
+                    T("RelayErrorDescription"),
+                    _snapshot.ErrorCode ?? T("UnknownFailure")),
+                _ => T("RelayDisabledDescription")
+            };
         }
     }
 
@@ -148,18 +204,18 @@ public sealed class AudioRelayViewModel : INotifyPropertyChanged, IDisposable
         _ => WarningBrush
     };
 
-    public string SelectedPhoneLabel => SelectedDevice?.Name ?? "NO PHONE SELECTED";
+    public string SelectedPhoneLabel => SelectedDevice?.Name ?? T("NoPhoneSelected");
 
     public string DeviceCountLabel => Devices.Count switch
     {
-        0 => "NO PAIRED SOURCES",
-        1 => "1 PAIRED SOURCE",
-        _ => $"{Devices.Count} PAIRED SOURCES"
+        0 => T("NoPairedSources"),
+        1 => T("OnePairedSource"),
+        _ => string.Format(CultureInfo.CurrentCulture, T("ManyPairedSources"), Devices.Count)
     };
 
     public string RouteStateLabel => _snapshot.Status == AudioRelayStatus.Streaming
-        ? "SIGNAL OPEN"
-        : "SIGNAL STANDBY";
+        ? T("SignalOpen")
+        : T("SignalStandby");
 
     public bool HasError => !string.IsNullOrWhiteSpace(_errorMessage);
 
@@ -170,7 +226,7 @@ public sealed class AudioRelayViewModel : INotifyPropertyChanged, IDisposable
     public async Task ToggleAsync()
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
-        if (!IsToggleEnabled)
+        if (!IsToggleEnabled || RequiresHostRestart)
         {
             return;
         }
@@ -179,6 +235,28 @@ public sealed class AudioRelayViewModel : INotifyPropertyChanged, IDisposable
             _loadedPlugin is null ? EnableCoreAsync : DisableCoreAsync,
             "AUDIO_RELAY_LIFECYCLE_FAILED",
             $"The {ProductName} lifecycle operation failed.");
+    }
+
+    public async Task<bool> SetRuntimeEnabledAsync(bool enabled)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        if (RequiresHostRestart)
+        {
+            return false;
+        }
+
+        if (IsRuntimeEnabled == enabled)
+        {
+            return true;
+        }
+
+        if (!IsToggleEnabled)
+        {
+            return false;
+        }
+
+        await ToggleAsync();
+        return IsRuntimeEnabled == enabled && !RequiresHostRestart;
     }
 
     public async Task RefreshAsync()
@@ -253,10 +331,43 @@ public sealed class AudioRelayViewModel : INotifyPropertyChanged, IDisposable
                     $"{ProductName} package installed and activated.",
                     pluginId: installed.PluginId,
                     pluginVersion: installed.Version);
+                NotifyManagementProperties();
                 NotifyRuntimeProperties();
             },
             "PACKAGE_INSTALL_FAILED",
             $"The {ProductName} package could not be installed.");
+    }
+
+    public async Task UninstallAsync()
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        var removedVersion = InstalledVersion;
+        if (!IsUninstallEnabled || string.IsNullOrWhiteSpace(removedVersion))
+        {
+            return;
+        }
+
+        await RunOperationAsync(
+            async () =>
+            {
+                if (_loadedPlugin is not null)
+                {
+                    await DisableCoreAsync();
+                }
+
+                var result = await _packageInstaller.UninstallAsync(ProductId, removedVersion);
+                _pluginDirectory = string.IsNullOrWhiteSpace(result.ActiveVersionAfterUninstall)
+                    ? null
+                    : _packageInstaller.GetActiveVersionDirectory(ProductId);
+                _snapshot = AudioRelaySnapshot.Disabled();
+                SyncDevices(_snapshot);
+                _logger.Info("Package", $"{ProductName} {removedVersion} uninstalled.");
+                NotifyManagementProperties();
+                NotifyRuntimeProperties();
+                NotifySnapshotProperties();
+            },
+            "PACKAGE_UNINSTALL_FAILED",
+            $"The {ProductName} package could not be uninstalled.");
     }
 
     public void Dispose()
@@ -267,11 +378,12 @@ public sealed class AudioRelayViewModel : INotifyPropertyChanged, IDisposable
         }
 
         _disposed = true;
+        _localization.LanguageChanged -= OnLanguageChanged;
         DetachPluginCallbacks();
 
         try
         {
-            _loadedPlugin?.StopAndUnloadAsync().AsTask().GetAwaiter().GetResult();
+            _loadedPlugin?.DisposeAsync().AsTask().GetAwaiter().GetResult();
         }
         catch (Exception exception)
         {
@@ -450,16 +562,29 @@ public sealed class AudioRelayViewModel : INotifyPropertyChanged, IDisposable
 
     private void NotifyRuntimeProperties()
     {
+        Notify(nameof(IsRuntimeEnabled));
         Notify(nameof(ToggleLabel));
         Notify(nameof(PackageActionLabel));
         Notify(nameof(IsInstallEnabled));
+        Notify(nameof(IsUninstallEnabled));
         Notify(nameof(IsToggleEnabled));
+        Notify(nameof(RequiresHostRestart));
+        Notify(nameof(IsNormalToggleVisible));
+        Notify(nameof(IsRestartActionVisible));
+        Notify(nameof(IsRestartActionEnabled));
         Notify(nameof(IsRefreshEnabled));
         Notify(nameof(IsConnectEnabled));
         Notify(nameof(IsDisconnectEnabled));
         Notify(nameof(StatusLabel));
         Notify(nameof(StatusDescription));
         Notify(nameof(StatusAccentBrush));
+    }
+
+    private void NotifyManagementProperties()
+    {
+        Notify(nameof(IsInstalled));
+        Notify(nameof(InstalledVersion));
+        Notify(nameof(IsUninstallEnabled));
     }
 
     private void NotifySnapshotProperties()
@@ -469,10 +594,18 @@ public sealed class AudioRelayViewModel : INotifyPropertyChanged, IDisposable
         Notify(nameof(RouteStateLabel));
     }
 
+    private void OnLanguageChanged(object? sender, EventArgs e)
+    {
+        NotifyRuntimeProperties();
+        NotifySnapshotProperties();
+    }
+
     private void Notify([CallerMemberName] string? propertyName = null)
     {
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
     }
+
+    private string T(string key) => _localization[key];
 
     private static void EnsureAudioRelayPackage(string packagePath)
     {

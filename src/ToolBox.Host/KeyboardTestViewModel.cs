@@ -9,6 +9,8 @@ using ToolBox.Core.Packaging;
 using ToolBox.Core.Plugins;
 using ToolBox.PluginSdk;
 using ToolBox.PluginSdk.Experimental;
+using Color = System.Windows.Media.Color;
+using ColorConverter = System.Windows.Media.ColorConverter;
 
 namespace ToolBox.Host;
 
@@ -17,10 +19,12 @@ public sealed class KeyboardTestViewModel : INotifyPropertyChanged, IDisposable
     private static readonly SolidColorBrush HealthyBrush = CreateBrush("#92E6B5");
     private static readonly SolidColorBrush WarningBrush = CreateBrush("#F5B85B");
     private static readonly SolidColorBrush ErrorBrush = CreateBrush("#FF8F86");
+    private const string ProductId = "com.toolbox.keyboard-test";
     private const string ProductName = "Keyboard & Mouse Test";
 
     private readonly IStructuredLogger _logger;
     private readonly PluginPackageInstaller _packageInstaller;
+    private readonly LocalizationService _localization;
     private readonly InProcessPluginRuntime _runtime;
     private string? _pluginDirectory;
     private readonly Dispatcher _dispatcher;
@@ -35,16 +39,27 @@ public sealed class KeyboardTestViewModel : INotifyPropertyChanged, IDisposable
     public KeyboardTestViewModel(
         IStructuredLogger logger,
         string? pluginDirectory,
-        PluginPackageInstaller packageInstaller)
+        PluginPackageInstaller packageInstaller,
+        LocalizationService localization)
     {
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _packageInstaller = packageInstaller ?? throw new ArgumentNullException(nameof(packageInstaller));
-        _pluginDirectory = pluginDirectory;
+        _localization = localization ?? throw new ArgumentNullException(nameof(localization));
+        _pluginDirectory = Directory.Exists(pluginDirectory) ? pluginDirectory : null;
         _runtime = new InProcessPluginRuntime();
         _dispatcher = System.Windows.Application.Current?.Dispatcher ?? Dispatcher.CurrentDispatcher;
+        _localization.LanguageChanged += OnLanguageChanged;
     }
 
     public event PropertyChangedEventHandler? PropertyChanged;
+
+    public bool IsInstalled => _pluginDirectory is not null && Directory.Exists(_pluginDirectory);
+
+    public bool IsRuntimeEnabled => _loadedPlugin?.State.LifecycleState == PluginLifecycleState.Running;
+
+    public string InstalledVersion => IsInstalled
+        ? Path.GetFileName(_pluginDirectory!.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar))
+        : string.Empty;
 
     public bool IncludeKeyUpEvents
     {
@@ -78,9 +93,9 @@ public sealed class KeyboardTestViewModel : INotifyPropertyChanged, IDisposable
         }
     }
 
-    public string ToggleLabel => _loadedPlugin is null ? "Enable test" : "Disable test";
+    public string ToggleLabel => _loadedPlugin is null ? T("EnableTest") : T("DisableTest");
 
-    public string PackageActionLabel => _pluginDirectory is null ? "Install .tpk" : "Install update";
+    public string PackageActionLabel => _pluginDirectory is null ? T("InstallPackage") : T("InstallUpdate");
 
     public bool IsToggleEnabled => _pluginDirectory is not null
         && !_operationInProgress
@@ -93,28 +108,30 @@ public sealed class KeyboardTestViewModel : INotifyPropertyChanged, IDisposable
 
     public bool IsInstallEnabled => !_operationInProgress && _loadedPlugin is null;
 
+    public bool IsUninstallEnabled => IsInstalled && !_operationInProgress;
+
     public string StatusLabel => _pluginDirectory is null
-        ? "Not installed"
+        ? T("StatusNotInstalled")
         : _loadedPlugin?.State.LifecycleState switch
     {
-        PluginLifecycleState.Starting => "Starting",
-        PluginLifecycleState.Running => "Enabled",
-        PluginLifecycleState.Stopping => "Stopping",
-        PluginLifecycleState.Faulted => "Faulted",
-        PluginLifecycleState.RestartRequired => "Restart required",
-        _ => "Disabled"
+        PluginLifecycleState.Starting => T("StatusStarting"),
+        PluginLifecycleState.Running => T("StatusEnabled"),
+        PluginLifecycleState.Stopping => T("StatusStopping"),
+        PluginLifecycleState.Faulted => T("StatusFaulted"),
+        PluginLifecycleState.RestartRequired => T("StatusRestartRequired"),
+        _ => T("StatusDisabled")
     };
 
     public string StatusDescription => _pluginDirectory is null
-        ? "Install and activate a Keyboard & Mouse Test package to begin."
+        ? T("KeyboardInstallDescription")
         : _loadedPlugin?.State.LifecycleState switch
     {
-        PluginLifecycleState.Starting => $"{ProductName} is entering its active lifetime.",
-        PluginLifecycleState.Running => "Input is observed only inside this surface; no global hook is active.",
-        PluginLifecycleState.Stopping => "The Host is stopping the plugin before it can claim Disabled.",
-        PluginLifecycleState.Faulted => "The plugin reported a lifecycle failure. The Host keeps that state visible.",
-        PluginLifecycleState.RestartRequired => "The plugin did not finish its lifecycle. Restart the Host before retrying.",
-        _ => $"{ProductName} is installed but disabled. Enable it to test this surface."
+        PluginLifecycleState.Starting => T("KeyboardStartingDescription"),
+        PluginLifecycleState.Running => T("KeyboardRunningDescription"),
+        PluginLifecycleState.Stopping => T("KeyboardStoppingDescription"),
+        PluginLifecycleState.Faulted => T("KeyboardFaultedDescription"),
+        PluginLifecycleState.RestartRequired => T("KeyboardRestartDescription"),
+        _ => T("KeyboardDisabledDescription")
     };
 
     public SolidColorBrush StatusAccentBrush => _loadedPlugin?.State.LifecycleState switch
@@ -125,14 +142,18 @@ public sealed class KeyboardTestViewModel : INotifyPropertyChanged, IDisposable
     };
 
     public string LastInputLabel => string.IsNullOrWhiteSpace(_snapshot.LastInput)
-        ? "Waiting for a signal"
+        ? T("WaitingForSignal")
         : _snapshot.LastInput;
 
     public string KeyEventCountLabel => _snapshot.KeyEventCount.ToString("N0", CultureInfo.InvariantCulture);
 
     public string MouseEventCountLabel => _snapshot.MouseEventCount.ToString("N0", CultureInfo.InvariantCulture);
 
-    public string SettingsSummary => $"Key-up {(_settings.IncludeKeyUpEvents ? "on" : "off")}  ·  Mouse {(_settings.IncludeMouseEvents ? "on" : "off")}";
+    public string SettingsSummary => string.Format(
+        CultureInfo.CurrentCulture,
+        T("SettingsSummary"),
+        _settings.IncludeKeyUpEvents ? T("On") : T("Off"),
+        _settings.IncludeMouseEvents ? T("On") : T("Off"));
 
     public bool HasError => !string.IsNullOrWhiteSpace(_errorMessage);
 
@@ -182,6 +203,23 @@ public sealed class KeyboardTestViewModel : INotifyPropertyChanged, IDisposable
         {
             SetOperationInProgress(false);
         }
+    }
+
+    public async Task<bool> SetRuntimeEnabledAsync(bool enabled)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        if (IsRuntimeEnabled == enabled)
+        {
+            return true;
+        }
+
+        if (!IsToggleEnabled)
+        {
+            return false;
+        }
+
+        await ToggleAsync();
+        return IsRuntimeEnabled == enabled;
     }
 
     public async Task ApplySettingsAsync()
@@ -247,6 +285,7 @@ public sealed class KeyboardTestViewModel : INotifyPropertyChanged, IDisposable
                 $"{ProductName} package installed and activated.",
                 pluginId: installed.PluginId,
                 pluginVersion: installed.Version);
+            NotifyManagementProperties();
             NotifySnapshotProperties();
             NotifyRuntimeProperties();
         }
@@ -259,6 +298,56 @@ public sealed class KeyboardTestViewModel : INotifyPropertyChanged, IDisposable
                 errorCode: exception is PluginPackageException packageException
                     ? packageException.ErrorCode
                     : "PACKAGE_INSTALL_FAILED",
+                exception: exception);
+            Notify(nameof(HasError));
+            Notify(nameof(ErrorMessage));
+        }
+        finally
+        {
+            SetOperationInProgress(false);
+        }
+    }
+
+    public async Task UninstallAsync()
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        var removedVersion = InstalledVersion;
+        if (!IsUninstallEnabled || string.IsNullOrWhiteSpace(removedVersion))
+        {
+            return;
+        }
+
+        SetOperationInProgress(true);
+        _errorMessage = null;
+        Notify(nameof(HasError));
+        Notify(nameof(ErrorMessage));
+
+        try
+        {
+            if (_loadedPlugin is not null)
+            {
+                await DisableCoreAsync();
+            }
+
+            var result = await _packageInstaller.UninstallAsync(ProductId, removedVersion);
+            _pluginDirectory = string.IsNullOrWhiteSpace(result.ActiveVersionAfterUninstall)
+                ? null
+                : _packageInstaller.GetActiveVersionDirectory(ProductId);
+            _snapshot = KeyboardTestSnapshot.Disabled(_settings);
+            _logger.Info("Package", $"{ProductName} {removedVersion} uninstalled.");
+            NotifyManagementProperties();
+            NotifyRuntimeProperties();
+            NotifySnapshotProperties();
+        }
+        catch (Exception exception)
+        {
+            _errorMessage = exception.Message;
+            _logger.Error(
+                "Package",
+                $"The {ProductName} package could not be uninstalled.",
+                errorCode: exception is PluginPackageException packageException
+                    ? packageException.ErrorCode
+                    : "PACKAGE_UNINSTALL_FAILED",
                 exception: exception);
             Notify(nameof(HasError));
             Notify(nameof(ErrorMessage));
@@ -297,12 +386,13 @@ public sealed class KeyboardTestViewModel : INotifyPropertyChanged, IDisposable
         }
 
         _disposed = true;
+        _localization.LanguageChanged -= OnLanguageChanged;
 
         DetachPluginCallbacks();
 
         try
         {
-            _loadedPlugin?.StopAndUnloadAsync().AsTask().GetAwaiter().GetResult();
+            _loadedPlugin?.DisposeAsync().AsTask().GetAwaiter().GetResult();
         }
         catch (Exception exception)
         {
@@ -412,10 +502,12 @@ public sealed class KeyboardTestViewModel : INotifyPropertyChanged, IDisposable
         Notify(nameof(IsToggleEnabled));
         Notify(nameof(IsSettingsEnabled));
         Notify(nameof(IsInstallEnabled));
+        Notify(nameof(IsUninstallEnabled));
     }
 
     private void NotifyRuntimeProperties()
     {
+        Notify(nameof(IsRuntimeEnabled));
         Notify(nameof(ToggleLabel));
         Notify(nameof(PackageActionLabel));
         Notify(nameof(IsToggleEnabled));
@@ -426,6 +518,13 @@ public sealed class KeyboardTestViewModel : INotifyPropertyChanged, IDisposable
         Notify(nameof(StatusAccentBrush));
     }
 
+    private void NotifyManagementProperties()
+    {
+        Notify(nameof(IsInstalled));
+        Notify(nameof(InstalledVersion));
+        Notify(nameof(IsUninstallEnabled));
+    }
+
     private void NotifySnapshotProperties()
     {
         Notify(nameof(LastInputLabel));
@@ -434,10 +533,18 @@ public sealed class KeyboardTestViewModel : INotifyPropertyChanged, IDisposable
         Notify(nameof(SettingsSummary));
     }
 
+    private void OnLanguageChanged(object? sender, EventArgs e)
+    {
+        NotifyRuntimeProperties();
+        NotifySnapshotProperties();
+    }
+
     private void Notify([CallerMemberName] string? propertyName = null)
     {
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
     }
+
+    private string T(string key) => _localization[key];
 
     private static SolidColorBrush CreateBrush(string hex)
     {

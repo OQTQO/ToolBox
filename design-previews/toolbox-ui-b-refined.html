@@ -1,0 +1,663 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ToolBox · B 方案精修</title>
+  <style>
+    :root {
+      color-scheme: light;
+      font-family: "Segoe UI Variable", "Microsoft YaHei UI", "Microsoft YaHei", sans-serif;
+      font-synthesis: none;
+      text-rendering: geometricPrecision;
+      --canvas: #e7ebf1;
+      --window: #f3f5f8;
+      --surface: #fbfcfe;
+      --surface-soft: #f5f7fa;
+      --surface-blue: #edf3ff;
+      --sidebar: #f8fafc;
+      --line: #d9dfe8;
+      --line-strong: #bdc7d4;
+      --ink: #182231;
+      --ink-soft: #465466;
+      --muted: #788596;
+      --blue: #2868df;
+      --blue-deep: #174faa;
+      --green: #168260;
+      --red: #c64654;
+      --shadow: 0 30px 90px rgba(35, 46, 65, .22), 0 4px 15px rgba(35, 46, 65, .08);
+      --ease: cubic-bezier(.2,.8,.2,1);
+    }
+
+    * { box-sizing: border-box; }
+    button, input { font: inherit; }
+    button { -webkit-tap-highlight-color: transparent; }
+    body {
+      min-width: 1080px;
+      min-height: 100vh;
+      margin: 0;
+      overflow: hidden;
+      color: var(--ink);
+      background: var(--canvas);
+    }
+
+    .review-bar {
+      height: 68px;
+      display: flex;
+      align-items: center;
+      gap: 22px;
+      padding: 0 28px;
+      border-bottom: 1px solid #cfd6e0;
+      background: rgba(248,250,252,.94);
+      backdrop-filter: blur(20px);
+    }
+    .review-title { min-width: 230px; }
+    .review-title strong { display: block; font-size: 14px; font-weight: 680; letter-spacing: -.01em; }
+    .review-title span { display: block; margin-top: 3px; color: var(--muted); font-size: 11px; }
+    .icon-picker { display: flex; align-items: center; gap: 7px; }
+    .picker-label { margin-right: 4px; color: var(--muted); font-size: 11px; }
+    .icon-choice {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 7px 10px 7px 7px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      color: var(--ink-soft);
+      background: #fff;
+      cursor: pointer;
+      transition: border-color .16s ease, box-shadow .16s ease, color .16s ease;
+    }
+    .icon-choice:hover { border-color: #9aa9ba; }
+    .icon-choice.active { color: var(--blue-deep); border-color: #8cacec; box-shadow: 0 0 0 3px rgba(40,104,223,.09); }
+    .icon-choice .mini-icon { width: 24px; height: 24px; border-radius: 6px; overflow: hidden; }
+    .icon-choice span { font-size: 11px; }
+    .review-note { margin-left: auto; max-width: 390px; color: var(--muted); font-size: 11px; line-height: 1.55; }
+
+    .stage {
+      height: calc(100vh - 68px);
+      padding: 17px;
+      display: grid;
+      place-items: center;
+      background:
+        radial-gradient(circle at 70% 15%, rgba(255,255,255,.8), transparent 29%),
+        linear-gradient(125deg, #e1e6ed, #eef1f5 58%, #dce2ea);
+    }
+
+    .app-window {
+      position: relative;
+      width: min(1450px, calc(100vw - 34px));
+      height: min(900px, calc(100vh - 102px));
+      min-height: 650px;
+      display: grid;
+      grid-template-columns: 224px minmax(0,1fr);
+      grid-template-rows: 50px minmax(0,1fr);
+      overflow: hidden;
+      border: 1px solid #c3ccd8;
+      border-radius: 11px;
+      background: var(--window);
+      box-shadow: var(--shadow);
+      transition: width .28s var(--ease), height .28s var(--ease), border-radius .28s ease;
+    }
+    .app-window.maximized {
+      width: calc(100vw - 8px);
+      height: calc(100vh - 72px);
+      border-radius: 5px;
+    }
+
+    .titlebar {
+      grid-column: 1 / -1;
+      display: flex;
+      align-items: center;
+      padding-left: 15px;
+      border-bottom: 1px solid var(--line);
+      background: rgba(251,252,254,.96);
+      user-select: none;
+    }
+    .app-icon-slot { width: 24px; height: 24px; flex: none; overflow: hidden; border-radius: 6px; }
+    .app-title { margin-left: 9px; font-size: 12px; font-weight: 650; letter-spacing: .01em; }
+    .app-subtitle { margin-left: 9px; color: var(--muted); font-size: 10px; }
+    .window-controls { height: 100%; display: flex; margin-left: auto; }
+    .window-control {
+      position: relative;
+      width: 47px;
+      height: 100%;
+      display: grid;
+      place-items: center;
+      padding: 0;
+      border: 0;
+      color: #435164;
+      background: transparent;
+      cursor: pointer;
+      transition: background .14s ease, color .14s ease;
+    }
+    .window-control:hover { color: #132033; background: #e7ebf1; }
+    .window-control.close:hover { color: #fff; background: #c42b3b; }
+    .window-control svg { width: 11px; height: 11px; stroke: currentColor; fill: none; stroke-width: 1.35; shape-rendering: geometricPrecision; }
+
+    .sidebar {
+      grid-column: 1;
+      grid-row: 2;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+      padding: 20px 13px 14px;
+      border-right: 1px solid var(--line);
+      background: var(--sidebar);
+    }
+    .workspace-name { padding: 0 10px 17px; }
+    .workspace-name span { display: block; color: var(--muted); font-size: 9px; font-weight: 700; letter-spacing: .11em; text-transform: uppercase; }
+    .workspace-name strong { display: block; margin-top: 6px; font-size: 17px; font-weight: 660; letter-spacing: -.025em; }
+    .nav { display: grid; gap: 3px; }
+    .nav-group { margin: 17px 10px 6px; color: #919caa; font-size: 9px; font-weight: 710; letter-spacing: .08em; text-transform: uppercase; }
+    .nav-item {
+      position: relative;
+      width: 100%;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 9px 10px;
+      border: 0;
+      border-radius: 7px;
+      color: #536277;
+      background: transparent;
+      text-align: left;
+      cursor: pointer;
+      transition: .14s ease;
+    }
+    .nav-item:hover { color: var(--ink); background: #eef2f7; }
+    .nav-item.active { color: var(--blue-deep); background: #e8f0ff; font-weight: 650; }
+    .nav-item.active::before {
+      content: "";
+      position: absolute;
+      left: 0;
+      width: 3px;
+      height: 18px;
+      border-radius: 0 3px 3px 0;
+      background: var(--blue);
+    }
+    .nav-item svg { width: 17px; height: 17px; flex: none; stroke: currentColor; fill: none; stroke-width: 1.65; }
+    .nav-state { width: 6px; height: 6px; margin-left: auto; border: 1px solid #fff; border-radius: 50%; background: #2aa578; box-shadow: 0 0 0 2px rgba(42,165,120,.12); }
+    .sidebar-status { margin-top: auto; display: flex; align-items: center; gap: 9px; padding: 11px 10px; border-top: 1px solid var(--line); color: var(--muted); font-size: 10px; }
+    .health-dot { width: 7px; height: 7px; border-radius: 50%; background: #22a16f; box-shadow: 0 0 0 4px rgba(34,161,111,.10); }
+
+    .content {
+      grid-column: 2;
+      grid-row: 2;
+      min-width: 0;
+      min-height: 0;
+      overflow-y: auto;
+      scrollbar-width: thin;
+      scrollbar-color: #b6c0cd transparent;
+    }
+    .content::-webkit-scrollbar { width: 9px; }
+    .content::-webkit-scrollbar-track { margin: 5px 0; background: transparent; }
+    .content::-webkit-scrollbar-thumb { min-height: 46px; border: 3px solid var(--window); border-radius: 99px; background: #aeb9c7; }
+    .content::-webkit-scrollbar-thumb:hover { background: #8190a3; }
+    .page { display: none; width: min(100%, 1090px); min-height: 100%; margin: 0 auto; padding: 37px 44px 70px; animation: enter .22s var(--ease); }
+    .page.active { display: block; }
+    @keyframes enter { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: none; } }
+    .eyebrow { margin-bottom: 8px; color: var(--blue); font-size: 10px; font-weight: 720; letter-spacing: .08em; text-transform: uppercase; }
+    h1 { margin: 0; font-size: 30px; font-weight: 660; letter-spacing: -.035em; line-height: 1.2; }
+    .lede { max-width: 720px; margin: 10px 0 25px; color: var(--ink-soft); font-size: 12px; line-height: 1.7; }
+    h2 { margin: 0; font-size: 15px; font-weight: 660; letter-spacing: -.015em; }
+    .description { margin: 4px 0 0; color: var(--muted); font-size: 10px; line-height: 1.55; }
+
+    .overview-hero {
+      position: relative;
+      min-height: 190px;
+      padding: 28px;
+      overflow: hidden;
+      border: 1px solid #cad8ec;
+      border-radius: 11px;
+      background: #edf4ff;
+    }
+    .overview-hero::after {
+      content: "";
+      position: absolute;
+      right: -40px;
+      top: -58px;
+      width: 330px;
+      height: 280px;
+      opacity: .5;
+      background-image: radial-gradient(#8fb2ec 1px, transparent 1px);
+      background-size: 14px 14px;
+      transform: rotate(5deg);
+      mask-image: linear-gradient(100deg, transparent, #000);
+    }
+    .hero-status { display: flex; align-items: center; gap: 8px; color: var(--green); font-size: 10px; font-weight: 650; }
+    .hero-status i { width: 7px; height: 7px; border-radius: 50%; background: #24a578; }
+    .hero-title { position: relative; z-index: 1; margin-top: 27px; font-size: 25px; font-weight: 650; letter-spacing: -.035em; }
+    .hero-copy { position: relative; z-index: 1; width: 58%; margin-top: 8px; color: var(--ink-soft); font-size: 11px; line-height: 1.65; }
+    .metric-row { display: grid; grid-template-columns: repeat(3,1fr); gap: 12px; margin-top: 12px; }
+    .metric { padding: 16px 17px; border: 1px solid var(--line); border-radius: 9px; background: var(--surface); }
+    .metric span { color: var(--muted); font-size: 9px; font-weight: 690; letter-spacing: .04em; text-transform: uppercase; }
+    .metric strong { display: block; margin-top: 7px; font-size: 16px; font-weight: 650; }
+
+    .settings { display: grid; gap: 12px; }
+    .card { overflow: hidden; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); box-shadow: 0 2px 7px rgba(45,58,78,.035); }
+    .card-head { display: flex; align-items: center; gap: 18px; min-height: 68px; padding: 15px 18px; }
+    .card-head-copy { min-width: 0; }
+    .right-control { margin-left: auto; }
+    .segmented { display: flex; gap: 3px; padding: 3px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface-soft); }
+    .segmented button { min-width: 58px; padding: 6px 9px; border: 0; border-radius: 5px; color: var(--muted); background: transparent; font-size: 10px; cursor: pointer; }
+    .segmented button.selected { color: var(--blue-deep); background: #fff; box-shadow: 0 1px 4px rgba(36,50,70,.11); font-weight: 650; }
+    .primary, .secondary {
+      padding: 8px 13px;
+      border-radius: 7px;
+      font-size: 10px;
+      font-weight: 650;
+      cursor: pointer;
+      transition: transform .15s ease, box-shadow .15s ease;
+    }
+    .primary { border: 1px solid var(--blue); color: #fff; background: var(--blue); box-shadow: 0 2px 6px rgba(40,104,223,.19); }
+    .secondary { border: 1px solid var(--line); color: var(--ink-soft); background: #fff; }
+    .primary:hover, .secondary:hover { transform: translateY(-1px); box-shadow: 0 4px 10px rgba(36,50,70,.12); }
+
+    .behavior-options { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; padding: 0 18px 17px; }
+    .behavior-option {
+      position: relative;
+      display: grid;
+      grid-template-columns: 26px 1fr;
+      gap: 10px;
+      min-height: 72px;
+      padding: 13px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--surface-soft);
+      cursor: pointer;
+      transition: .16s ease;
+    }
+    .behavior-option:hover { border-color: #a8b7ca; }
+    .behavior-option.selected { border-color: #8baceb; background: #f1f6ff; box-shadow: inset 0 0 0 1px rgba(40,104,223,.08); }
+    .radio { width: 17px; height: 17px; margin-top: 1px; display: grid; place-items: center; border: 1.5px solid #9aa7b8; border-radius: 50%; background: #fff; }
+    .selected .radio { border-color: var(--blue); }
+    .selected .radio::after { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--blue); }
+    .behavior-option strong { display: block; font-size: 11px; }
+    .behavior-option p { margin: 4px 0 0; color: var(--muted); font-size: 9px; line-height: 1.5; }
+
+    .plugin-list { border-top: 1px solid var(--line); }
+    .plugin-row { display: grid; grid-template-columns: 36px minmax(200px,1fr) 96px auto; align-items: center; gap: 13px; padding: 13px 18px; }
+    .plugin-row + .plugin-row { border-top: 1px solid var(--line); }
+    .plugin-row.disabled { background: #fafbfc; }
+    .plugin-icon { width: 34px; height: 34px; display: grid; place-items: center; border-radius: 8px; color: var(--blue); background: #edf3ff; }
+    .plugin-icon svg { width: 17px; height: 17px; stroke: currentColor; fill: none; stroke-width: 1.65; }
+    .plugin-name { display: block; font-size: 11px; font-weight: 650; }
+    .plugin-meta { display: block; margin-top: 3px; color: var(--muted); font-size: 9px; }
+    .plugin-state { color: var(--green); font-size: 9px; font-weight: 650; }
+    .disabled .plugin-state { color: var(--muted); }
+    .row-actions { display: flex; align-items: center; gap: 9px; }
+    .link-button { padding: 5px 2px; border: 0; color: var(--muted); background: transparent; font-size: 9px; cursor: pointer; }
+    .link-button.danger { color: var(--red); }
+    .switch { position: relative; width: 38px; height: 21px; padding: 0; border: 0; border-radius: 99px; background: #adb8c5; cursor: pointer; transition: .18s ease; }
+    .switch::after { content: ""; position: absolute; left: 3px; top: 3px; width: 15px; height: 15px; border-radius: 50%; background: #fff; box-shadow: 0 1px 3px rgba(30,40,55,.25); transition: .2s var(--ease); }
+    .switch.on { background: var(--blue); }
+    .switch.on::after { transform: translateX(17px); }
+
+    .log-list { border-top: 1px solid var(--line); }
+    .log-row { display: grid; grid-template-columns: 78px 52px 1fr; gap: 13px; padding: 10px 18px; color: #6f7b8a; font: 9px/1.55 "Cascadia Mono", Consolas, monospace; }
+    .log-row + .log-row { border-top: 1px solid #edf0f4; }
+    .log-row b { color: var(--green); font-weight: 650; }
+
+    .plugin-workspace { display: grid; grid-template-columns: minmax(0,1fr) 250px; gap: 12px; }
+    .workspace-card { padding: 22px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); }
+    .connection { display: flex; align-items: center; gap: 11px; margin: 22px 0; }
+    .connection-symbol { width: 42px; height: 42px; display: grid; place-items: center; border: 1px solid #d2dff2; border-radius: 10px; color: var(--blue); background: #edf4ff; font-size: 17px; }
+    .connection strong { display: block; font-size: 12px; }
+    .connection span { display: block; margin-top: 3px; color: var(--muted); font-size: 9px; }
+    .signal-meter { height: 6px; margin: 20px 0 8px; overflow: hidden; border-radius: 99px; background: #e6ebf1; }
+    .signal-meter i { display: block; width: 65%; height: 100%; border-radius: inherit; background: var(--blue); animation: signal 2.2s ease-in-out infinite; }
+    @keyframes signal { 50% { width: 83%; } }
+    .button-row { display: flex; gap: 8px; margin-top: 19px; }
+    .detail { padding: 10px 0; }
+    .detail + .detail { border-top: 1px solid #edf0f4; }
+    .detail span { display: block; color: var(--muted); font-size: 9px; }
+    .detail strong { display: block; margin-top: 4px; font-size: 10px; font-weight: 620; }
+
+    /* Icon design lab */
+    .icon-lab-grid { display: grid; grid-template-columns: repeat(2,1fr); gap: 12px; }
+    .icon-concept { padding: 17px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); cursor: pointer; transition: .16s ease; }
+    .icon-concept:hover { border-color: #aab7c8; transform: translateY(-1px); }
+    .icon-concept.selected { border-color: #8baceb; box-shadow: 0 0 0 3px rgba(40,104,223,.08); }
+    .icon-concept-head { display: flex; align-items: center; gap: 13px; }
+    .icon-large { width: 58px; height: 58px; flex: none; overflow: hidden; border-radius: 14px; box-shadow: 0 5px 13px rgba(29,70,140,.18); }
+    .icon-concept h3 { margin: 0; font-size: 12px; font-weight: 660; }
+    .icon-concept p { margin: 5px 0 0; color: var(--muted); font-size: 9px; line-height: 1.5; }
+    .icon-sizes { display: flex; align-items: center; gap: 16px; margin-top: 14px; padding-top: 12px; border-top: 1px solid #edf0f4; }
+    .size-sample { display: flex; align-items: center; gap: 6px; color: var(--muted); font-size: 8px; }
+    .size-sample .render { overflow: hidden; border-radius: 5px; }
+    .tray-sample { margin-left: auto; display: flex; align-items: center; gap: 7px; padding: 6px 9px; border-radius: 6px; color: #e7edf7; background: #263142; font-size: 8px; }
+    .tray-icon { width: 16px; height: 16px; color: #e8edf5; }
+
+    .tray-preview {
+      position: fixed;
+      right: 28px;
+      bottom: 24px;
+      z-index: 20;
+      width: 285px;
+      padding: 13px;
+      border: 1px solid #cbd3dd;
+      border-radius: 10px;
+      color: var(--ink);
+      background: rgba(255,255,255,.97);
+      box-shadow: 0 18px 50px rgba(30,40,58,.24);
+      opacity: 0;
+      transform: translateY(12px) scale(.98);
+      pointer-events: none;
+      transition: .2s var(--ease);
+    }
+    .tray-preview.show { opacity: 1; transform: none; pointer-events: auto; }
+    .tray-preview-head { display: flex; align-items: center; gap: 9px; }
+    .tray-preview-head .app-icon-slot { width: 27px; height: 27px; }
+    .tray-preview-head strong { display: block; font-size: 11px; }
+    .tray-preview-head span { display: block; margin-top: 2px; color: var(--muted); font-size: 9px; }
+    .tray-actions { display: flex; gap: 7px; margin-top: 11px; }
+
+    .exit-dialog-backdrop {
+      position: absolute;
+      inset: 50px 0 0;
+      z-index: 12;
+      display: grid;
+      place-items: center;
+      background: rgba(31,42,58,.18);
+      backdrop-filter: blur(2px);
+      opacity: 0;
+      pointer-events: none;
+      transition: .18s ease;
+    }
+    .exit-dialog-backdrop.show { opacity: 1; pointer-events: auto; }
+    .exit-dialog { width: 330px; padding: 21px; border: 1px solid #c8d0dc; border-radius: 11px; background: #fff; box-shadow: 0 18px 55px rgba(31,42,58,.28); transform: translateY(8px); transition: .18s var(--ease); }
+    .show .exit-dialog { transform: none; }
+    .exit-dialog h3 { margin: 0; font-size: 15px; }
+    .exit-dialog p { margin: 8px 0 17px; color: var(--muted); font-size: 10px; line-height: 1.55; }
+    .dialog-actions { display: flex; justify-content: flex-end; gap: 8px; }
+
+    .toast {
+      position: absolute;
+      left: 50%;
+      bottom: 18px;
+      z-index: 15;
+      padding: 9px 13px;
+      border: 1px solid #cfd7e1;
+      border-radius: 8px;
+      color: #fff;
+      background: #263243;
+      box-shadow: 0 8px 25px rgba(31,42,58,.2);
+      font-size: 10px;
+      opacity: 0;
+      transform: translate(-50%, 8px);
+      pointer-events: none;
+      transition: .18s ease;
+    }
+    .toast.show { opacity: 1; transform: translate(-50%,0); }
+
+    .icon-svg { display: block; width: 100%; height: 100%; }
+    .hidden { display: none !important; }
+    button:focus-visible, .behavior-option:focus-visible, .icon-concept:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+    @media (max-height: 760px) {
+      .review-bar { height: 58px; }
+      .stage { height: calc(100vh - 58px); padding: 8px; }
+      .app-window { height: calc(100vh - 74px); min-height: 590px; }
+      .page { padding-top: 27px; }
+    }
+    @media (prefers-reduced-motion: reduce) { *,*::before,*::after { animation-duration: .001ms !important; animation-iteration-count: 1 !important; } }
+  </style>
+</head>
+<body>
+  <header class="review-bar">
+    <div class="review-title"><strong>B 方案 · 雾银原生</strong><span>精修版 / 应用图标与窗口行为预览</span></div>
+    <div class="icon-picker" role="tablist" aria-label="图标方案">
+      <span class="picker-label">图标</span>
+      <button class="icon-choice active" data-icon="modular"><span class="mini-icon icon-render" data-variant="modular"></span><span>模块 T</span></button>
+      <button class="icon-choice" data-icon="matrix"><span class="mini-icon icon-render" data-variant="matrix"></span><span>工具矩阵</span></button>
+      <button class="icon-choice" data-icon="hub"><span class="mini-icon icon-render" data-variant="hub"></span><span>中枢连接</span></button>
+      <button class="icon-choice" data-icon="case"><span class="mini-icon icon-render" data-variant="case"></span><span>工具箱</span></button>
+    </div>
+    <div class="review-note">推荐“模块 T”：大尺寸有品牌识别，缩到任务栏和托盘仍然清楚。点击右上角三个窗口按钮可体验行为。</div>
+  </header>
+
+  <main class="stage">
+    <section class="app-window" id="appWindow">
+      <header class="titlebar">
+        <span class="app-icon-slot icon-render current-icon"></span>
+        <span class="app-title">ToolBox</span>
+        <span class="app-subtitle" data-zh="插件工作台" data-en="Plugin workspace">插件工作台</span>
+        <div class="window-controls">
+          <button class="window-control" id="minimizeButton" aria-label="最小化" title="最小化">
+            <svg viewBox="0 0 12 12"><path d="M2 8.5h8"/></svg>
+          </button>
+          <button class="window-control" id="maximizeButton" aria-label="最大化" title="最大化">
+            <svg viewBox="0 0 12 12"><rect x="2.2" y="2.2" width="7.6" height="7.6"/></svg>
+          </button>
+          <button class="window-control close" id="closeButton" aria-label="关闭" title="关闭">
+            <svg viewBox="0 0 12 12"><path d="m2.4 2.4 7.2 7.2m0-7.2-7.2 7.2"/></svg>
+          </button>
+        </div>
+      </header>
+
+      <aside class="sidebar">
+        <div class="workspace-name"><span data-zh="工作区" data-en="Workspace">工作区</span><strong data-zh="主程序" data-en="ToolBox host">主程序</strong></div>
+        <nav class="nav">
+          <button class="nav-item" data-page="overview">
+            <svg viewBox="0 0 24 24"><path d="M4 13h6V4H4v9Zm10 7h6V11h-6v9ZM4 20h6v-3H4v3Zm10-13h6V4h-6v3Z"/></svg>
+            <span data-zh="概览" data-en="Overview">概览</span>
+          </button>
+          <div class="nav-group" id="pluginHeading" data-zh="已启用插件" data-en="Enabled plugins">已启用插件</div>
+          <button class="nav-item plugin-nav" data-plugin="keyboard" data-page="keyboard">
+            <svg viewBox="0 0 24 24"><rect x="3" y="6" width="18" height="12" rx="2"/><path d="M7 10h.01M10 10h.01M13 10h.01M16 10h.01M8 14h8" stroke-linecap="round"/></svg>
+            <span data-zh="键盘与鼠标" data-en="Keyboard & Mouse">键盘与鼠标</span><i class="nav-state"></i>
+          </button>
+          <button class="nav-item plugin-nav" data-plugin="audio" data-page="audio">
+            <svg viewBox="0 0 24 24"><path d="M8 17V7l9-2v10"/><circle cx="6" cy="17" r="2"/><circle cx="15" cy="15" r="2"/></svg>
+            <span data-zh="手机音频流转" data-en="Phone Audio Relay">手机音频流转</span><i class="nav-state"></i>
+          </button>
+          <div class="nav-group" data-zh="主程序" data-en="Host">主程序</div>
+          <button class="nav-item active" data-page="settings">
+            <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19 12c0-.4 0-.8-.1-1.2l2-1.5-2-3.4-2.5 1A7 7 0 0 0 14.3 5L14 2h-4l-.4 3a7 7 0 0 0-2.1 1.2l-2.5-1-2 3.4 2 1.6a7 7 0 0 0 0 2.5l-2 1.5 2 3.5 2.5-1a7 7 0 0 0 2.1 1.2l.4 3h4l.4-3a7 7 0 0 0 2.1-1.2l2.5 1 2-3.5-2-1.5c.1-.4.1-.8.1-1.2Z"/></svg>
+            <span data-zh="设置" data-en="Settings">设置</span>
+          </button>
+          <button class="nav-item" data-page="identity">
+            <svg viewBox="0 0 24 24"><path d="M5 4h14v16H5zM8 8h8m-8 4h5m-5 4h8"/></svg>
+            <span data-zh="图标方案" data-en="Icon concepts">图标方案</span>
+          </button>
+        </nav>
+        <div class="sidebar-status"><i class="health-dot"></i><span data-zh="主程序运行正常 · v0.1.0" data-en="Host healthy · v0.1.0">主程序运行正常 · v0.1.0</span></div>
+      </aside>
+
+      <div class="content" id="content">
+        <section class="page" data-view="overview">
+          <div class="eyebrow" data-zh="系统概览" data-en="System overview">系统概览</div>
+          <h1 data-zh="工具都在正确的位置" data-en="Every tool, exactly where it belongs">工具都在正确的位置</h1>
+          <p class="lede" data-zh="主程序保持安静，只呈现已启用的工具。安装、停用和诊断集中在设置中管理。" data-en="The host stays quiet and shows only enabled tools. Installation, suspension, and diagnostics live in Settings.">主程序保持安静，只呈现已启用的工具。安装、停用和诊断集中在设置中管理。</p>
+          <div class="overview-hero">
+            <div class="hero-status"><i></i><span data-zh="所有组件运行正常" data-en="All components operational">所有组件运行正常</span></div>
+            <div class="hero-title"><span id="overviewEnabled">2</span> <span data-zh="个工具已启用" data-en="tools enabled">个工具已启用</span></div>
+            <div class="hero-copy" data-zh="音频流转待连接，键鼠控制可随时开始。停用插件不会删除配置，下次启用即可恢复。" data-en="Audio relay awaits a phone and remote control is ready. Suspended plugins keep their settings for next time.">音频流转待连接，键鼠控制可随时开始。停用插件不会删除配置，下次启用即可恢复。</div>
+          </div>
+          <div class="metric-row">
+            <div class="metric"><span data-zh="已安装" data-en="Installed">已安装</span><strong>2</strong></div>
+            <div class="metric"><span data-zh="已启用" data-en="Enabled">已启用</span><strong id="metricEnabled">2</strong></div>
+            <div class="metric"><span data-zh="主程序版本" data-en="Host version">主程序版本</span><strong>0.1.0</strong></div>
+          </div>
+        </section>
+
+        <section class="page active" data-view="settings">
+          <div class="eyebrow" data-zh="主程序设置" data-en="Host preferences">主程序设置</div>
+          <h1 data-zh="设置" data-en="Settings">设置</h1>
+          <p class="lede" data-zh="只保留真正需要管理的选项；插件状态、关闭行为和诊断信息都在这里。" data-en="Only the controls that matter: plugin state, close behavior, and diagnostics in one place.">只保留真正需要管理的选项；插件状态、关闭行为和诊断信息都在这里。</p>
+          <div class="settings">
+            <article class="card">
+              <div class="card-head">
+                <div class="card-head-copy"><h2 data-zh="界面语言" data-en="Interface language">界面语言</h2><p class="description" data-zh="切换立即生效，并在下次启动时保持。" data-en="Applies immediately and persists across restarts.">切换立即生效，并在下次启动时保持。</p></div>
+                <div class="segmented right-control"><button class="language selected" data-language="zh">中文</button><button class="language" data-language="en">English</button></div>
+              </div>
+            </article>
+
+            <article class="card">
+              <div class="card-head">
+                <div class="card-head-copy"><h2 data-zh="关闭主窗口时" data-en="When closing the main window">关闭主窗口时</h2><p class="description" data-zh="最小化到托盘可以继续运行已启动的插件功能。" data-en="Minimizing to tray keeps active plugin features running.">最小化到托盘可以继续运行已启动的插件功能。</p></div>
+              </div>
+              <div class="behavior-options">
+                <div class="behavior-option selected" tabindex="0" data-behavior="tray"><i class="radio"></i><div><strong data-zh="进入系统托盘（推荐）" data-en="Minimize to system tray (Recommended)">进入系统托盘（推荐）</strong><p data-zh="隐藏窗口，插件继续工作；双击托盘图标恢复。" data-en="Hide the window and keep plugins running. Double-click the tray icon to restore.">隐藏窗口，插件继续工作；双击托盘图标恢复。</p></div></div>
+                <div class="behavior-option" tabindex="0" data-behavior="exit"><i class="radio"></i><div><strong data-zh="直接退出主程序" data-en="Exit ToolBox directly">直接退出主程序</strong><p data-zh="停止正在运行的插件功能，然后完全退出。" data-en="Stop active plugin features, then fully exit ToolBox.">停止正在运行的插件功能，然后完全退出。</p></div></div>
+              </div>
+            </article>
+
+            <article class="card">
+              <div class="card-head">
+                <div class="card-head-copy"><h2 data-zh="插件管理" data-en="Plugin management">插件管理</h2><p class="description" data-zh="已安装 2 个插件。停用后从左侧隐藏，但保留配置与数据。" data-en="2 plugins installed. Suspended plugins are hidden from the sidebar but keep their data.">已安装 2 个插件。停用后从左侧隐藏，但保留配置与数据。</p></div>
+                <button class="primary right-control" id="installButton" data-zh="安装插件" data-en="Install plugin">安装插件</button>
+              </div>
+              <div class="plugin-list">
+                <div class="plugin-row" data-plugin-row="keyboard">
+                  <span class="plugin-icon"><svg viewBox="0 0 24 24"><rect x="3" y="6" width="18" height="12" rx="2"/><path d="M7 10h.01M10 10h.01M13 10h.01M16 10h.01M8 14h8" stroke-linecap="round"/></svg></span>
+                  <div><span class="plugin-name" data-zh="键盘与鼠标" data-en="Keyboard & Mouse">键盘与鼠标</span><span class="plugin-meta">v0.1.0 · com.toolbox.keyboard-test</span></div>
+                  <span class="plugin-state state-label" data-zh="已启用" data-en="Enabled">已启用</span>
+                  <div class="row-actions"><button class="link-button" data-zh="安装更新" data-en="Update">安装更新</button><button class="switch on" data-toggle="keyboard" aria-label="切换键盘与鼠标插件"></button><button class="link-button danger" data-zh="卸载" data-en="Uninstall">卸载</button></div>
+                </div>
+                <div class="plugin-row" data-plugin-row="audio">
+                  <span class="plugin-icon"><svg viewBox="0 0 24 24"><path d="M8 17V7l9-2v10"/><circle cx="6" cy="17" r="2"/><circle cx="15" cy="15" r="2"/></svg></span>
+                  <div><span class="plugin-name" data-zh="手机音频流转" data-en="Phone Audio Relay">手机音频流转</span><span class="plugin-meta">v0.1.0 · com.toolbox.audio-relay</span></div>
+                  <span class="plugin-state state-label" data-zh="已启用" data-en="Enabled">已启用</span>
+                  <div class="row-actions"><button class="link-button" data-zh="安装更新" data-en="Update">安装更新</button><button class="switch on" data-toggle="audio" aria-label="切换手机音频流转插件"></button><button class="link-button danger" data-zh="卸载" data-en="Uninstall">卸载</button></div>
+                </div>
+              </div>
+            </article>
+
+            <article class="card">
+              <div class="card-head"><div class="card-head-copy"><h2 data-zh="结构化日志" data-en="Structured logs">结构化日志</h2><p class="description" data-zh="记录本次会话，用于定位安装与运行问题。" data-en="Current-session events for diagnosing installation and runtime issues.">记录本次会话，用于定位安装与运行问题。</p></div><button class="secondary right-control" data-zh="打开日志目录" data-en="Open log folder">打开日志目录</button></div>
+              <div class="log-list"><div class="log-row"><span>10:29:09</span><b>INFO</b><span>HOST_READY · ToolBox host is ready</span></div><div class="log-row"><span>10:29:07</span><b>INFO</b><span>PLUGIN_LOADED · com.toolbox.audio-relay</span></div></div>
+            </article>
+          </div>
+        </section>
+
+        <section class="page" data-view="audio">
+          <div class="eyebrow" data-zh="插件工作区" data-en="Plugin workspace">插件工作区</div>
+          <h1 data-zh="手机音频流转" data-en="Phone Audio Relay">手机音频流转</h1>
+          <p class="lede" data-zh="将安卓手机的蓝牙音频送到电脑扬声器，不改变电脑自身应用的音量。" data-en="Route Android Bluetooth audio through your PC speakers without changing other app volumes.">将安卓手机的蓝牙音频送到电脑扬声器，不改变电脑自身应用的音量。</p>
+          <div class="plugin-workspace">
+            <article class="workspace-card"><div class="hero-status"><i></i><span data-zh="插件已启用" data-en="Plugin enabled">插件已启用</span></div><div class="connection"><span class="connection-symbol">◉</span><div><strong data-zh="等待手机连接" data-en="Waiting for phone">等待手机连接</strong><span data-zh="电脑蓝牙接收已就绪" data-en="Bluetooth receiver is ready">电脑蓝牙接收已就绪</span></div></div><div class="signal-meter"><i></i></div><p class="description" data-zh="手机音量 67% · 电脑系统音量不受影响" data-en="Phone volume 67% · PC system volume remains independent">手机音量 67% · 电脑系统音量不受影响</p><div class="button-row"><button class="primary feature-button" data-running="false" data-start-zh="开始接收" data-stop-zh="停止接收" data-start-en="Start receiving" data-stop-en="Stop receiving">开始接收</button><button class="secondary" data-zh="连接说明" data-en="Connection guide">连接说明</button></div></article>
+            <aside class="workspace-card"><h2 data-zh="流转信息" data-en="Routing">流转信息</h2><div class="detail"><span data-zh="输入设备" data-en="Input device">输入设备</span><strong>Bluetooth A2DP Sink</strong></div><div class="detail"><span data-zh="输出设备" data-en="Output device">输出设备</span><strong data-zh="默认扬声器" data-en="Default speakers">默认扬声器</strong></div><div class="detail"><span data-zh="目标延迟" data-en="Target latency">目标延迟</span><strong>80–160 ms</strong></div></aside>
+          </div>
+        </section>
+
+        <section class="page" data-view="keyboard">
+          <div class="eyebrow" data-zh="插件工作区" data-en="Plugin workspace">插件工作区</div><h1 data-zh="键盘与鼠标" data-en="Keyboard & Mouse">键盘与鼠标</h1><p class="lede" data-zh="让手机成为电脑的临时触控板和键盘；停止功能后插件入口仍然保留。" data-en="Use your phone as a temporary trackpad and keyboard. The plugin remains visible when control stops.">让手机成为电脑的临时触控板和键盘；停止功能后插件入口仍然保留。</p>
+          <div class="plugin-workspace"><article class="workspace-card"><div class="hero-status"><i></i><span data-zh="插件已启用" data-en="Plugin enabled">插件已启用</span></div><div class="connection"><span class="connection-symbol">⌨</span><div><strong data-zh="控制服务已就绪" data-en="Control service ready">控制服务已就绪</strong><span data-zh="仅接受已配对设备" data-en="Paired devices only">仅接受已配对设备</span></div></div><div class="button-row"><button class="primary feature-button" data-running="false" data-start-zh="开始控制" data-stop-zh="停止控制" data-start-en="Start control" data-stop-en="Stop control">开始控制</button><button class="secondary" data-zh="权限检查" data-en="Check permissions">权限检查</button></div></article><aside class="workspace-card"><h2 data-zh="安全状态" data-en="Security">安全状态</h2><div class="detail"><span data-zh="设备配对" data-en="Device pairing">设备配对</span><strong data-zh="必须" data-en="Required">必须</strong></div><div class="detail"><span data-zh="网络访问" data-en="Network access">网络访问</span><strong data-zh="仅本地网络" data-en="Local network only">仅本地网络</strong></div></aside></div>
+        </section>
+
+        <section class="page" data-view="identity">
+          <div class="eyebrow" data-zh="视觉识别" data-en="Visual identity">视觉识别</div>
+          <h1 data-zh="应用与托盘图标" data-en="App and tray icons">应用与托盘图标</h1>
+          <p class="lede" data-zh="四个方向都提供 64px 应用图标和 16px 单色托盘版本。点击任一方案即可应用到标题栏和托盘预览。" data-en="Each direction includes a 64px app icon and a 16px monochrome tray variant. Select one to preview it throughout the shell.">四个方向都提供 64px 应用图标和 16px 单色托盘版本。点击任一方案即可应用到标题栏和托盘预览。</p>
+          <div class="icon-lab-grid" id="iconLab">
+            <article class="icon-concept selected" tabindex="0" data-icon-card="modular"><div class="icon-concept-head"><span class="icon-large icon-render" data-variant="modular"></span><div><h3>01 · <span data-zh="模块 T（推荐）" data-en="Modular T (Recommended)">模块 T（推荐）</span></h3><p data-zh="T 代表 ToolBox，分段结构代表可安装插件。" data-en="T for ToolBox; segmented construction for installable plugins.">T 代表 ToolBox，分段结构代表可安装插件。</p></div></div><div class="icon-sizes"><span class="size-sample"><i class="render icon-render" data-variant="modular" style="width:32px;height:32px"></i>32px</span><span class="size-sample"><i class="render icon-render" data-variant="modular" style="width:20px;height:20px"></i>20px</span><span class="tray-sample"><i class="tray-icon tray-render" data-variant="modular"></i>托盘 16px</span></div></article>
+            <article class="icon-concept" tabindex="0" data-icon-card="matrix"><div class="icon-concept-head"><span class="icon-large icon-render" data-variant="matrix"></span><div><h3>02 · <span data-zh="工具矩阵" data-en="Tool matrix">工具矩阵</span></h3><p data-zh="四个工作单元形成插件容器，秩序感更强。" data-en="Four working cells form a disciplined plugin container.">四个工作单元形成插件容器，秩序感更强。</p></div></div><div class="icon-sizes"><span class="size-sample"><i class="render icon-render" data-variant="matrix" style="width:32px;height:32px"></i>32px</span><span class="size-sample"><i class="render icon-render" data-variant="matrix" style="width:20px;height:20px"></i>20px</span><span class="tray-sample"><i class="tray-icon tray-render" data-variant="matrix"></i>托盘 16px</span></div></article>
+            <article class="icon-concept" tabindex="0" data-icon-card="hub"><div class="icon-concept-head"><span class="icon-large icon-render" data-variant="hub"></span><div><h3>03 · <span data-zh="中枢连接" data-en="Connected hub">中枢连接</span></h3><p data-zh="主程序是中心节点，插件以连接点围绕。" data-en="The host is the central node, surrounded by connected plugins.">主程序是中心节点，插件以连接点围绕。</p></div></div><div class="icon-sizes"><span class="size-sample"><i class="render icon-render" data-variant="hub" style="width:32px;height:32px"></i>32px</span><span class="size-sample"><i class="render icon-render" data-variant="hub" style="width:20px;height:20px"></i>20px</span><span class="tray-sample"><i class="tray-icon tray-render" data-variant="hub"></i>托盘 16px</span></div></article>
+            <article class="icon-concept" tabindex="0" data-icon-card="case"><div class="icon-concept-head"><span class="icon-large icon-render" data-variant="case"></span><div><h3>04 · <span data-zh="轻量工具箱" data-en="Light toolbox">轻量工具箱</span></h3><p data-zh="最直接的产品隐喻，识别快，但独特性稍弱。" data-en="The clearest product metaphor; quick to recognize but less distinctive.">最直接的产品隐喻，识别快，但独特性稍弱。</p></div></div><div class="icon-sizes"><span class="size-sample"><i class="render icon-render" data-variant="case" style="width:32px;height:32px"></i>32px</span><span class="size-sample"><i class="render icon-render" data-variant="case" style="width:20px;height:20px"></i>20px</span><span class="tray-sample"><i class="tray-icon tray-render" data-variant="case"></i>托盘 16px</span></div></article>
+          </div>
+        </section>
+      </div>
+
+      <div class="exit-dialog-backdrop" id="exitBackdrop"><div class="exit-dialog"><h3 data-zh="退出 ToolBox？" data-en="Exit ToolBox?">退出 ToolBox？</h3><p data-zh="正在运行的插件功能会停止。你可以在设置中改为关闭时进入系统托盘。" data-en="Running plugin features will stop. You can change close behavior to system tray in Settings.">正在运行的插件功能会停止。你可以在设置中改为关闭时进入系统托盘。</p><div class="dialog-actions"><button class="secondary" id="cancelExit" data-zh="取消" data-en="Cancel">取消</button><button class="primary" id="confirmExit" data-zh="退出" data-en="Exit">退出</button></div></div></div>
+      <div class="toast" id="toast">窗口已最小化</div>
+    </section>
+  </main>
+
+  <aside class="tray-preview" id="trayPreview">
+    <div class="tray-preview-head"><span class="app-icon-slot icon-render current-icon"></span><div><strong>ToolBox</strong><span data-zh="正在系统托盘中运行" data-en="Running in the system tray">正在系统托盘中运行</span></div></div>
+    <div class="tray-actions"><button class="primary" id="restoreWindow" data-zh="打开 ToolBox" data-en="Open ToolBox">打开 ToolBox</button><button class="secondary" id="trayExit" data-zh="退出" data-en="Exit">退出</button></div>
+  </aside>
+
+  <script>
+    const iconSvgs = {
+      modular: `<svg class="icon-svg" viewBox="0 0 64 64" aria-hidden="true"><defs><linearGradient id="g1" x1="8" y1="5" x2="56" y2="59" gradientUnits="userSpaceOnUse"><stop stop-color="#4C8CFF"/><stop offset="1" stop-color="#1854BD"/></linearGradient></defs><rect width="64" height="64" rx="15" fill="url(#g1)"/><rect x="13" y="15" width="38" height="11" rx="4" fill="white"/><rect x="27" y="25" width="11" height="25" rx="4" fill="white"/><circle cx="17" cy="43" r="4" fill="#AFCBFF"/><circle cx="47" cy="43" r="4" fill="#AFCBFF"/><path d="M21 43h6m11 0h5" stroke="#AFCBFF" stroke-width="3" stroke-linecap="round"/></svg>`,
+      matrix: `<svg class="icon-svg" viewBox="0 0 64 64" aria-hidden="true"><defs><linearGradient id="g2" x1="10" y1="6" x2="56" y2="58" gradientUnits="userSpaceOnUse"><stop stop-color="#477CE8"/><stop offset="1" stop-color="#173E92"/></linearGradient></defs><rect width="64" height="64" rx="15" fill="url(#g2)"/><rect x="13" y="13" width="17" height="17" rx="5" fill="white"/><rect x="34" y="13" width="17" height="17" rx="5" fill="#AFCBFF"/><rect x="13" y="34" width="17" height="17" rx="5" fill="#AFCBFF"/><rect x="34" y="34" width="17" height="17" rx="5" fill="white"/><circle cx="42.5" cy="42.5" r="3" fill="#2868DF"/></svg>`,
+      hub: `<svg class="icon-svg" viewBox="0 0 64 64" aria-hidden="true"><defs><linearGradient id="g3" x1="8" y1="8" x2="57" y2="57" gradientUnits="userSpaceOnUse"><stop stop-color="#5C91F4"/><stop offset="1" stop-color="#204A9E"/></linearGradient></defs><rect width="64" height="64" rx="15" fill="url(#g3)"/><path d="M19 20l13 12m13-12L32 32M19 44l13-12m13 12L32 32" stroke="#BBD1FA" stroke-width="4" stroke-linecap="round"/><circle cx="32" cy="32" r="10" fill="white"/><circle cx="18" cy="19" r="5" fill="white"/><circle cx="46" cy="19" r="5" fill="white"/><circle cx="18" cy="45" r="5" fill="white"/><circle cx="46" cy="45" r="5" fill="white"/></svg>`,
+      case: `<svg class="icon-svg" viewBox="0 0 64 64" aria-hidden="true"><defs><linearGradient id="g4" x1="7" y1="5" x2="58" y2="60" gradientUnits="userSpaceOnUse"><stop stop-color="#568AEB"/><stop offset="1" stop-color="#17448F"/></linearGradient></defs><rect width="64" height="64" rx="15" fill="url(#g4)"/><path d="M24 20v-3c0-2 1.5-3 3.5-3h9c2 0 3.5 1 3.5 3v3" stroke="white" stroke-width="4" stroke-linecap="round"/><rect x="11" y="20" width="42" height="31" rx="7" fill="white"/><path d="M11 33h42" stroke="#AFCBFF" stroke-width="4"/><rect x="27" y="29" width="10" height="8" rx="2" fill="#2868DF"/></svg>`
+    };
+    const traySvgs = {
+      modular: `<svg class="icon-svg" viewBox="0 0 16 16"><path d="M2.5 3h11v3H9.5v7h-3V6h-4V3Zm0 8.5h2m7 0h2" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
+      matrix: `<svg class="icon-svg" viewBox="0 0 16 16"><rect x="2" y="2" width="5" height="5" rx="1" fill="none" stroke="currentColor" stroke-width="1.4"/><rect x="9" y="2" width="5" height="5" rx="1" fill="currentColor"/><rect x="2" y="9" width="5" height="5" rx="1" fill="currentColor"/><rect x="9" y="9" width="5" height="5" rx="1" fill="none" stroke="currentColor" stroke-width="1.4"/></svg>`,
+      hub: `<svg class="icon-svg" viewBox="0 0 16 16"><path d="m4 4 4 4m4-4L8 8m-4 4 4-4m4 4L8 8" stroke="currentColor" stroke-width="1.4"/><circle cx="8" cy="8" r="2.5" fill="currentColor"/><circle cx="3.5" cy="3.5" r="1.3" fill="currentColor"/><circle cx="12.5" cy="3.5" r="1.3" fill="currentColor"/><circle cx="3.5" cy="12.5" r="1.3" fill="currentColor"/><circle cx="12.5" cy="12.5" r="1.3" fill="currentColor"/></svg>`,
+      case: `<svg class="icon-svg" viewBox="0 0 16 16"><path d="M5.5 4V2.8c0-.7.5-1.3 1.3-1.3h2.4c.8 0 1.3.6 1.3 1.3V4M2 5h12v8.5H2V5Zm0 4h12M6.5 8h3v2h-3V8Z" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></svg>`
+    };
+
+    let selectedIcon = 'modular';
+    let language = 'zh';
+    let closeBehavior = 'tray';
+    let currentPage = 'settings';
+    const enabled = { keyboard: true, audio: true };
+    const appWindow = document.getElementById('appWindow');
+    const content = document.getElementById('content');
+    const toast = document.getElementById('toast');
+    const trayPreview = document.getElementById('trayPreview');
+    const exitBackdrop = document.getElementById('exitBackdrop');
+
+    function renderIcons() {
+      document.querySelectorAll('.icon-render').forEach(slot => {
+        const variant = slot.classList.contains('current-icon') ? selectedIcon : (slot.dataset.variant || selectedIcon);
+        slot.innerHTML = iconSvgs[variant];
+      });
+      document.querySelectorAll('.tray-render').forEach(slot => slot.innerHTML = traySvgs[slot.dataset.variant || selectedIcon]);
+      document.querySelectorAll('.icon-choice').forEach(button => button.classList.toggle('active', button.dataset.icon === selectedIcon));
+      document.querySelectorAll('.icon-concept').forEach(card => card.classList.toggle('selected', card.dataset.iconCard === selectedIcon));
+    }
+
+    function selectIcon(icon) { selectedIcon = icon; renderIcons(); showToast(language === 'zh' ? '图标方案已应用到预览' : 'Icon applied to the preview'); }
+    function showToast(message) { toast.textContent = message; toast.classList.add('show'); clearTimeout(showToast.timer); showToast.timer = setTimeout(() => toast.classList.remove('show'), 1600); }
+    function navigate(page) {
+      if ((page === 'keyboard' || page === 'audio') && !enabled[page]) page = 'settings';
+      currentPage = page;
+      document.querySelectorAll('.nav-item').forEach(button => button.classList.toggle('active', button.dataset.page === page));
+      document.querySelectorAll('.page').forEach(section => section.classList.toggle('active', section.dataset.view === page));
+      content.scrollTop = 0;
+    }
+    function updatePlugins() {
+      let count = 0;
+      Object.entries(enabled).forEach(([plugin,on]) => {
+        if (on) count++;
+        document.querySelector(`.plugin-nav[data-plugin="${plugin}"]`).classList.toggle('hidden', !on);
+        const row = document.querySelector(`[data-plugin-row="${plugin}"]`);
+        row.classList.toggle('disabled', !on);
+        row.querySelector('.switch').classList.toggle('on', on);
+        const label = row.querySelector('.state-label');
+        label.textContent = language === 'zh' ? (on ? '已启用' : '已停用') : (on ? 'Enabled' : 'Suspended');
+      });
+      document.getElementById('pluginHeading').classList.toggle('hidden', count === 0);
+      document.getElementById('overviewEnabled').textContent = count;
+      document.getElementById('metricEnabled').textContent = count;
+      if (!enabled[currentPage]) navigate('settings');
+    }
+    function setLanguage(next) {
+      language = next;
+      document.documentElement.lang = next === 'zh' ? 'zh-CN' : 'en';
+      document.querySelectorAll('[data-zh][data-en]').forEach(node => node.textContent = node.dataset[next]);
+      document.querySelectorAll('.language').forEach(button => button.classList.toggle('selected', button.dataset.language === next));
+      document.querySelectorAll('.feature-button').forEach(button => { const running = button.dataset.running === 'true'; button.textContent = button.dataset[`${running ? 'stop' : 'start'}${next === 'zh' ? 'Zh' : 'En'}`]; });
+      updatePlugins();
+    }
+    function setBehavior(behavior) { closeBehavior = behavior; document.querySelectorAll('.behavior-option').forEach(option => option.classList.toggle('selected', option.dataset.behavior === behavior)); }
+
+    document.querySelectorAll('.icon-choice').forEach(button => button.addEventListener('click', () => selectIcon(button.dataset.icon)));
+    document.querySelectorAll('.icon-concept').forEach(card => { card.addEventListener('click', () => selectIcon(card.dataset.iconCard)); card.addEventListener('keydown', event => { if (event.key === 'Enter' || event.key === ' ') selectIcon(card.dataset.iconCard); }); });
+    document.querySelectorAll('.nav-item').forEach(button => button.addEventListener('click', () => navigate(button.dataset.page)));
+    document.querySelectorAll('.language').forEach(button => button.addEventListener('click', () => setLanguage(button.dataset.language)));
+    document.querySelectorAll('.behavior-option').forEach(option => { option.addEventListener('click', () => setBehavior(option.dataset.behavior)); option.addEventListener('keydown', event => { if (event.key === 'Enter' || event.key === ' ') setBehavior(option.dataset.behavior); }); });
+    document.querySelectorAll('.switch').forEach(button => button.addEventListener('click', () => { const plugin = button.dataset.toggle; enabled[plugin] = !enabled[plugin]; updatePlugins(); showToast(language === 'zh' ? (enabled[plugin] ? '插件已启用，并显示在左侧' : '插件已停用，并从左侧隐藏') : (enabled[plugin] ? 'Plugin enabled and shown in sidebar' : 'Plugin suspended and hidden from sidebar')); }));
+    document.querySelectorAll('.feature-button').forEach(button => button.addEventListener('click', () => { const next = button.dataset.running !== 'true'; button.dataset.running = String(next); button.textContent = button.dataset[`${next ? 'stop' : 'start'}${language === 'zh' ? 'Zh' : 'En'}`]; showToast(language === 'zh' ? (next ? '功能已开始运行' : '功能已停止，插件仍保持启用') : (next ? 'Feature started' : 'Feature stopped; plugin remains enabled')); }));
+
+    document.getElementById('minimizeButton').addEventListener('click', () => showToast(language === 'zh' ? '最小化按钮：窗口进入任务栏' : 'Minimize: window goes to the taskbar'));
+    document.getElementById('maximizeButton').addEventListener('click', () => { appWindow.classList.toggle('maximized'); showToast(language === 'zh' ? (appWindow.classList.contains('maximized') ? '已最大化' : '已还原窗口') : (appWindow.classList.contains('maximized') ? 'Maximized' : 'Window restored')); });
+    document.getElementById('closeButton').addEventListener('click', () => { if (closeBehavior === 'tray') { trayPreview.classList.add('show'); showToast(language === 'zh' ? '窗口已隐藏，ToolBox 在托盘中继续运行' : 'Window hidden; ToolBox continues in the tray'); } else { exitBackdrop.classList.add('show'); } });
+    document.getElementById('restoreWindow').addEventListener('click', () => { trayPreview.classList.remove('show'); showToast(language === 'zh' ? '主窗口已恢复' : 'Main window restored'); });
+    document.getElementById('trayExit').addEventListener('click', () => { trayPreview.classList.remove('show'); exitBackdrop.classList.add('show'); });
+    document.getElementById('cancelExit').addEventListener('click', () => exitBackdrop.classList.remove('show'));
+    document.getElementById('confirmExit').addEventListener('click', () => { exitBackdrop.classList.remove('show'); showToast(language === 'zh' ? '原型演示：正式程序将在这里退出' : 'Prototype: the app would exit here'); });
+    document.getElementById('installButton').addEventListener('click', () => showToast(language === 'zh' ? '这里将打开 .tpk 文件选择器' : 'This opens the .tpk file picker'));
+
+    renderIcons();
+    updatePlugins();
+  </script>
+</body>
+</html>

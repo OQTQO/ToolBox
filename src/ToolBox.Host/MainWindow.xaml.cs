@@ -1,12 +1,28 @@
+using System.Globalization;
+using System.ComponentModel;
+using System.Diagnostics;
+using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Input;
+using System.Windows.Controls.Primitives;
+using System.Windows.Media;
+using System.Windows.Interop;
 using Microsoft.Win32;
 using ToolBox.PluginSdk.Experimental;
+using Application = System.Windows.Application;
+using KeyEventArgs = System.Windows.Input.KeyEventArgs;
+using MessageBox = System.Windows.MessageBox;
+using OpenFileDialog = Microsoft.Win32.OpenFileDialog;
 
 namespace ToolBox.Host;
 
 public partial class MainWindow : Window
 {
+    private const int DwmWindowCornerPreferenceAttribute = 33;
+    private const int DwmWindowCornerDoNotRound = 1;
+    private const int DwmWindowCornerRound = 2;
+    private const double WindowCornerRadius = 10;
+    private bool _allowClose;
     public MainWindow(MainWindowViewModel viewModel)
     {
         ArgumentNullException.ThrowIfNull(viewModel);
@@ -43,6 +59,79 @@ public partial class MainWindow : Window
         WindowState = WindowState.Minimized;
     }
 
+    private void OnWindowFrameLoaded(object sender, RoutedEventArgs e)
+    {
+        UpdateWindowFrameClip();
+    }
+
+    private void OnWindowFrameSizeChanged(object sender, SizeChangedEventArgs e)
+    {
+        UpdateWindowFrameClip();
+    }
+
+    private void OnWindowStateChanged(object? sender, EventArgs e)
+    {
+        UpdateWindowFrameClip();
+    }
+
+    protected override void OnSourceInitialized(EventArgs e)
+    {
+        base.OnSourceInitialized(e);
+        UpdateWindowFrameClip();
+    }
+
+    private void UpdateWindowFrameClip()
+    {
+        if (WindowFrame.ActualWidth <= 0 || WindowFrame.ActualHeight <= 0)
+        {
+            return;
+        }
+
+        var radius = WindowState == WindowState.Maximized
+            ? 0
+            : WindowCornerRadius;
+        Chrome.CornerRadius = new CornerRadius(radius);
+        ApplyDwmCornerPreference(WindowState == WindowState.Maximized);
+        WindowFrame.Clip = new RectangleGeometry(
+            new Rect(0, 0, WindowFrame.ActualWidth, WindowFrame.ActualHeight),
+            radius,
+            radius);
+    }
+
+    private void ApplyDwmCornerPreference(bool maximized)
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        var handle = new WindowInteropHelper(this).Handle;
+        if (handle == IntPtr.Zero)
+        {
+            return;
+        }
+
+        var preference = maximized
+            ? DwmWindowCornerDoNotRound
+            : DwmWindowCornerRound;
+        var result = DwmSetWindowAttribute(
+            handle,
+            DwmWindowCornerPreferenceAttribute,
+            ref preference,
+            Marshal.SizeOf<int>());
+        if (result != 0)
+        {
+            Debug.WriteLine($"DWM window corner preference was not applied (HRESULT 0x{result:X8}).");
+        }
+    }
+
+    [DllImport("dwmapi.dll", EntryPoint = "DwmSetWindowAttribute")]
+    private static extern int DwmSetWindowAttribute(
+        IntPtr hwnd,
+        int attribute,
+        ref int value,
+        int valueSize);
+
     private void OnMaximizeClick(object sender, RoutedEventArgs e)
     {
         ToggleMaximize();
@@ -51,6 +140,138 @@ public partial class MainWindow : Window
     private void OnCloseClick(object sender, RoutedEventArgs e)
     {
         Close();
+    }
+
+    protected override void OnClosing(CancelEventArgs e)
+    {
+        if (!_allowClose && Application.Current is App app)
+        {
+            e.Cancel = true;
+            if (DataContext is MainWindowViewModel viewModel && viewModel.CloseToTray)
+            {
+                app.HideMainWindowToTray();
+            }
+            else
+            {
+                app.RequestShutdown();
+            }
+        }
+
+        base.OnClosing(e);
+    }
+
+    internal void PrepareForShutdown()
+    {
+        _allowClose = true;
+    }
+
+    private void OnOverviewNavigationClick(object sender, RoutedEventArgs e)
+    {
+        if (DataContext is MainWindowViewModel viewModel)
+        {
+            viewModel.SelectPage(ShellPage.Overview);
+        }
+    }
+
+    private void OnKeyboardNavigationClick(object sender, RoutedEventArgs e)
+    {
+        if (DataContext is MainWindowViewModel viewModel)
+        {
+            viewModel.SelectPage(ShellPage.KeyboardTest);
+        }
+    }
+
+    private void OnAudioRelayNavigationClick(object sender, RoutedEventArgs e)
+    {
+        if (DataContext is MainWindowViewModel viewModel)
+        {
+            viewModel.SelectPage(ShellPage.AudioRelay);
+        }
+    }
+
+    private void OnSettingsNavigationClick(object sender, RoutedEventArgs e)
+    {
+        if (DataContext is MainWindowViewModel viewModel)
+        {
+            viewModel.SelectPage(ShellPage.Settings);
+        }
+    }
+
+    private void OnSetChineseClick(object sender, RoutedEventArgs e)
+    {
+        if (DataContext is MainWindowViewModel viewModel)
+        {
+            viewModel.SetLanguage(AppLanguage.Chinese);
+        }
+    }
+
+    private void OnSetEnglishClick(object sender, RoutedEventArgs e)
+    {
+        if (DataContext is MainWindowViewModel viewModel)
+        {
+            viewModel.SetLanguage(AppLanguage.English);
+        }
+    }
+
+    private void OnSetTrayCloseBehaviorClick(object sender, RoutedEventArgs e)
+    {
+        if (DataContext is MainWindowViewModel viewModel)
+        {
+            viewModel.SetCloseBehavior(CloseBehavior.MinimizeToTray);
+        }
+    }
+
+    private void OnSetExitCloseBehaviorClick(object sender, RoutedEventArgs e)
+    {
+        if (DataContext is MainWindowViewModel viewModel)
+        {
+            viewModel.SetCloseBehavior(CloseBehavior.Exit);
+        }
+    }
+
+    private async void OnKeyboardOpenedToggleClick(object sender, RoutedEventArgs e)
+    {
+        if (DataContext is MainWindowViewModel viewModel)
+        {
+            await viewModel.ToggleKeyboardOpenedAsync();
+            if (sender is ToggleButton toggle)
+            {
+                toggle.GetBindingExpression(ToggleButton.IsCheckedProperty)?.UpdateTarget();
+            }
+        }
+    }
+
+    private async void OnAudioRelayOpenedToggleClick(object sender, RoutedEventArgs e)
+    {
+        if (DataContext is MainWindowViewModel viewModel)
+        {
+            await viewModel.ToggleAudioRelayOpenedAsync();
+            if (sender is ToggleButton toggle)
+            {
+                toggle.GetBindingExpression(ToggleButton.IsCheckedProperty)?.UpdateTarget();
+            }
+        }
+    }
+
+    private async void OnInstallPluginClick(object sender, RoutedEventArgs e)
+    {
+        if (DataContext is not MainWindowViewModel viewModel)
+        {
+            return;
+        }
+
+        var dialog = new OpenFileDialog
+        {
+            Title = viewModel.Localize("InstallPluginDialogTitle"),
+            Filter = viewModel.Localize("PackageDialogFilter"),
+            CheckFileExists = true,
+            Multiselect = false
+        };
+
+        if (dialog.ShowDialog(this) == true)
+        {
+            await viewModel.InstallPackageAsync(dialog.FileName);
+        }
     }
 
     private async void OnKeyboardTestToggleClick(object sender, RoutedEventArgs e)
@@ -70,15 +291,15 @@ public partial class MainWindow : Window
 
         var dialog = new OpenFileDialog
         {
-            Title = "Install Keyboard & Mouse Test package",
-            Filter = "ToolBox packages (*.tpk)|*.tpk|All files (*.*)|*.*",
+            Title = viewModel.Localize("InstallKeyboardDialogTitle"),
+            Filter = viewModel.Localize("PackageDialogFilter"),
             CheckFileExists = true,
             Multiselect = false
         };
 
         if (dialog.ShowDialog(this) == true)
         {
-            await viewModel.KeyboardTest.InstallPackageAsync(dialog.FileName);
+            await viewModel.InstallPackageAsync(dialog.FileName);
         }
     }
 
@@ -98,6 +319,14 @@ public partial class MainWindow : Window
         }
     }
 
+    private void OnAudioRelayRestartClick(object sender, RoutedEventArgs e)
+    {
+        if (Application.Current is App app)
+        {
+            app.RequestRestart();
+        }
+    }
+
     private async void OnAudioRelayInstallClick(object sender, RoutedEventArgs e)
     {
         if (DataContext is not MainWindowViewModel viewModel)
@@ -107,15 +336,33 @@ public partial class MainWindow : Window
 
         var dialog = new OpenFileDialog
         {
-            Title = "Install Phone Audio Relay package",
-            Filter = "ToolBox packages (*.tpk)|*.tpk|All files (*.*)|*.*",
+            Title = viewModel.Localize("InstallAudioDialogTitle"),
+            Filter = viewModel.Localize("PackageDialogFilter"),
             CheckFileExists = true,
             Multiselect = false
         };
 
         if (dialog.ShowDialog(this) == true)
         {
-            await viewModel.AudioRelay.InstallPackageAsync(dialog.FileName);
+            await viewModel.InstallPackageAsync(dialog.FileName);
+        }
+    }
+
+    private async void OnKeyboardUninstallClick(object sender, RoutedEventArgs e)
+    {
+        if (DataContext is MainWindowViewModel viewModel
+            && ConfirmUninstall(viewModel, viewModel.Localize("KeyboardMouse")))
+        {
+            await viewModel.UninstallKeyboardAsync();
+        }
+    }
+
+    private async void OnAudioRelayUninstallClick(object sender, RoutedEventArgs e)
+    {
+        if (DataContext is MainWindowViewModel viewModel
+            && ConfirmUninstall(viewModel, viewModel.Localize("PhoneAudioRelay")))
+        {
+            await viewModel.UninstallAudioRelayAsync();
         }
     }
 
@@ -193,6 +440,21 @@ public partial class MainWindow : Window
         WindowState = WindowState == WindowState.Maximized
             ? WindowState.Normal
             : WindowState.Maximized;
+    }
+
+    private bool ConfirmUninstall(MainWindowViewModel viewModel, string pluginName)
+    {
+        var message = string.Format(
+            CultureInfo.CurrentCulture,
+            viewModel.Localize("UninstallConfirm"),
+            pluginName);
+        return MessageBox.Show(
+            this,
+            message,
+            viewModel.Localize("UninstallTitle"),
+            MessageBoxButton.YesNo,
+            MessageBoxImage.Warning,
+            MessageBoxResult.No) == MessageBoxResult.Yes;
     }
 
     private static string GetKeyName(KeyEventArgs e)

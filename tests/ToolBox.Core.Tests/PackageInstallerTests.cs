@@ -103,6 +103,52 @@ public sealed class PackageInstallerTests
     }
 
     [Fact]
+    public async Task ExistingRollbackSnapshotDoesNotBlockPortableHostInstall()
+    {
+        var root = CreateTemporaryRoot();
+        var dataRoot = Path.Combine(root, "PluginData");
+
+        try
+        {
+            var package = CreateHappyPathPackage(root, "0.1.0");
+            using (var firstInstaller = new PluginPackageInstaller(
+                       Path.Combine(root, "HostA", "Plugins"),
+                       dataRoot))
+            {
+                await firstInstaller.InstallAsync(package);
+            }
+
+            using (var secondInstaller = new PluginPackageInstaller(
+                       Path.Combine(root, "HostB", "Plugins"),
+                       dataRoot))
+            {
+                var installed = await secondInstaller.InstallAsync(package);
+                Assert.Equal("0.1.0", installed.Version);
+                Assert.NotNull(secondInstaller.GetActiveVersionDirectory(installed.PluginId));
+            }
+
+            var rollbackRoot = Path.Combine(
+                dataRoot,
+                "com.toolbox.happy-path",
+                "rollback");
+            var snapshots = Directory.GetDirectories(rollbackRoot)
+                .Select(Path.GetFileName)
+                .OrderBy(name => name, StringComparer.Ordinal)
+                .ToArray();
+
+            Assert.Equal(2, snapshots.Length);
+            Assert.Contains("before-0.1.0", snapshots);
+            Assert.Contains(snapshots, name => name?.StartsWith(
+                "before-0.1.0-",
+                StringComparison.Ordinal) == true);
+        }
+        finally
+        {
+            DeleteTemporaryRoot(root);
+        }
+    }
+
+    [Fact]
     public async Task BadZipPackageRejectsTraversalAndCleansStaging()
     {
         var root = CreateTemporaryRoot();
