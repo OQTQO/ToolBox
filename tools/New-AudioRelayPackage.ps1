@@ -13,6 +13,7 @@ param(
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
+Import-Module (Join-Path $PSScriptRoot 'ToolBox.PackageTools.psm1') -Force
 
 $repositoryRoot = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
 $targetFramework = 'net8.0-windows10.0.19041.0'
@@ -83,12 +84,7 @@ try {
         Remove-Item -LiteralPath $outputPath -Force
     }
 
-    Add-Type -AssemblyName System.IO.Compression.FileSystem
-    [System.IO.Compression.ZipFile]::CreateFromDirectory(
-        $stagingRoot,
-        $outputPath,
-        [System.IO.Compression.CompressionLevel]::Optimal,
-        $false)
+    New-DeterministicZipArchive -SourceDirectory $stagingRoot -DestinationPath $outputPath
 
     Write-Output $outputPath
 }

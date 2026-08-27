@@ -39,6 +39,16 @@ dotnet test ToolBox.sln --configuration Release
 dotnet run --project src/ToolBox.Host/ToolBox.Host.csproj
 ```
 
+发布前执行统一 dry-run：
+
+```powershell
+.\tools\Invoke-ReleaseValidation.ps1 `
+  -Configuration Release `
+  -OutputDirectory .\artifacts\release-validation
+```
+
+该命令使用 Host 项目版本，依次执行干净构建、`-warnaserror`、完整测试、自包含 Windows x64 发布、两个 `.tpk` 生成、包结构/版本/payload 哈希检查以及发布 SHA-256 反向核对。CI 和 Tag Release 调用同一脚本。
+
 生成 Phone Audio Relay 安装包：
 
 ```powershell
