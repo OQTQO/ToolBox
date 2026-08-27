@@ -112,6 +112,7 @@ The software and packages are released, but physical Android A2DP-source accepta
 - CI and Release workflow adapters no longer duplicate the build, test, publish, package, and checksum implementation.
 - Added deterministic ZIP construction shared by both product package adapters.
 - Two consecutive final dry-runs passed all `68/68` tests and produced byte-identical hashes for all four candidate assets.
+- Pull request #1 reran the same entry point on GitHub's Windows runner. The corrected run `33085645418` passed at commit `afe46a752843f8591c95e61c63b415294ee22eca` after the first run exposed a CI-only analyzer warning.
 
 ### Failure discovered during the milestone
 
@@ -138,4 +139,4 @@ The analyzer finding was corrected without suppression by narrowing the fixture 
 
 ### Remaining boundary
 
-The workflow changes are locally verified but remain uncommitted and have not yet run on a fresh GitHub runner. Remote CI verification is required after the user approves commit and push. Physical Android audio acceptance remains the next product milestone.
+The implementation is committed on `codex/release-validation`, locally verified, and verified by pull-request CI on a fresh GitHub Windows runner. Pull request #1 still requires review and an explicit merge decision; this milestone does not authorize a Release update. Physical Android audio acceptance remains the next product milestone.
