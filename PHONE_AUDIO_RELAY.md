@@ -18,14 +18,14 @@ Phone Audio Relay 是 ToolBox 的 Product 02 插件。它把 Windows 作为蓝�
 dotnet build ToolBox.sln --configuration Release
 powershell -ExecutionPolicy Bypass -File .\tools\New-AudioRelayPackage.ps1 `
   -Configuration Release `
-  -Version 0.1.0 `
+  -Version 0.1.1 `
   -OutputDirectory .\artifacts
 dotnet run --project .\src\ToolBox.Host\ToolBox.Host.csproj
 ```
 
 在 Host 的 `Phone Audio Relay` 卡片中：
 
-1. 点击 `Install .tpk`，选择 `artifacts\PhoneAudioRelay-0.1.0.tpk`；
+1. 点击 `Install .tpk`，选择 `artifacts\PhoneAudioRelay-0.1.1.tpk`；
 2. 点击 `Enable relay`；
 3. 点击 `Refresh paired phones`，从列表选择手机；
 4. 点击 `Start receiving`，然后在 Android 手机上播放媒体；
