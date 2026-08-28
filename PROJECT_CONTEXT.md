@@ -6,8 +6,8 @@
 
 ```text
 Checkpoint date: 2026-08-28
-Current phase: Plugin-neutral Host workspace composition verified in pull request #4
-Next phase: User-owned UI regression and explicit merge approval
+Current phase: Plugin-neutral Host workspace composition physically accepted
+Next phase: Merge pull request #4 and verify main
 Plugin API: Frozen v1
 Production updater: Deferred to v0.2
 ```
@@ -33,7 +33,8 @@ Detailed milestone failures and reusable lessons are recorded in [`PROJECT_RETRO
 - Targeted plugin updates revalidate package Manifest identity before invoking a workspace installer, preventing an update button from activating a package belonging to another registered plugin.
 - UI-bound workspace changes cross an injectable dispatcher boundary: WPF uses the application dispatcher, while unit tests use deterministic immediate dispatch without a message pump.
 - The local plugin-workspace candidate passes a warnings-as-errors Release build, all `86/86` tests, self-contained Host publish, both deterministic product packages, exact asset validation, package identity/version/hash validation, and release checksum verification.
-- Pull request [#4](https://github.com/OQTQO/ToolBox/pull/4) verifies the plugin-neutral Host workspace candidate on GitHub's Windows runner; run [`33147315829`](https://github.com/OQTQO/ToolBox/actions/runs/33147315829) passed at commit `59a592c1c1f081770329072ac14ec09383073afd`. User-owned UI regression and explicit merge approval remain outstanding.
+- Pull request [#4](https://github.com/OQTQO/ToolBox/pull/4) verifies the plugin-neutral Host workspace candidate on GitHub's Windows runner; run [`33147315829`](https://github.com/OQTQO/ToolBox/actions/runs/33147315829) passed at commit `59a592c1c1f081770329072ac14ec09383073afd`.
+- On 2026-08-28, the user reported that the physical/UI candidate from final pull-request head `cd396ff2369a0951081e20aef74b1d8ddec49131` passed acceptance. This is user-supplied evidence distinct from automated CI; pull-request run [`33147471754`](https://github.com/OQTQO/ToolBox/actions/runs/33147471754) also passed for that head.
 
 - .NET SDK `8.0.424` is installed.
 - `ToolBox.sln` restores successfully.
