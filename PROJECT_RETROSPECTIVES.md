@@ -164,3 +164,39 @@ No failure was reported during this physical acceptance pass. That does not prov
 ### Remaining boundary
 
 Host lifecycle deepening is the next architecture milestone. Release `v0.1.0` remains unchanged; a future public release requires a separately versioned release decision and full validation.
+
+## 2026-08-28 — Host lifecycle deepening
+
+### Outcome
+
+- Replaced the four App-level shutdown/restart Boolean and path fields with `HostLifetimeState`, which accepts one explicit shutdown or restart intent and produces one immutable exit plan.
+- Added `HostShutdownCoordinator` and the default shutdown pipeline. Plugin view models, tray resources, diagnostics, logger, package installer, and optional replacement process now run in a locked order; a failure in one operation is reported without skipping the remaining cleanup operations.
+- Added `IHostApplicationCommands` so `MainWindow` no longer casts `Application.Current` to the concrete `App` when closing, hiding to tray, or requesting audio recovery restart.
+- Extracted `HostRestartService` so restart executable validation and launch parameters are testable without starting a replacement process.
+- Host lifecycle tests increased from 8 to 23; the full solution now passes `83/83` tests. The unified Release validation also passed Host publish, both deterministic product packages, exact asset validation, and SHA-256 verification.
+
+### Failure discovered during the milestone
+
+The previous `App.OnExit` wrapped plugin, tray, diagnostics, and logging cleanup in one `try` block. Any early exception could skip every later resource even though the outer handler recorded only one generic shutdown failure. Restart state was spread across separate Boolean and path fields, and `MainWindow` reached the concrete global WPF application directly, which made the actual exit contract difficult to test.
+
+A UI smoke run confirmed startup and close-to-tray behavior, but the system tray did not expose a targetable automation window. The test process had been launched with elevated permissions, so the first non-elevated cleanup attempt was denied; it was then terminated by exact PID at the matching permission level. This forced termination is not counted as graceful-exit evidence, and physical/UI acceptance remains user-owned.
+
+Repository-wide `dotnet format --verify-no-changes` also exposed an existing baseline of mixed BOM/line-ending conventions, historical whitespace/import findings, and a Debug-only LegacyPlugin fixture load warning. The Release compiler/analyzer gate remains clean. Unrelated files were intentionally not rewritten during this lifecycle change.
+
+### Root cause and correction
+
+Shutdown ordering existed only as incidental statement order inside the WPF `Application`, while request idempotence depended on multiple mutable fields. Window code depended on the global concrete application because no narrow command boundary existed. The correction makes the exit intent, resource order, failure isolation, window commands, and restart process boundary explicit types with focused tests.
+
+### Reusable lessons
+
+1. Cleanup order is product behavior and must be represented by one tested pipeline rather than by a broad `try` block.
+2. Idempotent shutdown needs one state transition and one immutable exit plan; independent flags allow contradictory combinations.
+3. Failure reporting must itself be isolated so it cannot prevent later cleanup.
+4. A WPF window should depend on narrow application commands, not discover and cast the global `Application.Current` at each event.
+5. Restart validation and process launch belong behind an injectable boundary; tests must prove that `dotnet.exe`, relative paths, missing files, and non-EXE hosts are rejected.
+6. A close-to-tray smoke test proves only hiding/background behavior. Do not report graceful tray exit unless that path was actually exercised.
+7. Do not mix a repository-wide formatting cleanup into a lifecycle refactor; establish a separate formatting baseline first.
+
+### Remaining boundary
+
+Remote pull-request CI and user physical/UI regression remain acceptance boundaries for this branch. The next architecture milestone is to replace hard-coded Host plugin navigation and page composition with a plugin-neutral workspace model without changing Plugin API v1 or the package format.
