@@ -47,6 +47,17 @@ Phone Audio Relay 包另外携带 `Microsoft.Windows.SDK.NET.dll` 与 `WinRT.Run
 
 GitHub 发布流程已写入 `.github/workflows/release.yml`：推送形如 `v0.1.0` 的 Tag 后，GitHub Actions 会先执行构建和测试，再生成自包含 Windows x64 Host、Keyboard & Mouse `.tpk`、Phone Audio Relay `.tpk` 和 SHA-256 清单，并创建同名 GitHub Release。
 
+本地、CI 与 Release 共用同一个发布验证入口：
+
+```powershell
+.\tools\Invoke-ReleaseValidation.ps1 `
+  -Version 0.1.0 `
+  -Configuration Release `
+  -OutputDirectory .\artifacts\release-validation
+```
+
+脚本会执行干净构建和完整测试，生成四个候选附件，再反向检查准确文件集合、包条目、插件身份、版本、payload 哈希和发布 SHA-256。两个产品包由共同的确定性 ZIP module 写入：条目稳定排序且使用固定时间戳，因此相同源码、版本和 SDK 输入产生逐字节一致的 `.tpk`。
+
 ## 版本与恢复规则
 
 - `manifest.json.version` 与 `package.json.pluginVersion` 必须一致。
@@ -78,6 +89,8 @@ Install
 
 - [ ] Release build 为 0 warning / 0 error。
 - [ ] `dotnet test ToolBox.sln --configuration Release` 全部通过。
+- [ ] `Invoke-ReleaseValidation.ps1` 在不推标签的情况下完成 dry-run。
+- [ ] 连续两次 dry-run 的四个候选附件 SHA-256 完全一致。
 - [ ] 包的 Plugin ID、版本、Manifest/API/platform 与目标 Host 匹配。
 - [ ] 包内没有私有 `ToolBox.PluginSdk.dll`。
 - [ ] Host 冒烟通过，激活状态为 committed，停止后无残留 Worker/ALC。

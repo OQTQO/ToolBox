@@ -13,9 +13,14 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   verify:
     runs-on: windows-latest
+    timeout-minutes: 30
 
     steps:
       - name: Checkout
@@ -26,11 +31,9 @@ jobs:
         with:
           dotnet-version: '8.0.x'
 
-      - name: Restore
-        run: dotnet restore ToolBox.sln
-
-      - name: Build
-        run: dotnet build ToolBox.sln --configuration Release --no-restore
-
-      - name: Test
-        run: dotnet test ToolBox.sln --configuration Release --no-build --no-restore
+      - name: Validate release artifacts
+        shell: pwsh
+        run: |
+          & .\tools\Invoke-ReleaseValidation.ps1 `
+            -Configuration Release `
+            -OutputDirectory .\artifacts\ci-validation

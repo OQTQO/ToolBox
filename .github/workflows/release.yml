@@ -11,6 +11,7 @@ permissions:
 jobs:
   release:
     runs-on: windows-latest
+    timeout-minutes: 30
 
     steps:
       - name: Checkout
@@ -21,53 +22,16 @@ jobs:
         with:
           dotnet-version: '8.0.x'
 
-      - name: Restore
-        run: dotnet restore ToolBox.sln
-
-      - name: Build
-        run: dotnet build ToolBox.sln --configuration Release --no-restore
-
-      - name: Test
-        run: dotnet test ToolBox.sln --configuration Release --no-build --no-restore
-
-      - name: Publish Windows Host and plugin package
+      - name: Validate release artifacts
         shell: pwsh
         env:
           RELEASE_TAG: ${{ github.ref_name }}
         run: |
           $version = $env:RELEASE_TAG.TrimStart('v')
-          dotnet restore src/ToolBox.Host/ToolBox.Host.csproj --runtime win-x64
-          dotnet publish src/ToolBox.Host/ToolBox.Host.csproj `
-            --configuration Release `
-            --runtime win-x64 `
-            --self-contained true `
-            --no-restore `
-            -p:PublishSingleFile=true `
-            -p:IncludeNativeLibrariesForSelfExtract=true `
-            -p:DebugType=None `
-            -o artifacts/publish
-          & .\tools\New-KeyboardMousePackage.ps1 `
+          & .\tools\Invoke-ReleaseValidation.ps1 `
             -Configuration Release `
             -Version $version `
-            -OutputDirectory .\artifacts
-          & .\tools\New-AudioRelayPackage.ps1 `
-            -Configuration Release `
-            -Version $version `
-            -OutputDirectory .\artifacts
-          Copy-Item -LiteralPath artifacts/publish/ToolBox.Host.exe `
-            -Destination "artifacts/ToolBox-Host-$env:RELEASE_TAG-win-x64.exe"
-          $releaseArtifacts = @(
-            "artifacts/ToolBox-Host-$env:RELEASE_TAG-win-x64.exe"
-            "artifacts/KeyboardMouse-$version.tpk"
-            "artifacts/PhoneAudioRelay-$version.tpk"
-          )
-          $checksumLines = foreach ($artifact in $releaseArtifacts) {
-            $fileHash = Get-FileHash -Algorithm SHA256 -LiteralPath $artifact
-            "{0}  {1}" -f $fileHash.Hash.ToLowerInvariant(), (Split-Path -Leaf $fileHash.Path)
-          }
-          $checksumLines | Set-Content `
-            -LiteralPath "artifacts/SHA256SUMS-$env:RELEASE_TAG.txt" `
-            -Encoding ascii
+            -OutputDirectory .\artifacts\release-validation
 
       - name: Create or update GitHub Release
         shell: pwsh
@@ -77,10 +41,10 @@ jobs:
         run: |
           $version = $env:RELEASE_TAG.TrimStart('v')
           $releaseAssets = @(
-            "artifacts/ToolBox-Host-$env:RELEASE_TAG-win-x64.exe"
-            "artifacts/KeyboardMouse-$version.tpk"
-            "artifacts/PhoneAudioRelay-$version.tpk"
-            "artifacts/SHA256SUMS-$env:RELEASE_TAG.txt"
+            "artifacts/release-validation/ToolBox-Host-$env:RELEASE_TAG-win-x64.exe"
+            "artifacts/release-validation/KeyboardMouse-$version.tpk"
+            "artifacts/release-validation/PhoneAudioRelay-$version.tpk"
+            "artifacts/release-validation/SHA256SUMS-$env:RELEASE_TAG.txt"
           )
 
           gh release view $env:RELEASE_TAG --repo $env:GITHUB_REPOSITORY *> $null

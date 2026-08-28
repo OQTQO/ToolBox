@@ -5,14 +5,25 @@
 ## Current checkpoint
 
 ```text
-Checkpoint date: 2026-08-26
-Current phase: Phone Audio Relay Product 02 implementation complete
-Next phase: Physical Android phone connection acceptance, then optional v0.2 authenticity planning
+Checkpoint date: 2026-08-27
+Current phase: Unified release-validation module complete after ToolBox v0.1.0
+Next phase: Physical Android phone connection acceptance, then Host lifecycle deepening
 Plugin API: Frozen v1
 Production updater: Deferred to v0.2
 ```
 
+Detailed milestone failures and reusable lessons are recorded in [`PROJECT_RETROSPECTIVES.md`](PROJECT_RETROSPECTIVES.md). A major milestone is not complete until its retrospective has been added there.
+
 ## Verified state
+
+- Public GitHub `v0.1.0` Release is complete at commit `8bf0ca0b24f8c0d826c709446b1445b2f240fa81`; it is neither draft nor prerelease.
+- The final main CI and tag-triggered Release workflow both pass. Three consecutive local full Release runs each passed `68/68` tests.
+- Release assets are complete and SHA-256-verified: self-contained Windows x64 Host, KeyboardMouse `.tpk`, PhoneAudioRelay `.tpk`, and checksum manifest.
+- The WPF Host uses the approved B-scheme UI and Module T icon, persistent bilingual/close/plugin-open settings, tray lifecycle, and separate installed/opened/runtime-enabled plugin state.
+- WinRT audio dependencies are process-shared with identity/version checks; WinRT-dependent plugin assemblies load without locking their installation files, and restart-required remains an explicit failure boundary.
+- Local, CI, and Tag Release now call `tools/Invoke-ReleaseValidation.ps1` as the single release-validation entry point; it performs clean warnings-as-errors build, all 68 tests, Host publish, both package builds, exact asset checks, package identity/version/hash validation, and release checksum verification.
+- Two consecutive post-change dry-runs produced byte-identical Host EXE, KeyboardMouse TPK, PhoneAudioRelay TPK, and checksum manifest. Deterministic package ZIP creation uses stable entry ordering and a fixed timestamp.
+- Pull request [#1](https://github.com/OQTQO/ToolBox/pull/1) verifies the unified pipeline on GitHub's Windows runner. After fixing the CI-only `CA1859` analyzer finding, run `33085645418` passed at commit `afe46a752843f8591c95e61c63b415294ee22eca`; the branch remains unmerged pending review.
 
 - .NET SDK `8.0.424` is installed.
 - `ToolBox.sln` restores successfully.
@@ -231,6 +242,8 @@ After physical acceptance, optional v0.2 work can be scoped around the future au
 - Host must never claim a plugin is Disabled until its active lifecycle is gone.
 - Plugin API v1 is frozen; incompatible changes require a new API major and compatible 1.x changes must preserve the recorded baseline.
 - Phase changes must follow: implement → build → test → fix → accept.
+- Every major milestone must end with a written retrospective in `PROJECT_RETROSPECTIVES.md`: record failures, root causes, why earlier checks missed them, corrections, verification evidence, prevention measures, and remaining risks.
+- A milestone is not complete and the checkpoint must not advance until both the retrospective and `PROJECT_CONTEXT.md` are updated.
 - Failed lifecycle operations remain visible as failure states; do not hide them behind Disabled.
 - Keep the Host small and do not build future phases early.
 
@@ -244,3 +257,4 @@ When continuing this project:
 4. Make the smallest in-scope change.
 5. Run restore/build/test before moving the checkpoint forward.
 6. Update this file with verified results, decisions, blockers, and the next concrete step.
+7. After every major milestone, add a retrospective to `PROJECT_RETROSPECTIVES.md` before marking it complete.
