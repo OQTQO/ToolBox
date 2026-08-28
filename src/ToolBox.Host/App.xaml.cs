@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.IO;
 using System.Windows;
@@ -11,9 +10,11 @@ using MessageBox = System.Windows.MessageBox;
 namespace ToolBox.Host;
 
 [SuppressMessage("Design", "CA1001:TypesThatOwnDisposableFieldsShouldBeDisposable", Justification = "WPF Application owns and closes runtime resources in OnExit.")]
-public partial class App : Application
+public partial class App : Application, IHostApplicationCommands
 {
     private readonly string _hostVersion = typeof(App).Assembly.GetName().Version?.ToString(3) ?? "0.1.0";
+    private readonly HostLifetimeState _lifetime = new();
+    private readonly HostRestartService _restartService = new();
     private StructuredLogger? _logger;
     private HostDiagnostics? _diagnostics;
     private MainWindowViewModel? _viewModel;
@@ -22,10 +23,7 @@ public partial class App : Application
     private HostSettingsService? _settings;
     private TrayIconService? _trayIcon;
     private MainWindow? _mainWindow;
-    private bool _shutdownRequested;
-    private bool _shutdownStarted;
-    private bool _restartRequested;
-    private string? _restartExecutablePath;
+    private HostShutdownCoordinator? _shutdownCoordinator;
 
     protected override void OnStartup(StartupEventArgs e)
     {
@@ -58,50 +56,14 @@ public partial class App : Application
 
     protected override void OnExit(ExitEventArgs e)
     {
-        if (_shutdownStarted)
+        if (!_lifetime.TryBeginShutdown(out var exitPlan))
         {
             base.OnExit(e);
             return;
         }
 
-        _shutdownStarted = true;
-        var restartRequested = _restartRequested;
-
-        try
-        {
-            _diagnostics?.TransitionTo(StartupStage.Stopping);
-            _logger?.Info("Host", "Host shutdown started.");
-
-            _viewModel?.Dispose();
-            _trayIcon?.Dispose();
-            _trayIcon = null;
-
-            _diagnostics?.TransitionTo(StartupStage.Stopped);
-            _logger?.Info("Host", "Host shutdown completed.");
-        }
-        catch (Exception exception)
-        {
-            RecordException("HOST_SHUTDOWN_FAILED", exception);
-        }
-        finally
-        {
-            try
-            {
-                _logger?.DisposeAsync().AsTask().GetAwaiter().GetResult();
-            }
-            catch (Exception exception)
-            {
-                Debug.WriteLine($"ToolBox logger shutdown failed: {exception}");
-            }
-
-            _packageInstaller?.Dispose();
-            _packageInstaller = null;
-
-            if (restartRequested)
-            {
-                LaunchReplacementProcess();
-            }
-        }
+        _shutdownCoordinator ??= CreateShutdownCoordinator();
+        _shutdownCoordinator.Run(exitPlan);
 
         base.OnExit(e);
     }
@@ -141,7 +103,7 @@ public partial class App : Application
             _localization,
             _settings);
 
-        _mainWindow = new MainWindow(_viewModel);
+        _mainWindow = new MainWindow(_viewModel, this);
         MainWindow = _mainWindow;
         _trayIcon = new TrayIconService(_localization);
         _trayIcon.OpenRequested += OnTrayOpenRequested;
@@ -156,7 +118,7 @@ public partial class App : Application
 
     internal void HideMainWindowToTray()
     {
-        if (_shutdownRequested || _mainWindow is null)
+        if (_lifetime.IsShutdownRequested || _mainWindow is null)
         {
             return;
         }
@@ -168,24 +130,23 @@ public partial class App : Application
 
     internal void RequestShutdown()
     {
-        if (_shutdownRequested)
+        if (!_lifetime.TryRequestShutdown())
         {
             return;
         }
 
-        _shutdownRequested = true;
         _mainWindow?.PrepareForShutdown();
         Shutdown();
     }
 
     internal void RequestRestart()
     {
-        if (_shutdownRequested)
+        if (_lifetime.IsShutdownRequested)
         {
             return;
         }
 
-        if (!TryGetRestartExecutable(out var executablePath))
+        if (!_restartService.TryGetExecutablePath(out var executablePath))
         {
             MessageBox.Show(
                 _localization?["RestartUnavailableDescription"]
@@ -200,9 +161,11 @@ public partial class App : Application
             return;
         }
 
-        _restartExecutablePath = executablePath;
-        _restartRequested = true;
-        _shutdownRequested = true;
+        if (!_lifetime.TryRequestRestart(executablePath))
+        {
+            return;
+        }
+
         _mainWindow?.PrepareForShutdown();
         _logger?.Info("Host", "ToolBox restart requested after plugin lifecycle recovery.");
         Shutdown();
@@ -218,55 +181,24 @@ public partial class App : Application
         Dispatcher.Invoke(RequestShutdown);
     }
 
-    private void LaunchReplacementProcess()
+    void IHostApplicationCommands.HideMainWindowToTray()
     {
-        var executablePath = _restartExecutablePath;
-        if (string.IsNullOrWhiteSpace(executablePath))
-        {
-            return;
-        }
-
-        try
-        {
-            Process.Start(new ProcessStartInfo
-            {
-                FileName = executablePath,
-                WorkingDirectory = Path.GetDirectoryName(executablePath) ?? AppContext.BaseDirectory,
-                UseShellExecute = true
-            });
-        }
-        catch (Exception exception)
-        {
-            Debug.WriteLine($"ToolBox restart process could not be launched: {exception}");
-            MessageBox.Show(
-                _localization?["RestartLaunchFailed"]
-                    ?? "ToolBox could not launch the replacement process. Close and reopen it manually.",
-                _localization?["RestartUnavailableTitle"] ?? "ToolBox cannot restart automatically",
-                MessageBoxButton.OK,
-                MessageBoxImage.Warning);
-        }
+        HideMainWindowToTray();
     }
 
-    private static bool TryGetRestartExecutable(out string executablePath)
+    void IHostApplicationCommands.RequestShutdown()
     {
-        executablePath = string.Empty;
-        var processPath = Environment.ProcessPath;
-        if (string.IsNullOrWhiteSpace(processPath)
-            || !Path.IsPathFullyQualified(processPath)
-            || !File.Exists(processPath)
-            || !processPath.EndsWith(".exe", StringComparison.OrdinalIgnoreCase)
-            || string.Equals(Path.GetFileName(processPath), "dotnet.exe", StringComparison.OrdinalIgnoreCase))
-        {
-            return false;
-        }
+        RequestShutdown();
+    }
 
-        executablePath = processPath;
-        return true;
+    void IHostApplicationCommands.RequestRestart()
+    {
+        RequestRestart();
     }
 
     private void ShowMainWindow()
     {
-        if (_shutdownRequested || _mainWindow is null)
+        if (_lifetime.IsShutdownRequested || _mainWindow is null)
         {
             return;
         }
@@ -308,6 +240,78 @@ public partial class App : Application
         _logger?.Info("Host", message);
     }
 
+    private HostShutdownCoordinator CreateShutdownCoordinator()
+    {
+        return HostShutdownCoordinator.CreateDefault(
+            new HostShutdownActions(
+                TransitionToStopping: () => _diagnostics?.TransitionTo(StartupStage.Stopping),
+                LogShutdownStarted: () => _logger?.Info("Host", "Host shutdown started."),
+                StopPluginViewModels: () =>
+                {
+                    try
+                    {
+                        _viewModel?.Dispose();
+                    }
+                    finally
+                    {
+                        _viewModel = null;
+                    }
+                },
+                DisposeTray: () =>
+                {
+                    try
+                    {
+                        _trayIcon?.Dispose();
+                    }
+                    finally
+                    {
+                        _trayIcon = null;
+                    }
+                },
+                TransitionToStopped: () => _diagnostics?.TransitionTo(StartupStage.Stopped),
+                LogShutdownCompleted: () => _logger?.Info("Host", "Host shutdown completed."),
+                DisposeLogger: () =>
+                {
+                    var logger = _logger;
+                    _logger = null;
+                    logger?.DisposeAsync().AsTask().GetAwaiter().GetResult();
+                },
+                DisposePackageInstaller: () =>
+                {
+                    try
+                    {
+                        _packageInstaller?.Dispose();
+                    }
+                    finally
+                    {
+                        _packageInstaller = null;
+                    }
+                },
+                LaunchReplacement: _restartService.Launch),
+            OnShutdownOperationFailed);
+    }
+
+    private void OnShutdownOperationFailed(HostShutdownFailure failure)
+    {
+        System.Diagnostics.Debug.WriteLine(
+            $"ToolBox shutdown operation '{failure.OperationName}' failed: {failure.Exception}");
+        RecordException(
+            "HOST_SHUTDOWN_OPERATION_FAILED",
+            new InvalidOperationException(
+                $"Host shutdown operation '{failure.OperationName}' failed.",
+                failure.Exception));
+
+        if (string.Equals(failure.OperationName, "launch-replacement", StringComparison.Ordinal))
+        {
+            MessageBox.Show(
+                _localization?["RestartLaunchFailed"]
+                    ?? "ToolBox could not launch the replacement process. Close and reopen it manually.",
+                _localization?["RestartUnavailableTitle"] ?? "ToolBox cannot restart automatically",
+                MessageBoxButton.OK,
+                MessageBoxImage.Warning);
+        }
+    }
+
     private void OnDispatcherUnhandledException(object sender, DispatcherUnhandledExceptionEventArgs e)
     {
         RecordException("HOST_DISPATCHER_UNHANDLED", e.Exception);
@@ -341,8 +345,8 @@ public partial class App : Application
         }
         catch (Exception loggingException)
         {
-            Debug.WriteLine($"ToolBox exception logging failed: {loggingException}");
-            Debug.WriteLine($"Original exception: {exception}");
+            System.Diagnostics.Debug.WriteLine($"ToolBox exception logging failed: {loggingException}");
+            System.Diagnostics.Debug.WriteLine($"Original exception: {exception}");
         }
     }
 }

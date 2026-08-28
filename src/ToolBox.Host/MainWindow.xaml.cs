@@ -22,10 +22,24 @@ public partial class MainWindow : Window
     private const int DwmWindowCornerDoNotRound = 1;
     private const int DwmWindowCornerRound = 2;
     private const double WindowCornerRadius = 10;
+    private readonly IHostApplicationCommands _applicationCommands;
     private bool _allowClose;
+
     public MainWindow(MainWindowViewModel viewModel)
+        : this(
+            viewModel,
+            Application.Current as IHostApplicationCommands
+                ?? throw new InvalidOperationException("The ToolBox application lifetime is unavailable."))
+    {
+    }
+
+    internal MainWindow(
+        MainWindowViewModel viewModel,
+        IHostApplicationCommands applicationCommands)
     {
         ArgumentNullException.ThrowIfNull(viewModel);
+        _applicationCommands = applicationCommands
+            ?? throw new ArgumentNullException(nameof(applicationCommands));
 
         InitializeComponent();
         DataContext = viewModel;
@@ -144,16 +158,16 @@ public partial class MainWindow : Window
 
     protected override void OnClosing(CancelEventArgs e)
     {
-        if (!_allowClose && Application.Current is App app)
+        if (!_allowClose)
         {
             e.Cancel = true;
             if (DataContext is MainWindowViewModel viewModel && viewModel.CloseToTray)
             {
-                app.HideMainWindowToTray();
+                _applicationCommands.HideMainWindowToTray();
             }
             else
             {
-                app.RequestShutdown();
+                _applicationCommands.RequestShutdown();
             }
         }
 
@@ -321,10 +335,7 @@ public partial class MainWindow : Window
 
     private void OnAudioRelayRestartClick(object sender, RoutedEventArgs e)
     {
-        if (Application.Current is App app)
-        {
-            app.RequestRestart();
-        }
+        _applicationCommands.RequestRestart();
     }
 
     private async void OnAudioRelayInstallClick(object sender, RoutedEventArgs e)
