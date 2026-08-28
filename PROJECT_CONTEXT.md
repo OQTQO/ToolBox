@@ -5,9 +5,9 @@
 ## Current checkpoint
 
 ```text
-Checkpoint date: 2026-08-27
-Current phase: Unified release-validation module complete after ToolBox v0.1.0
-Next phase: Physical Android phone connection acceptance, then Host lifecycle deepening
+Checkpoint date: 2026-08-28
+Current phase: Physical Android phone audio acceptance complete by user report
+Next phase: Host lifecycle deepening
 Plugin API: Frozen v1
 Production updater: Deferred to v0.2
 ```
@@ -23,7 +23,8 @@ Detailed milestone failures and reusable lessons are recorded in [`PROJECT_RETRO
 - WinRT audio dependencies are process-shared with identity/version checks; WinRT-dependent plugin assemblies load without locking their installation files, and restart-required remains an explicit failure boundary.
 - Local, CI, and Tag Release now call `tools/Invoke-ReleaseValidation.ps1` as the single release-validation entry point; it performs clean warnings-as-errors build, all 68 tests, Host publish, both package builds, exact asset checks, package identity/version/hash validation, and release checksum verification.
 - Two consecutive post-change dry-runs produced byte-identical Host EXE, KeyboardMouse TPK, PhoneAudioRelay TPK, and checksum manifest. Deterministic package ZIP creation uses stable entry ordering and a fixed timestamp.
-- Pull request [#1](https://github.com/OQTQO/ToolBox/pull/1) verifies the unified pipeline on GitHub's Windows runner. After fixing the CI-only `CA1859` analyzer finding, run `33085645418` passed at commit `afe46a752843f8591c95e61c63b415294ee22eca`; the branch remains unmerged pending review.
+- Pull request [#1](https://github.com/OQTQO/ToolBox/pull/1) merged the unified pipeline into `main` at `036b78dfe0d692fea8bd60427b7b9a412cc0b10e`. After fixing the CI-only `CA1859` analyzer finding, both the corrected PR run `33085645418` and final `main` run `33129661198` passed on GitHub's Windows runner.
+- On 2026-08-28, the user reported that the physical-test candidate built from merge commit `036b78dfe0d692fea8bd60427b7b9a412cc0b10e` passed Android phone audio acceptance. This is user-supplied hardware evidence, distinct from automated CI evidence.
 
 - .NET SDK `8.0.424` is installed.
 - `ToolBox.sln` restores successfully.

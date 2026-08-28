@@ -113,6 +113,7 @@ The software and packages are released, but physical Android A2DP-source accepta
 - Added deterministic ZIP construction shared by both product package adapters.
 - Two consecutive final dry-runs passed all `68/68` tests and produced byte-identical hashes for all four candidate assets.
 - Pull request #1 reran the same entry point on GitHub's Windows runner. The corrected run `33085645418` passed at commit `afe46a752843f8591c95e61c63b415294ee22eca` after the first run exposed a CI-only analyzer warning.
+- Pull request #1 was merged as `036b78dfe0d692fea8bd60427b7b9a412cc0b10e`; the resulting `main` run `33129661198` passed the same validation pipeline. A fresh physical-test candidate was then built from that merge commit and passed all `68/68` tests.
 
 ### Failure discovered during the milestone
 
@@ -139,4 +140,27 @@ The analyzer finding was corrected without suppression by narrowing the fixture 
 
 ### Remaining boundary
 
-The implementation is committed on `codex/release-validation`, locally verified, and verified by pull-request CI on a fresh GitHub Windows runner. Pull request #1 still requires review and an explicit merge decision; this milestone does not authorize a Release update. Physical Android audio acceptance remains the next product milestone.
+The implementation is merged into `main`, locally verified, and verified by both pull-request and post-merge CI on fresh GitHub Windows runners. No Release update was performed. Physical Android audio acceptance is owned by the user and remains the next product milestone; it must not be marked complete until the user reports real phone results.
+
+## 2026-08-28 — Physical Android phone audio acceptance
+
+### Outcome
+
+- The user reported that the physical-test candidate built from merge commit `036b78dfe0d692fea8bd60427b7b9a412cc0b10e` passed real-device testing.
+- This closes the physical Android A2DP-source acceptance boundary for the tested phone and computer combination.
+- Automated evidence remains separate: the same candidate passed a warnings-as-errors Release build, all `68/68` tests, package validation, and SHA-256 verification before delivery.
+
+### Failure discovered during the milestone
+
+No failure was reported during this physical acceptance pass. That does not prove compatibility with every Android vendor, Bluetooth adapter, Windows audio driver, or reconnect sequence.
+
+### Reusable lessons
+
+1. Record physical acceptance as user-supplied evidence and identify the exact tested commit; do not present it as CI evidence or as universal hardware compatibility.
+2. Deliver hardware candidates from the merged commit rather than from a pre-merge branch so field results map to repository history.
+3. Keep phone audio, computer audio coexistence, stop/disable cleanup, tray exit, and restart-required behavior in the regression checklist for future audio changes.
+4. A passing hardware test closes the current acceptance boundary but does not remove the explicit restart-required safety state.
+
+### Remaining boundary
+
+Host lifecycle deepening is the next architecture milestone. Release `v0.1.0` remains unchanged; a future public release requires a separately versioned release decision and full validation.
