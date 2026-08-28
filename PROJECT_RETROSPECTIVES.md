@@ -251,4 +251,4 @@ Correction: every targeted workspace install now parses the Manifest and require
 
 ### Remaining boundary
 
-Local implementation and full release validation are complete. A fresh GitHub pull-request run and user-owned UI regression remain before merge. Release `v0.1.0` is unchanged, and this milestone does not add a public plugin UI contract or alter `.tpk` compatibility.
+Local implementation and full release validation are complete. Pull request [#4](https://github.com/OQTQO/ToolBox/pull/4) run [`33147315829`](https://github.com/OQTQO/ToolBox/actions/runs/33147315829) passed at commit `59a592c1c1f081770329072ac14ec09383073afd`. User-owned UI regression and explicit merge approval remain before merge. Release `v0.1.0` is unchanged, and this milestone does not add a public plugin UI contract or alter `.tpk` compatibility.
