@@ -415,6 +415,7 @@ CI 和 Release 工作流必须保持为 `Invoke-ReleaseValidation.ps1` 的薄适
 - WPF 与 WinForms 同时启用时，要警惕 `Brush`、`KeyEventArgs` 等类型歧义；
 - 测试的 Dispatcher 不能依赖不存在的真实消息循环；
 - 性能/期限断言必须只包围它声称测量的操作，不能把 Worker 启动时间混入关闭期限；
+- `CancelAfter` 通知与单调时钟截止点可能相差数毫秒，测试不能假设二者在同一次观察中原子同步；
 - 软件验证、UI 验收和硬件验收是三类证据，不能互相替代；
 - 每完成一个大节点必须回顾失败原因并写入项目记忆。
 
