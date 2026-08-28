@@ -113,6 +113,7 @@ The software and packages are released, but physical Android A2DP-source accepta
 - Added deterministic ZIP construction shared by both product package adapters.
 - Two consecutive final dry-runs passed all `68/68` tests and produced byte-identical hashes for all four candidate assets.
 - Pull request #1 reran the same entry point on GitHub's Windows runner. The corrected run `33085645418` passed at commit `afe46a752843f8591c95e61c63b415294ee22eca` after the first run exposed a CI-only analyzer warning.
+- Pull request #1 was merged as `036b78dfe0d692fea8bd60427b7b9a412cc0b10e`; the resulting `main` run `33129661198` passed the same validation pipeline. A fresh physical-test candidate was then built from that merge commit and passed all `68/68` tests.
 
 ### Failure discovered during the milestone
 
@@ -139,4 +140,4 @@ The analyzer finding was corrected without suppression by narrowing the fixture 
 
 ### Remaining boundary
 
-The implementation is committed on `codex/release-validation`, locally verified, and verified by pull-request CI on a fresh GitHub Windows runner. Pull request #1 still requires review and an explicit merge decision; this milestone does not authorize a Release update. Physical Android audio acceptance remains the next product milestone.
+The implementation is merged into `main`, locally verified, and verified by both pull-request and post-merge CI on fresh GitHub Windows runners. No Release update was performed. Physical Android audio acceptance is owned by the user and remains the next product milestone; it must not be marked complete until the user reports real phone results.
