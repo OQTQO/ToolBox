@@ -1,6 +1,9 @@
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
+Add-Type -AssemblyName System.IO.Compression
+Add-Type -AssemblyName System.IO.Compression.FileSystem
+
 function New-DeterministicZipArchive {
     [CmdletBinding()]
     param(

@@ -6,8 +6,8 @@
 
 ```text
 Checkpoint date: 2026-08-28
-Current phase: Architecture-review execution complete on verified main
-Next phase: Feature-driven planning; no speculative dependency-policy extraction
+Current phase: ToolBox v0.1.1 release candidate verified locally
+Next phase: Release pull request, main CI, tag workflow, and published-asset verification
 Plugin API: Frozen v1
 Production updater: Deferred to v0.2
 ```
@@ -21,7 +21,7 @@ Detailed milestone failures and reusable lessons are recorded in [`PROJECT_RETRO
 - Release assets are complete and SHA-256-verified: self-contained Windows x64 Host, KeyboardMouse `.tpk`, PhoneAudioRelay `.tpk`, and checksum manifest.
 - The WPF Host uses the approved B-scheme UI and Module T icon, persistent bilingual/close/plugin-open settings, tray lifecycle, and separate installed/opened/runtime-enabled plugin state.
 - WinRT audio dependencies are process-shared with identity/version checks; WinRT-dependent plugin assemblies load without locking their installation files, and restart-required remains an explicit failure boundary.
-- Local, CI, and Tag Release now call `tools/Invoke-ReleaseValidation.ps1` as the single release-validation entry point; it performs clean warnings-as-errors build, all 68 tests, Host publish, both package builds, exact asset checks, package identity/version/hash validation, and release checksum verification.
+- Local, CI, and Tag Release call `tools/Invoke-ReleaseValidation.ps1` as the single release-validation entry point; it performs production-version consistency checks, a clean warnings-as-errors build, all solution tests, Host publish, both package builds, exact asset checks, package identity/version/hash validation, and release checksum verification.
 - Two consecutive post-change dry-runs produced byte-identical Host EXE, KeyboardMouse TPK, PhoneAudioRelay TPK, and checksum manifest. Deterministic package ZIP creation uses stable entry ordering and a fixed timestamp.
 - Pull request [#1](https://github.com/OQTQO/ToolBox/pull/1) merged the unified pipeline into `main` at `036b78dfe0d692fea8bd60427b7b9a412cc0b10e`. After fixing the CI-only `CA1859` analyzer finding, both the corrected PR run `33085645418` and final `main` run `33129661198` passed on GitHub's Windows runner.
 - On 2026-08-28, the user reported that the physical-test candidate built from merge commit `036b78dfe0d692fea8bd60427b7b9a412cc0b10e` passed Android phone audio acceptance. This is user-supplied hardware evidence, distinct from automated CI evidence.
@@ -37,11 +37,15 @@ Detailed milestone failures and reusable lessons are recorded in [`PROJECT_RETRO
 - On 2026-08-28, the user reported that the physical/UI candidate from final pull-request head `cd396ff2369a0951081e20aef74b1d8ddec49131` passed acceptance. This is user-supplied evidence distinct from automated CI; pull-request run [`33147471754`](https://github.com/OQTQO/ToolBox/actions/runs/33147471754) also passed for that head.
 - Pull request [#4](https://github.com/OQTQO/ToolBox/pull/4) merged the plugin-neutral Host workspace into `main` at `c70a0df6a5dc3a35fe3fd2bf99b55bd9b2be61bd`; post-merge main run [`33148234184`](https://github.com/OQTQO/ToolBox/actions/runs/33148234184) passed.
 - The architecture review's three strong recommendations are complete: unified release artifact construction, a deep Host lifecycle session, and plugin-neutral Host workspace composition. Dependency-loading policy remains intentionally local until a second real process-level dependency creates a non-speculative seam.
+- Pull request [#5](https://github.com/OQTQO/ToolBox/pull/5) merged the architecture-review closeout into `main` at `3808f7430e840b0d30747959740ffc310b9f2fa5`; post-merge main run [`33148934438`](https://github.com/OQTQO/ToolBox/actions/runs/33148934438) passed.
+- The `v0.1.1` release candidate consistently versions Host, Core, Worker, PluginSdk, Keyboard & Mouse, Phone Audio Relay, and both source Manifests as `0.1.1`; historical compatibility fixtures retain their intentional versions.
+- Two independent local `v0.1.1` release validations each passed a warnings-as-errors build, all `86/86` tests, self-contained `win-x64` Host publish, both product package builds, exact package/payload/hash checks, and release checksum verification. All four candidate artifacts were byte-identical across the two runs.
+- Release tooling now explicitly loads ZIP assemblies for cold Windows PowerShell 5.1 processes, computes stream hashes through compatible SHA-256 APIs, and rejects mismatched production project or Manifest versions before building.
 
 - .NET SDK `8.0.424` is installed.
 - `ToolBox.sln` restores successfully.
 - Release build passes with `0` warnings and `0` errors.
-- Release test run passes: `59` passed, `0` failed, `0` skipped (`54` Core + `5` Audio Relay).
+- Release test run passes: `86` passed, `0` failed, `0` skipped (`55` Core + `5` Audio Relay + `26` Host).
 - WPF Host smoke test passes: startup, healthy state, graceful shutdown, and shutdown logging were all confirmed.
 - Phase 4 WPF interaction pass: KeyboardTest enabled, mouse events observed, settings applied, then disabled and unloaded to `Disabled`.
 - Keyboard & Mouse Test product packages contain only the product runtime payload and manifest metadata; no duplicate PluginSdk copy is shipped.

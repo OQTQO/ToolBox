@@ -15,6 +15,13 @@ $ErrorActionPreference = 'Stop'
 $repositoryRoot = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
 $solutionPath = Join-Path $repositoryRoot 'ToolBox.sln'
 $hostProjectPath = Join-Path $repositoryRoot 'src\ToolBox.Host\ToolBox.Host.csproj'
+$coreProjectPath = Join-Path $repositoryRoot 'src\ToolBox.Core\ToolBox.Core.csproj'
+$pluginSdkProjectPath = Join-Path $repositoryRoot 'src\ToolBox.PluginSdk\ToolBox.PluginSdk.csproj'
+$pluginWorkerProjectPath = Join-Path $repositoryRoot 'src\ToolBox.PluginWorker\ToolBox.PluginWorker.csproj'
+$keyboardProjectPath = Join-Path $repositoryRoot 'spikes\KeyboardTest\KeyboardTest.csproj'
+$audioProjectPath = Join-Path $repositoryRoot 'spikes\AudioRelay\AudioRelay.csproj'
+$keyboardManifestPath = Join-Path $repositoryRoot 'spikes\KeyboardTest\manifest.json'
+$audioManifestPath = Join-Path $repositoryRoot 'spikes\AudioRelay\manifest.json'
 $keyboardPackageScript = Join-Path $PSScriptRoot 'New-KeyboardMousePackage.ps1'
 $audioPackageScript = Join-Path $PSScriptRoot 'New-AudioRelayPackage.ps1'
 $outputRoot = [System.IO.Path]::GetFullPath($OutputDirectory)
@@ -44,7 +51,7 @@ function Get-ProjectVersion {
     [xml]$project = Get-Content -LiteralPath $ProjectPath -Raw
     $versionNode = $project.SelectSingleNode('/Project/PropertyGroup/Version')
     if ($null -eq $versionNode -or [string]::IsNullOrWhiteSpace($versionNode.InnerText)) {
-        throw "The Host project does not declare a Version property: '$ProjectPath'."
+        throw "The project does not declare a Version property: '$ProjectPath'."
     }
 
     return $versionNode.InnerText.Trim()
@@ -122,11 +129,13 @@ function Get-ZipEntrySha256 {
     param([Parameter(Mandatory)][System.IO.Compression.ZipArchiveEntry]$Entry)
 
     $stream = $Entry.Open()
+    $algorithm = [System.Security.Cryptography.SHA256]::Create()
     try {
-        $hash = [System.Security.Cryptography.SHA256]::HashData($stream)
-        return [Convert]::ToHexString($hash).ToLowerInvariant()
+        $hash = $algorithm.ComputeHash($stream)
+        return ([BitConverter]::ToString($hash)).Replace('-', '').ToLowerInvariant()
     }
     finally {
+        $algorithm.Dispose()
         $stream.Dispose()
     }
 }
@@ -239,6 +248,26 @@ $hostAssetName = "ToolBox-Host-$releaseTag-win-x64.exe"
 $keyboardAssetName = "KeyboardMouse-$Version.tpk"
 $audioAssetName = "PhoneAudioRelay-$Version.tpk"
 $checksumAssetName = "SHA256SUMS-$releaseTag.txt"
+
+foreach ($versionedProjectPath in @(
+    $hostProjectPath,
+    $coreProjectPath,
+    $pluginSdkProjectPath,
+    $pluginWorkerProjectPath,
+    $keyboardProjectPath,
+    $audioProjectPath)) {
+    $projectVersion = Get-ProjectVersion -ProjectPath $versionedProjectPath
+    if ($projectVersion -cne $Version) {
+        throw "Project '$versionedProjectPath' declares version '$projectVersion', expected '$Version'."
+    }
+}
+
+foreach ($manifestPath in @($keyboardManifestPath, $audioManifestPath)) {
+    $manifest = Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json
+    if ([string]$manifest.version -cne $Version) {
+        throw "Manifest '$manifestPath' declares version '$($manifest.version)', expected '$Version'."
+    }
+}
 
 try {
     New-Item -ItemType Directory -Path $publishDirectory -Force | Out-Null

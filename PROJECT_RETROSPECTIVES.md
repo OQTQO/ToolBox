@@ -279,3 +279,58 @@ Correction: stop the refactor sequence after the three strong recommendations. A
 ### Remaining boundary
 
 The architecture-review implementation program is complete on verified `main`. There is no active architecture refactor. The next branch should be scoped from a concrete feature, defect, or v0.2 distribution requirement; dependency-policy extraction remains deferred until its second real adapter exists.
+
+## 2026-08-28 — ToolBox v0.1.1 final release candidate
+
+### Outcome
+
+- Advanced Host, Core, Worker, PluginSdk, Keyboard & Mouse, Phone Audio Relay, and the two product Manifests to `0.1.1` without changing Plugin API major 1 or `.tpk` format 1.
+- Added a `0.1.1` changelog entry and updated current package/release examples while preserving `v0.1.0` history and compatibility fixtures.
+- Extended unified release validation to reject drift between the requested release version and every production project or source Manifest.
+- Made deterministic package creation and checksum verification work from a cold Windows PowerShell 5.1 process as documented, as well as from GitHub's `pwsh` environment.
+- Two independent local validations passed with 0 warnings, 0 errors, `86/86` tests, all four release assets, exact package contents, payload hashes, release checksums, and byte-identical artifact SHA-256 values.
+
+### Failures and corrections
+
+#### 1. NuGet audit cache produced `NU1900` under the warnings-as-errors gate
+
+The first two local runs could reach project packages but failed to load vulnerability data. Direct checks showed the NuGet service index and vulnerability files returned HTTP 200.
+
+Root cause: the local NuGet HTTP audit cache was stale or corrupt; disabling audit or suppressing the warning would have weakened the release gate.
+
+Correction: clear only the recoverable NuGet HTTP cache and force a fresh restore. The unchanged warnings-as-errors build then proceeded with 0 warnings and 0 errors.
+
+#### 2. The Keyboard & Mouse product test retained the `0.1.0` package baseline
+
+After the source Manifest moved to `0.1.1`, three real product-package tests still generated `package.json` with `0.1.0`. The installer correctly rejected the inconsistent packages.
+
+Root cause: the production version existed in projects, Manifests, and a product-test package builder, but the release script did not audit all production sources before building.
+
+Correction: advance the product-test baseline and add pre-build invariants for all production project and Manifest versions. Generic installer fixtures retain `0.1.0` where it is deliberate test data.
+
+#### 3. Packaging relied on assemblies already loaded into the PowerShell process
+
+A cold Windows PowerShell process could not resolve `System.IO.Compression.ZipArchive`, although earlier warm sessions and GitHub `pwsh` runs succeeded.
+
+Root cause: the shared package module used ZIP types without explicitly loading their assemblies.
+
+Correction: load `System.IO.Compression` and `System.IO.Compression.FileSystem` when the package module starts.
+
+#### 4. Checksum verification used a newer runtime-only SHA-256 convenience API
+
+After ZIP creation succeeded, Windows PowerShell 5.1 could not call static `SHA256.HashData` or rely on newer hex conversion APIs.
+
+Root cause: the validation implementation assumed the `pwsh`/.NET runtime even though documented local commands use Windows PowerShell.
+
+Correction: use `SHA256.Create().ComputeHash(stream)` and stable `BitConverter` hex conversion, preserving the same SHA-256 validation semantics across both shells.
+
+### Reusable lessons
+
+1. Release validation must run in the oldest shell environment claimed by the documentation, from a cold process.
+2. A version bump is a repository-wide invariant over production projects, Manifests, package metadata, product tests, documentation, and asset names—not a Host-only edit.
+3. Never suppress a security-audit warning merely to pass a release gate; distinguish source failure from local cache failure and repair the latter.
+4. Preserve historical fixture versions intentionally, and make the production-version allowlist explicit so bulk replacement cannot destroy compatibility coverage.
+
+### Remaining boundary
+
+The local `v0.1.1` release candidate is complete. Pull-request CI, merge and post-merge main CI, creation of the immutable `v0.1.1` tag, tag-triggered Release workflow, and published-asset/checksum verification remain before the release is complete.

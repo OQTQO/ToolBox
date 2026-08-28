@@ -1,4 +1,4 @@
-using System.IO.Compression;
+﻿using System.IO.Compression;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
@@ -14,7 +14,7 @@ namespace ToolBox.Core.Tests;
 public sealed class KeyboardMouseProductTests
 {
     private const string ProductId = "com.toolbox.keyboard-test";
-    private const string ProductVersion = "0.1.0";
+    private const string ProductVersion = "0.1.1";
     private const string ProductVersion2 = "0.2.0";
 
     [Fact]

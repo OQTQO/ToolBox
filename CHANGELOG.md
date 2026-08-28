@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+暂无。
+
+## [0.1.1] - 2026-08-28
+
 ### Changed
 
 - 本地、CI 与 Tag Release 统一调用 `Invoke-ReleaseValidation.ps1`，在推送标签前即可完成完整发布 dry-run。
@@ -13,6 +17,19 @@
 - 主窗口通过窄生命周期命令接口请求托盘隐藏、退出和重启，重启可执行文件解析与启动参数已独立测试。
 - Host 导航、插件页选择与设置页插件管理改由统一工作区集合驱动；产品专属页面从主窗口拆分为独立视图。
 - 工作区状态投影通过可注入 UI 调度边界更新，测试不再依赖真实 WPF 消息循环。
+
+### Verification
+
+- Release 构建 0 警告/0 错误，完整测试 `86/86` 通过；自包含 `win-x64` Host、两个 `.tpk`、包内哈希与发布 SHA-256 使用同一入口验证。
+- 两轮独立 dry-run 生成的四个候选附件逐字节一致。
+- 用户完成最终候选的窗口、插件管理及 Android 手机音频物理验收。
+
+### Release assets
+
+- `ToolBox-Host-v0.1.1-win-x64.exe`：自包含 Windows x64 Host。
+- `KeyboardMouse-0.1.1.tpk`：Keyboard & Mouse Test 个人学习插件包。
+- `PhoneAudioRelay-0.1.1.tpk`：Phone Audio Relay 个人学习插件包。
+- `SHA256SUMS-v0.1.1.txt`：三个程序包的 SHA-256 校验清单。
 
 ## [0.1.0] - 2026-08-26
 

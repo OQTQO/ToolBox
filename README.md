@@ -53,7 +53,7 @@ dotnet run --project src/ToolBox.Host/ToolBox.Host.csproj
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\tools\New-AudioRelayPackage.ps1 `
-  -Configuration Release -Version 0.1.0 -OutputDirectory .\artifacts
+  -Configuration Release -Version 0.1.1 -OutputDirectory .\artifacts
 ```
 
 Host 运行日志默认写入：
