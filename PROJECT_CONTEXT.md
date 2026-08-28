@@ -6,7 +6,7 @@
 
 ```text
 Checkpoint date: 2026-08-28
-Current phase: Host lifecycle deepening implemented locally; pull-request verification pending
+Current phase: Host lifecycle deepening complete and verified in pull request #3
 Next phase: Plugin-neutral Host workspace and navigation composition
 Plugin API: Frozen v1
 Production updater: Deferred to v0.2
@@ -27,6 +27,7 @@ Detailed milestone failures and reusable lessons are recorded in [`PROJECT_RETRO
 - On 2026-08-28, the user reported that the physical-test candidate built from merge commit `036b78dfe0d692fea8bd60427b7b9a412cc0b10e` passed Android phone audio acceptance. This is user-supplied hardware evidence, distinct from automated CI evidence.
 - Host lifecycle deepening replaces App-owned Boolean exit flags with a thread-safe shutdown/restart intent, isolates the ordered shutdown pipeline from WPF, prevents one cleanup failure from skipping later resources, decouples `MainWindow` from the concrete `App`, and makes executable restart resolution testable.
 - The local lifecycle candidate passes a warnings-as-errors Release build, all `83/83` tests, Host publish, both product package builds, package validation, and release checksum verification.
+- Pull request [#3](https://github.com/OQTQO/ToolBox/pull/3) verifies the lifecycle candidate on GitHub's Windows runner; run `33131338623` passed at commit `2986486a69b51f85f5c5cd60b51fd2a1e71c173a`. The PR remains unmerged pending user-owned physical/UI regression and merge approval.
 
 - .NET SDK `8.0.424` is installed.
 - `ToolBox.sln` restores successfully.

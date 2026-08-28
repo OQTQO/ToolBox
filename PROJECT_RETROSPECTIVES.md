@@ -174,6 +174,7 @@ Host lifecycle deepening is the next architecture milestone. Release `v0.1.0` re
 - Added `IHostApplicationCommands` so `MainWindow` no longer casts `Application.Current` to the concrete `App` when closing, hiding to tray, or requesting audio recovery restart.
 - Extracted `HostRestartService` so restart executable validation and launch parameters are testable without starting a replacement process.
 - Host lifecycle tests increased from 8 to 23; the full solution now passes `83/83` tests. The unified Release validation also passed Host publish, both deterministic product packages, exact asset validation, and SHA-256 verification.
+- Pull request #3 run `33131338623` passed the same unified validation on GitHub's Windows runner at commit `2986486a69b51f85f5c5cd60b51fd2a1e71c173a`.
 
 ### Failure discovered during the milestone
 
@@ -199,4 +200,4 @@ Shutdown ordering existed only as incidental statement order inside the WPF `App
 
 ### Remaining boundary
 
-Remote pull-request CI and user physical/UI regression remain acceptance boundaries for this branch. The next architecture milestone is to replace hard-coded Host plugin navigation and page composition with a plugin-neutral workspace model without changing Plugin API v1 or the package format.
+Remote pull-request CI is complete. User-owned physical/UI regression and explicit PR #3 merge approval remain acceptance boundaries for this branch. The next architecture milestone is to replace hard-coded Host plugin navigation and page composition with a plugin-neutral workspace model without changing Plugin API v1 or the package format.
