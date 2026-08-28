@@ -26,6 +26,8 @@ ToolBox 是一个面向 Windows 的插件平台原型。
 
 当前 0.1 系列最终版本：[ToolBox v0.1.1](https://github.com/OQTQO/ToolBox/releases/tag/v0.1.1)。
 
+项目维护权转移或新维护者接手时，请从 [PROJECT_HANDOFF.md](PROJECT_HANDOFF.md) 开始；该文档汇总当前架构、运行数据、构建发布流程、第三方插件边界、风险和接手清单。
+
 本地 `.tpk` 生成方式与“完整性不等于真实性”的发布边界见 [PACKAGE_RELEASE_POLICY.md](PACKAGE_RELEASE_POLICY.md)。
 
 GitHub 的 CI、Tag 发布和 Release 附件流程见 [CHANGELOG.md](CHANGELOG.md) 与 `.github/workflows/release.yml`。
