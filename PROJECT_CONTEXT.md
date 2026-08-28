@@ -6,8 +6,8 @@
 
 ```text
 Checkpoint date: 2026-08-28
-Current phase: Host lifecycle deepening complete and verified in pull request #3
-Next phase: Plugin-neutral Host workspace and navigation composition
+Current phase: Plugin-neutral Host workspace composition complete locally
+Next phase: Pull-request CI and user-owned UI regression
 Plugin API: Frozen v1
 Production updater: Deferred to v0.2
 ```
@@ -27,7 +27,12 @@ Detailed milestone failures and reusable lessons are recorded in [`PROJECT_RETRO
 - On 2026-08-28, the user reported that the physical-test candidate built from merge commit `036b78dfe0d692fea8bd60427b7b9a412cc0b10e` passed Android phone audio acceptance. This is user-supplied hardware evidence, distinct from automated CI evidence.
 - Host lifecycle deepening replaces App-owned Boolean exit flags with a thread-safe shutdown/restart intent, isolates the ordered shutdown pipeline from WPF, prevents one cleanup failure from skipping later resources, decouples `MainWindow` from the concrete `App`, and makes executable restart resolution testable.
 - The local lifecycle candidate passes a warnings-as-errors Release build, all `83/83` tests, Host publish, both product package builds, package validation, and release checksum verification.
-- Pull request [#3](https://github.com/OQTQO/ToolBox/pull/3) verifies the lifecycle candidate on GitHub's Windows runner; run `33131338623` passed at commit `2986486a69b51f85f5c5cd60b51fd2a1e71c173a`. The PR remains unmerged pending user-owned physical/UI regression and merge approval.
+- Pull request [#3](https://github.com/OQTQO/ToolBox/pull/3) merged Host lifecycle deepening into `main` at `827dff01582ef59dcf923edde39320987e975483`; the post-merge main run `33132098458` passed on GitHub's Windows runner.
+- Host plugin composition is now registration-driven: `App` creates the built-in workspace catalog, `MainWindowViewModel` projects generic installed/opened collections, and `MainWindow` renders collection-driven navigation and settings cards.
+- Keyboard & Mouse and Phone Audio Relay page markup and interaction code live in independent workspace views. The shell selects a workspace page through its registered page view model instead of product-specific page enum branches.
+- Targeted plugin updates revalidate package Manifest identity before invoking a workspace installer, preventing an update button from activating a package belonging to another registered plugin.
+- UI-bound workspace changes cross an injectable dispatcher boundary: WPF uses the application dispatcher, while unit tests use deterministic immediate dispatch without a message pump.
+- The local plugin-workspace candidate passes a warnings-as-errors Release build, all `86/86` tests, self-contained Host publish, both deterministic product packages, exact asset validation, package identity/version/hash validation, and release checksum verification.
 
 - .NET SDK `8.0.424` is installed.
 - `ToolBox.sln` restores successfully.
@@ -220,19 +225,13 @@ dotnet test ToolBox.sln --configuration Release
 - Added [`tools/New-AudioRelayPackage.ps1`](tools/New-AudioRelayPackage.ps1), [`PHONE_AUDIO_RELAY.md`](PHONE_AUDIO_RELAY.md), Release workflow assets, real-platform tests, fake-transport lifecycle tests, and collectible-ALC start/unload acceptance.
 - Generated `artifacts/PhoneAudioRelay-0.1.0.tpk`; physical audio playback remains to be accepted with a paired Android phone because this machine currently has no paired A2DP Audio Source.
 
-## Next phase: Physical Android acceptance, then optional v0.2 authenticity planning
+## Current architecture phase — Plugin-neutral Host workspaces
 
-The implementation and package paths are complete. The next acceptance step requires a paired Android phone:
-
-1. Pair the phone in Windows Bluetooth settings and confirm it appears as an A2DP Audio Source.
-2. Install `PhoneAudioRelay-0.1.0.tpk`, enable the plugin, refresh, select the phone, and start receiving.
-3. Verify phone media and PC application audio are audible together through the current Windows output, then stop/disable and confirm clean release.
-
-After physical acceptance, optional v0.2 work can be scoped around the future authenticity contract:
-
-1. Define the official public-key and signed-update-manifest format.
-2. Decide how signature verification composes with existing package SHA-256 validation.
-3. Review the experimental-to-stable contract boundary before promising any long-lived product-specific API.
+- Product discovery and construction are isolated in the built-in workspace catalog instead of being spread through `App`, `MainWindowViewModel`, `MainWindow.xaml`, and window code-behind.
+- The shell renders opened navigation items and installed-plugin management cards from collections of `PluginWorkspaceViewModel`.
+- Product-specific page UI remains Host-owned because Plugin API v1 has no UI-contribution contract, but each product page is isolated in its own view and selected through an implicit WPF data template.
+- Adding another built-in product now requires one catalog registration and one page view/template; it does not require another shell page enum value, navigation handler, settings card, or install/uninstall branch.
+- Local automated acceptance is complete at `86/86`; pull-request CI and user-owned UI regression remain before merge.
 
 仍然不在 v0.1 范围内：
 

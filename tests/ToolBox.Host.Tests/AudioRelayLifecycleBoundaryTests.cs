@@ -1,4 +1,4 @@
-using System.Text.Json;
+﻿using System.Text.Json;
 using ToolBox.Core.Diagnostics;
 using ToolBox.Core.Packaging;
 using ToolBox.Host;
@@ -22,31 +22,39 @@ public sealed class AudioRelayLifecycleBoundaryTests
             "session",
             "0.1.0");
         using var installer = new PluginPackageInstaller(fixture.PluginsRoot, fixture.PluginDataRoot);
+        var registrations = BuiltInPluginWorkspaceCatalog.Create(
+            logger,
+            installer,
+            localization,
+            keyboardPluginDirectory: null,
+            fixture.AudioPluginDirectory);
         using var viewModel = new MainWindowViewModel(
             new HostDiagnostics("launch", "session", "0.1.0"),
             logger,
-            keyboardTestPluginDirectory: null,
-            fixture.AudioPluginDirectory,
-            installer,
+            registrations,
             localization,
             settings);
+        var workspace = Assert.Single(
+            viewModel.PluginWorkspaces,
+            candidate => candidate.PluginId == "com.toolbox.audio-relay");
+        var audio = Assert.IsType<AudioRelayViewModel>(workspace.PageViewModel);
 
         try
         {
-            Assert.True(viewModel.IsAudioRelayInstalled);
-            Assert.True(viewModel.IsAudioRelayOpened);
-            Assert.True(await viewModel.AudioRelay.SetRuntimeEnabledAsync(enabled: true));
+            Assert.True(workspace.IsInstalled);
+            Assert.True(workspace.IsOpened);
+            Assert.True(await audio.SetRuntimeEnabledAsync(enabled: true));
 
-            viewModel.SelectPage(ShellPage.AudioRelay);
-            await viewModel.ToggleAudioRelayOpenedAsync();
+            viewModel.SelectPluginWorkspace(workspace);
+            await viewModel.ToggleWorkspaceOpenedAsync(workspace);
 
-            Assert.True(viewModel.IsAudioRelayOpened);
-            Assert.True(viewModel.IsAudioRelayPage);
-            Assert.True(viewModel.AudioRelay.RequiresHostRestart);
-            Assert.False(viewModel.AudioRelay.IsToggleEnabled);
-            Assert.True(viewModel.AudioRelay.IsRestartActionVisible);
-            Assert.True(viewModel.AudioRelay.IsRestartActionEnabled);
-            Assert.Contains("重启", viewModel.AudioRelay.StatusDescription, StringComparison.Ordinal);
+            Assert.True(workspace.IsOpened);
+            Assert.True(viewModel.IsPluginPage);
+            Assert.True(audio.RequiresHostRestart);
+            Assert.False(audio.IsToggleEnabled);
+            Assert.True(audio.IsRestartActionVisible);
+            Assert.True(audio.IsRestartActionEnabled);
+            Assert.Contains("重启", audio.StatusDescription, StringComparison.Ordinal);
             Assert.Contains("重启", viewModel.PluginManagerError, StringComparison.Ordinal);
         }
         finally

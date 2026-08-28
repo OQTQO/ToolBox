@@ -1,16 +1,14 @@
-using System.Globalization;
-using System.ComponentModel;
+﻿using System.ComponentModel;
 using System.Diagnostics;
+using System.Globalization;
 using System.Runtime.InteropServices;
 using System.Windows;
-using System.Windows.Input;
 using System.Windows.Controls.Primitives;
-using System.Windows.Media;
+using System.Windows.Input;
 using System.Windows.Interop;
+using System.Windows.Media;
 using Microsoft.Win32;
-using ToolBox.PluginSdk.Experimental;
 using Application = System.Windows.Application;
-using KeyEventArgs = System.Windows.Input.KeyEventArgs;
 using MessageBox = System.Windows.MessageBox;
 using OpenFileDialog = Microsoft.Win32.OpenFileDialog;
 
@@ -187,19 +185,12 @@ public partial class MainWindow : Window
         }
     }
 
-    private void OnKeyboardNavigationClick(object sender, RoutedEventArgs e)
+    private void OnPluginNavigationClick(object sender, RoutedEventArgs e)
     {
-        if (DataContext is MainWindowViewModel viewModel)
+        if (DataContext is MainWindowViewModel viewModel
+            && sender is FrameworkElement { DataContext: PluginWorkspaceViewModel workspace })
         {
-            viewModel.SelectPage(ShellPage.KeyboardTest);
-        }
-    }
-
-    private void OnAudioRelayNavigationClick(object sender, RoutedEventArgs e)
-    {
-        if (DataContext is MainWindowViewModel viewModel)
-        {
-            viewModel.SelectPage(ShellPage.AudioRelay);
+            viewModel.SelectPluginWorkspace(workspace);
         }
     }
 
@@ -243,27 +234,13 @@ public partial class MainWindow : Window
         }
     }
 
-    private async void OnKeyboardOpenedToggleClick(object sender, RoutedEventArgs e)
+    private async void OnWorkspaceOpenedToggleClick(object sender, RoutedEventArgs e)
     {
-        if (DataContext is MainWindowViewModel viewModel)
+        if (DataContext is MainWindowViewModel viewModel
+            && sender is ToggleButton { DataContext: PluginWorkspaceViewModel workspace } toggle)
         {
-            await viewModel.ToggleKeyboardOpenedAsync();
-            if (sender is ToggleButton toggle)
-            {
-                toggle.GetBindingExpression(ToggleButton.IsCheckedProperty)?.UpdateTarget();
-            }
-        }
-    }
-
-    private async void OnAudioRelayOpenedToggleClick(object sender, RoutedEventArgs e)
-    {
-        if (DataContext is MainWindowViewModel viewModel)
-        {
-            await viewModel.ToggleAudioRelayOpenedAsync();
-            if (sender is ToggleButton toggle)
-            {
-                toggle.GetBindingExpression(ToggleButton.IsCheckedProperty)?.UpdateTarget();
-            }
+            await viewModel.ToggleWorkspaceOpenedAsync(workspace);
+            toggle.GetBindingExpression(ToggleButton.IsCheckedProperty)?.UpdateTarget();
         }
     }
 
@@ -288,24 +265,17 @@ public partial class MainWindow : Window
         }
     }
 
-    private async void OnKeyboardTestToggleClick(object sender, RoutedEventArgs e)
+    private async void OnWorkspaceInstallClick(object sender, RoutedEventArgs e)
     {
-        if (DataContext is MainWindowViewModel viewModel)
-        {
-            await viewModel.KeyboardTest.ToggleAsync();
-        }
-    }
-
-    private async void OnKeyboardTestInstallClick(object sender, RoutedEventArgs e)
-    {
-        if (DataContext is not MainWindowViewModel viewModel)
+        if (DataContext is not MainWindowViewModel viewModel
+            || sender is not FrameworkElement { DataContext: PluginWorkspaceViewModel workspace })
         {
             return;
         }
 
         var dialog = new OpenFileDialog
         {
-            Title = viewModel.Localize("InstallKeyboardDialogTitle"),
+            Title = workspace.InstallDialogTitle,
             Filter = viewModel.Localize("PackageDialogFilter"),
             CheckFileExists = true,
             Multiselect = false
@@ -313,136 +283,22 @@ public partial class MainWindow : Window
 
         if (dialog.ShowDialog(this) == true)
         {
-            await viewModel.InstallPackageAsync(dialog.FileName);
+            await viewModel.InstallWorkspacePackageAsync(workspace, dialog.FileName);
         }
     }
 
-    private async void OnKeyboardTestApplySettingsClick(object sender, RoutedEventArgs e)
-    {
-        if (DataContext is MainWindowViewModel viewModel)
-        {
-            await viewModel.KeyboardTest.ApplySettingsAsync();
-        }
-    }
-
-    private async void OnAudioRelayToggleClick(object sender, RoutedEventArgs e)
-    {
-        if (DataContext is MainWindowViewModel viewModel)
-        {
-            await viewModel.AudioRelay.ToggleAsync();
-        }
-    }
-
-    private void OnAudioRelayRestartClick(object sender, RoutedEventArgs e)
+    private void OnAudioRelayRestartRequested(object sender, RoutedEventArgs e)
     {
         _applicationCommands.RequestRestart();
     }
 
-    private async void OnAudioRelayInstallClick(object sender, RoutedEventArgs e)
-    {
-        if (DataContext is not MainWindowViewModel viewModel)
-        {
-            return;
-        }
-
-        var dialog = new OpenFileDialog
-        {
-            Title = viewModel.Localize("InstallAudioDialogTitle"),
-            Filter = viewModel.Localize("PackageDialogFilter"),
-            CheckFileExists = true,
-            Multiselect = false
-        };
-
-        if (dialog.ShowDialog(this) == true)
-        {
-            await viewModel.InstallPackageAsync(dialog.FileName);
-        }
-    }
-
-    private async void OnKeyboardUninstallClick(object sender, RoutedEventArgs e)
+    private async void OnWorkspaceUninstallClick(object sender, RoutedEventArgs e)
     {
         if (DataContext is MainWindowViewModel viewModel
-            && ConfirmUninstall(viewModel, viewModel.Localize("KeyboardMouse")))
+            && sender is FrameworkElement { DataContext: PluginWorkspaceViewModel workspace }
+            && ConfirmUninstall(viewModel, workspace.DisplayName))
         {
-            await viewModel.UninstallKeyboardAsync();
-        }
-    }
-
-    private async void OnAudioRelayUninstallClick(object sender, RoutedEventArgs e)
-    {
-        if (DataContext is MainWindowViewModel viewModel
-            && ConfirmUninstall(viewModel, viewModel.Localize("PhoneAudioRelay")))
-        {
-            await viewModel.UninstallAudioRelayAsync();
-        }
-    }
-
-    private async void OnAudioRelayRefreshClick(object sender, RoutedEventArgs e)
-    {
-        if (DataContext is MainWindowViewModel viewModel)
-        {
-            await viewModel.AudioRelay.RefreshAsync();
-        }
-    }
-
-    private async void OnAudioRelayConnectClick(object sender, RoutedEventArgs e)
-    {
-        if (DataContext is MainWindowViewModel viewModel)
-        {
-            await viewModel.AudioRelay.ConnectAsync();
-        }
-    }
-
-    private async void OnAudioRelayDisconnectClick(object sender, RoutedEventArgs e)
-    {
-        if (DataContext is MainWindowViewModel viewModel)
-        {
-            await viewModel.AudioRelay.DisconnectAsync();
-        }
-    }
-
-    private void OnKeyboardSurfaceKeyDown(object sender, KeyEventArgs e)
-    {
-        if (DataContext is MainWindowViewModel viewModel)
-        {
-            viewModel.KeyboardTest.ObserveKey(GetKeyName(e), isDown: true);
-        }
-    }
-
-    private void OnKeyboardSurfaceKeyUp(object sender, KeyEventArgs e)
-    {
-        if (DataContext is MainWindowViewModel viewModel)
-        {
-            viewModel.KeyboardTest.ObserveKey(GetKeyName(e), isDown: false);
-        }
-    }
-
-    private void OnKeyboardSurfaceMouseDown(object sender, MouseButtonEventArgs e)
-    {
-        if (DataContext is MainWindowViewModel viewModel
-            && TryGetMouseButton(e.ChangedButton, out var button))
-        {
-            KeyboardTestSurface.Focus();
-            var position = e.GetPosition(KeyboardTestSurface);
-            viewModel.KeyboardTest.ObserveMouse(
-                button,
-                isDown: true,
-                (int)Math.Round(position.X),
-                (int)Math.Round(position.Y));
-        }
-    }
-
-    private void OnKeyboardSurfaceMouseUp(object sender, MouseButtonEventArgs e)
-    {
-        if (DataContext is MainWindowViewModel viewModel
-            && TryGetMouseButton(e.ChangedButton, out var button))
-        {
-            var position = e.GetPosition(KeyboardTestSurface);
-            viewModel.KeyboardTest.ObserveMouse(
-                button,
-                isDown: false,
-                (int)Math.Round(position.X),
-                (int)Math.Round(position.Y));
+            await viewModel.UninstallWorkspaceAsync(workspace);
         }
     }
 
@@ -468,22 +324,4 @@ public partial class MainWindow : Window
             MessageBoxResult.No) == MessageBoxResult.Yes;
     }
 
-    private static string GetKeyName(KeyEventArgs e)
-    {
-        var key = e.Key == Key.System ? e.SystemKey : e.Key;
-        return key.ToString();
-    }
-
-    private static bool TryGetMouseButton(MouseButton button, out KeyboardTestMouseButton mappedButton)
-    {
-        mappedButton = button switch
-        {
-            MouseButton.Left => KeyboardTestMouseButton.Left,
-            MouseButton.Right => KeyboardTestMouseButton.Right,
-            MouseButton.Middle => KeyboardTestMouseButton.Middle,
-            _ => default
-        };
-
-        return button is MouseButton.Left or MouseButton.Right or MouseButton.Middle;
-    }
 }

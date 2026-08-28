@@ -1,4 +1,4 @@
-using System.Diagnostics.CodeAnalysis;
+﻿using System.Diagnostics.CodeAnalysis;
 using System.IO;
 using System.Windows;
 using System.Windows.Threading;
@@ -78,8 +78,6 @@ public partial class App : Application, IHostApplicationCommands
         _diagnostics = new HostDiagnostics(launchAttemptId, sessionId, _hostVersion);
         _logger = new StructuredLogger(new LoggerOptions(), sessionId, _hostVersion);
 
-        string? activeKeyboardTestDirectory = null;
-        string? activeAudioRelayDirectory = null;
         var pluginsRoot = Path.Combine(AppContext.BaseDirectory, "Plugins");
         var pluginDataRoot = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
@@ -87,21 +85,18 @@ public partial class App : Application, IHostApplicationCommands
             "Plugins");
 
         _packageInstaller = new PluginPackageInstaller(pluginsRoot, pluginDataRoot);
-        activeKeyboardTestDirectory = ResolveActiveProductDirectory(
-            "com.toolbox.keyboard-test",
-            "Keyboard & Mouse Test");
-        activeAudioRelayDirectory = ResolveActiveProductDirectory(
-            "com.toolbox.audio-relay",
-            "Phone Audio Relay");
+        var workspaceRegistrations = BuiltInPluginWorkspaceCatalog.CreateFromInstalledPackages(
+            _logger,
+            _packageInstaller,
+            _localization);
 
         _viewModel = new MainWindowViewModel(
             _diagnostics,
             _logger,
-            activeKeyboardTestDirectory,
-            activeAudioRelayDirectory,
-            _packageInstaller ?? throw new InvalidOperationException("Package installer was not initialized."),
+            workspaceRegistrations,
             _localization,
-            _settings);
+            _settings,
+            new WpfHostUiDispatcher(Dispatcher));
 
         _mainWindow = new MainWindow(_viewModel, this);
         MainWindow = _mainWindow;
@@ -215,23 +210,6 @@ public partial class App : Application, IHostApplicationCommands
 
         _mainWindow.Activate();
         _logger?.Info("Host", "Main window restored from the system tray.");
-    }
-
-    private string? ResolveActiveProductDirectory(string pluginId, string productName)
-    {
-        try
-        {
-            return _packageInstaller?.GetActiveVersionDirectory(pluginId);
-        }
-        catch (PluginPackageException exception)
-        {
-            _logger?.Error(
-                "Package",
-                $"The active {productName} package could not be resolved.",
-                errorCode: exception.ErrorCode,
-                exception: exception);
-            return null;
-        }
     }
 
     private void Advance(StartupStage stage, string message)
