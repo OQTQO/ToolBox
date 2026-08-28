@@ -363,6 +363,8 @@ Correction: establish one clearly named authoritative transfer document, make th
 
 The first staged Markdown check also reported three intentional two-space line breaks as trailing whitespace, but a semicolon-separated PowerShell command continued into `git commit` instead of treating the failed check as a gate. The content problem was minor; the process problem was that a verification command and mutation were placed in one non-fail-fast command sequence. Correction: replace the line breaks with blank blockquote lines, run `git diff --cached --check` as a separate required command, and only then amend the documentation commit.
 
+The first transfer pull-request CI run also failed `OutOfProcessHangUsesHostShutdownDeadlineAndRequiresRestart` on the newer Windows Server 2025 hosted image. The failure reported a 2.90-second “shutdown,” while the configured shutdown deadline was 100 ms. Inspection showed that the stopwatch started before Worker process launch and plugin startup, so the assertion measured environment-dependent startup plus shutdown while describing only shutdown. Correction: start timing immediately before `StopAsync`; retain the deadline, `PLUGIN_SHUTDOWN_TIMEOUT`, and `RestartRequired` assertions. This narrows the measurement to the behavior the test is named to verify rather than relaxing the production deadline.
+
 ### Reusable lessons
 
 1. A transfer document must describe verified current state, not simply concatenate historical plans.
@@ -371,6 +373,7 @@ The first staged Markdown check also reported three intentional two-space line b
 4. Ownership-transfer instructions must never include guessed accounts, tokens, or remote URLs.
 5. The transfer checkpoint should preserve immutable Tags and Releases and direct the next owner toward a new versioned milestone.
 6. Do not place a validation command and commit in a non-fail-fast shell chain; verify first, inspect its exit code, and mutate Git state only in a later command.
+7. A timing assertion must bracket only the operation named by the test; process startup and shutdown require separate budgets and evidence.
 
 ### Remaining boundary
 

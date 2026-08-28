@@ -1,4 +1,4 @@
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using System.Globalization;
 using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
@@ -124,7 +124,6 @@ public sealed class FaultFixtureTests
             "HangPlugin",
             typeof(HangPlugin.HangPlugin),
             "HangPlugin.manifest.json");
-        var stopwatch = Stopwatch.StartNew();
 
         try
         {
@@ -133,6 +132,7 @@ public sealed class FaultFixtureTests
                 Path.Combine(fixtureRoot, "HangPlugin"));
             await session.StartPluginAsync();
 
+            var stopwatch = Stopwatch.StartNew();
             var exception = await Assert.ThrowsAsync<WorkerProtocolException>(
                 () => session.StopAsync(
                     new PluginShutdownOptions(TimeSpan.FromMilliseconds(100))));

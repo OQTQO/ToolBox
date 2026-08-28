@@ -16,6 +16,8 @@ Detailed milestone failures and reusable lessons are recorded in [`PROJECT_RETRO
 
 The authoritative transfer entry is [`PROJECT_HANDOFF.md`](PROJECT_HANDOFF.md). The old `HANDOFF_TOOLBOX_GITHUB_RELEASE.md` has been reduced to an archive pointer because its pre-v0.1.0 CI instructions are obsolete.
 
+The transfer PR's first Windows Server 2025 CI run exposed a timing-test defect: `OutOfProcessHangUsesHostShutdownDeadlineAndRequiresRestart` measured Worker startup together with shutdown and could fail before testing the intended deadline property. Its stopwatch now starts immediately before `StopAsync`; the 100 ms deadline, timeout error, and `RestartRequired` assertions are unchanged.
+
 ## Verified state
 
 - Public GitHub `v0.1.0` Release is complete at commit `8bf0ca0b24f8c0d826c709446b1445b2f240fa81`; it is neither draft nor prerelease.

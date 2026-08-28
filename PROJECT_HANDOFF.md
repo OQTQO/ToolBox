@@ -414,6 +414,7 @@ CI 和 Release 工作流必须保持为 `Invoke-ReleaseValidation.ps1` 的薄适
 - 生命周期状态必须描述真实资源状态；停止失败时不能隐藏入口或显示 Disabled；
 - WPF 与 WinForms 同时启用时，要警惕 `Brush`、`KeyEventArgs` 等类型歧义；
 - 测试的 Dispatcher 不能依赖不存在的真实消息循环；
+- 性能/期限断言必须只包围它声称测量的操作，不能把 Worker 启动时间混入关闭期限；
 - 软件验证、UI 验收和硬件验收是三类证据，不能互相替代；
 - 每完成一个大节点必须回顾失败原因并写入项目记忆。
 
