@@ -141,3 +141,26 @@ The analyzer finding was corrected without suppression by narrowing the fixture 
 ### Remaining boundary
 
 The implementation is merged into `main`, locally verified, and verified by both pull-request and post-merge CI on fresh GitHub Windows runners. No Release update was performed. Physical Android audio acceptance is owned by the user and remains the next product milestone; it must not be marked complete until the user reports real phone results.
+
+## 2026-08-28 — Physical Android phone audio acceptance
+
+### Outcome
+
+- The user reported that the physical-test candidate built from merge commit `036b78dfe0d692fea8bd60427b7b9a412cc0b10e` passed real-device testing.
+- This closes the physical Android A2DP-source acceptance boundary for the tested phone and computer combination.
+- Automated evidence remains separate: the same candidate passed a warnings-as-errors Release build, all `68/68` tests, package validation, and SHA-256 verification before delivery.
+
+### Failure discovered during the milestone
+
+No failure was reported during this physical acceptance pass. That does not prove compatibility with every Android vendor, Bluetooth adapter, Windows audio driver, or reconnect sequence.
+
+### Reusable lessons
+
+1. Record physical acceptance as user-supplied evidence and identify the exact tested commit; do not present it as CI evidence or as universal hardware compatibility.
+2. Deliver hardware candidates from the merged commit rather than from a pre-merge branch so field results map to repository history.
+3. Keep phone audio, computer audio coexistence, stop/disable cleanup, tray exit, and restart-required behavior in the regression checklist for future audio changes.
+4. A passing hardware test closes the current acceptance boundary but does not remove the explicit restart-required safety state.
+
+### Remaining boundary
+
+Host lifecycle deepening is the next architecture milestone. Release `v0.1.0` remains unchanged; a future public release requires a separately versioned release decision and full validation.
