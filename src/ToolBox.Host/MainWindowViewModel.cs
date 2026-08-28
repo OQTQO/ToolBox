@@ -1,17 +1,14 @@
-using System.Collections.ObjectModel;
+﻿using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Globalization;
 using System.IO;
 using System.IO.Compression;
 using System.Runtime.CompilerServices;
-using System.Windows;
 using System.Windows.Media;
-using System.Windows.Threading;
 using ToolBox.Core.Diagnostics;
 using ToolBox.Core.Packaging;
 using ToolBox.PluginSdk;
 using Brush = System.Windows.Media.Brush;
-using Application = System.Windows.Application;
 using Color = System.Windows.Media.Color;
 using ColorConverter = System.Windows.Media.ColorConverter;
 
@@ -20,15 +17,12 @@ namespace ToolBox.Host;
 public enum ShellPage
 {
     Overview,
-    KeyboardTest,
-    AudioRelay,
+    Plugin,
     Settings
 }
 
 public sealed class MainWindowViewModel : INotifyPropertyChanged, IDisposable
 {
-    private const string KeyboardPluginId = "com.toolbox.keyboard-test";
-    private const string AudioRelayPluginId = "com.toolbox.audio-relay";
     private static readonly Brush HealthyBrush = CreateBrush("#92E6B5");
     private static readonly Brush WarningBrush = CreateBrush("#F5B85B");
     private static readonly Brush ErrorBrush = CreateBrush("#FF8F86");
@@ -37,42 +31,56 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged, IDisposable
     private readonly IStructuredLogger _logger;
     private readonly LocalizationService _localization;
     private readonly HostSettingsService _settings;
-    private readonly Dispatcher _dispatcher;
+    private readonly IHostUiDispatcher _uiDispatcher;
+    private readonly ObservableCollection<PluginWorkspaceViewModel> _pluginWorkspaces = [];
+    private readonly ObservableCollection<PluginWorkspaceViewModel> _installedPluginWorkspaces = [];
+    private readonly ObservableCollection<PluginWorkspaceViewModel> _openedPluginWorkspaces = [];
     private HostDiagnosticsSnapshot _snapshot;
     private ShellPage _selectedPage = ShellPage.Overview;
+    private PluginWorkspaceViewModel? _selectedPluginWorkspace;
     private string? _pluginManagerError;
     private bool _disposed;
 
     internal MainWindowViewModel(
         HostDiagnostics diagnostics,
         IStructuredLogger logger,
-        string? keyboardTestPluginDirectory,
-        string? audioRelayPluginDirectory,
-        PluginPackageInstaller packageInstaller,
+        IEnumerable<PluginWorkspaceRegistration> workspaceRegistrations,
         LocalizationService localization,
-        HostSettingsService settings)
+        HostSettingsService settings,
+        IHostUiDispatcher? uiDispatcher = null)
     {
         _diagnostics = diagnostics ?? throw new ArgumentNullException(nameof(diagnostics));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _localization = localization ?? throw new ArgumentNullException(nameof(localization));
         _settings = settings ?? throw new ArgumentNullException(nameof(settings));
-        _dispatcher = Application.Current?.Dispatcher ?? Dispatcher.CurrentDispatcher;
+        _uiDispatcher = uiDispatcher ?? ImmediateHostUiDispatcher.Instance;
         _snapshot = _diagnostics.Snapshot();
 
-        KeyboardTest = new KeyboardTestViewModel(
-            _logger,
-            keyboardTestPluginDirectory,
-            packageInstaller,
-            _localization);
-        AudioRelay = new AudioRelayViewModel(
-            _logger,
-            audioRelayPluginDirectory,
-            packageInstaller,
-            _localization);
         RecentEvents = new ObservableCollection<DiagnosticEventViewModel>();
+        var pluginIds = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var registration in workspaceRegistrations
+                     ?? throw new ArgumentNullException(nameof(workspaceRegistrations)))
+        {
+            if (!pluginIds.Add(registration.PluginId))
+            {
+                throw new InvalidOperationException(
+                    $"Plugin workspace '{registration.PluginId}' is registered more than once.");
+            }
 
-        KeyboardTest.PropertyChanged += OnPluginPropertyChanged;
-        AudioRelay.PropertyChanged += OnPluginPropertyChanged;
+            var workspace = new PluginWorkspaceViewModel(
+                registration,
+                _localization,
+                _settings,
+                _uiDispatcher);
+            workspace.PropertyChanged += OnWorkspacePropertyChanged;
+            _pluginWorkspaces.Add(workspace);
+        }
+
+        PluginWorkspaces = new ReadOnlyObservableCollection<PluginWorkspaceViewModel>(_pluginWorkspaces);
+        InstalledPluginWorkspaces = new ReadOnlyObservableCollection<PluginWorkspaceViewModel>(_installedPluginWorkspaces);
+        OpenedPluginWorkspaces = new ReadOnlyObservableCollection<PluginWorkspaceViewModel>(_openedPluginWorkspaces);
+        RefreshWorkspaceCollections();
+
         _diagnostics.Changed += OnDiagnosticsChanged;
         _logger.EventWritten += OnEventWritten;
         _localization.LanguageChanged += OnLanguageChanged;
@@ -83,45 +91,35 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged, IDisposable
 
     public ObservableCollection<DiagnosticEventViewModel> RecentEvents { get; }
 
-    public KeyboardTestViewModel KeyboardTest { get; }
+    public ReadOnlyObservableCollection<PluginWorkspaceViewModel> PluginWorkspaces { get; }
 
-    public AudioRelayViewModel AudioRelay { get; }
+    public ReadOnlyObservableCollection<PluginWorkspaceViewModel> InstalledPluginWorkspaces { get; }
+
+    public ReadOnlyObservableCollection<PluginWorkspaceViewModel> OpenedPluginWorkspaces { get; }
 
     public string WindowTitle => T("AppTitle");
 
     public bool IsOverviewPage => _selectedPage == ShellPage.Overview;
 
-    public bool IsKeyboardPage => _selectedPage == ShellPage.KeyboardTest;
-
-    public bool IsAudioRelayPage => _selectedPage == ShellPage.AudioRelay;
+    public bool IsPluginPage => _selectedPage == ShellPage.Plugin;
 
     public bool IsSettingsPage => _selectedPage == ShellPage.Settings;
 
-    public bool IsKeyboardInstalled => KeyboardTest.IsInstalled;
-
-    public bool IsAudioRelayInstalled => AudioRelay.IsInstalled;
-
-    public bool IsKeyboardOpened => IsKeyboardInstalled && _settings.IsPluginOpened(KeyboardPluginId);
-
-    public bool IsAudioRelayOpened => IsAudioRelayInstalled && _settings.IsPluginOpened(AudioRelayPluginId);
+    public PluginWorkspaceViewModel? SelectedPluginWorkspace => _selectedPluginWorkspace;
 
     public bool HasOpenedPlugins => OpenedPluginCount > 0;
 
-    public int OpenedPluginCount => (IsKeyboardOpened ? 1 : 0) + (IsAudioRelayOpened ? 1 : 0);
+    public int OpenedPluginCount => OpenedPluginWorkspaces.Count;
 
     public bool CloseToTray => _settings.CloseBehavior == CloseBehavior.MinimizeToTray;
 
     public bool CloseDirectly => _settings.CloseBehavior == CloseBehavior.Exit;
 
-    public string KeyboardOpenedStateLabel => IsKeyboardOpened ? T("StatusOpened") : T("StatusClosed");
-
-    public string AudioRelayOpenedStateLabel => IsAudioRelayOpened ? T("StatusOpened") : T("StatusClosed");
-
     public bool HasInstalledPlugins => InstalledPluginCount > 0;
 
     public bool HasNoInstalledPlugins => !HasInstalledPlugins;
 
-    public int InstalledPluginCount => (IsKeyboardInstalled ? 1 : 0) + (IsAudioRelayInstalled ? 1 : 0);
+    public int InstalledPluginCount => InstalledPluginWorkspaces.Count;
 
     public string InstalledPluginCountLabel => string.Format(
         CultureInfo.CurrentCulture,
@@ -204,8 +202,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged, IDisposable
 
     public void SelectPage(ShellPage page)
     {
-        if ((page == ShellPage.KeyboardTest && !IsKeyboardOpened)
-            || (page == ShellPage.AudioRelay && !IsAudioRelayOpened))
+        if (page == ShellPage.Plugin && _selectedPluginWorkspace?.IsOpened != true)
         {
             page = ShellPage.Overview;
         }
@@ -216,6 +213,25 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged, IDisposable
         }
 
         _selectedPage = page;
+        if (page != ShellPage.Plugin)
+        {
+            SetSelectedPluginWorkspace(null);
+        }
+
+        NotifyPageProperties();
+    }
+
+    public void SelectPluginWorkspace(PluginWorkspaceViewModel workspace)
+    {
+        ArgumentNullException.ThrowIfNull(workspace);
+        if (!_pluginWorkspaces.Contains(workspace) || !workspace.IsOpened)
+        {
+            SelectPage(ShellPage.Overview);
+            return;
+        }
+
+        SetSelectedPluginWorkspace(workspace);
+        _selectedPage = ShellPage.Plugin;
         NotifyPageProperties();
     }
 
@@ -229,14 +245,56 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged, IDisposable
         _settings.SetCloseBehavior(behavior);
     }
 
-    public async Task ToggleKeyboardOpenedAsync()
+    public async Task ToggleWorkspaceOpenedAsync(PluginWorkspaceViewModel workspace)
     {
-        await SetPluginOpenedAsync(KeyboardPluginId, !IsKeyboardOpened);
+        ArgumentNullException.ThrowIfNull(workspace);
+        if (!_pluginWorkspaces.Contains(workspace))
+        {
+            throw new ArgumentOutOfRangeException(nameof(workspace));
+        }
+
+        ClearPluginManagerError();
+        if (!await workspace.SetOpenedAsync(!workspace.IsOpened))
+        {
+            CapturePluginError(workspace);
+        }
     }
 
-    public async Task ToggleAudioRelayOpenedAsync()
+    public async Task InstallWorkspacePackageAsync(
+        PluginWorkspaceViewModel workspace,
+        string packagePath)
     {
-        await SetPluginOpenedAsync(AudioRelayPluginId, !IsAudioRelayOpened);
+        ArgumentNullException.ThrowIfNull(workspace);
+        ArgumentException.ThrowIfNullOrWhiteSpace(packagePath);
+        if (!_pluginWorkspaces.Contains(workspace))
+        {
+            throw new ArgumentOutOfRangeException(nameof(workspace));
+        }
+
+        try
+        {
+            ClearPluginManagerError();
+            var manifest = ReadPackageManifest(packagePath);
+            if (!string.Equals(manifest.Id, workspace.PluginId, StringComparison.Ordinal))
+            {
+                throw new InvalidOperationException(string.Format(
+                    CultureInfo.CurrentCulture,
+                    T("UnsupportedPluginPackage"),
+                    manifest.Id));
+            }
+
+            if (!workspace.IsInstallEnabled)
+            {
+                throw new InvalidOperationException(T("DisablePluginBeforeUpdate"));
+            }
+
+            await workspace.InstallPackageAsync(packagePath);
+            CapturePluginError(workspace);
+        }
+        catch (Exception exception)
+        {
+            RecordPackageInstallFailure(exception);
+        }
     }
 
     public async Task InstallPackageAsync(string packagePath)
@@ -248,76 +306,37 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged, IDisposable
         try
         {
             var manifest = ReadPackageManifest(packagePath);
-            switch (manifest.Id)
+            var workspace = _pluginWorkspaces.SingleOrDefault(candidate => string.Equals(
+                candidate.PluginId,
+                manifest.Id,
+                StringComparison.Ordinal));
+            if (workspace is null)
             {
-                case KeyboardPluginId:
-                    if (!KeyboardTest.IsInstallEnabled)
-                    {
-                        throw new InvalidOperationException(T("DisablePluginBeforeUpdate"));
-                    }
-
-                    await KeyboardTest.InstallPackageAsync(packagePath);
-                    CapturePluginError(KeyboardTest);
-                    if (KeyboardTest.IsInstalled && !KeyboardTest.HasError)
-                    {
-                        _settings.SetPluginOpened(KeyboardPluginId, opened: true);
-                    }
-                    break;
-
-                case AudioRelayPluginId:
-                    if (!AudioRelay.IsInstallEnabled)
-                    {
-                        throw new InvalidOperationException(T("DisablePluginBeforeUpdate"));
-                    }
-
-                    await AudioRelay.InstallPackageAsync(packagePath);
-                    CapturePluginError(AudioRelay);
-                    if (AudioRelay.IsInstalled && !AudioRelay.HasError)
-                    {
-                        _settings.SetPluginOpened(AudioRelayPluginId, opened: true);
-                    }
-                    break;
-
-                default:
-                    throw new InvalidOperationException(string.Format(
-                        CultureInfo.CurrentCulture,
-                        T("UnsupportedPluginPackage"),
-                        manifest.Id));
+                throw new InvalidOperationException(string.Format(
+                    CultureInfo.CurrentCulture,
+                    T("UnsupportedPluginPackage"),
+                    manifest.Id));
             }
+
+            await InstallWorkspacePackageAsync(workspace, packagePath);
         }
         catch (Exception exception)
         {
-            SetPluginManagerError(exception.Message);
-            _logger.Error(
-                "Package",
-                "The selected plugin package could not be installed.",
-                errorCode: exception is PluginPackageException packageException
-                    ? packageException.ErrorCode
-                    : "PACKAGE_INSTALL_FAILED",
-                exception: exception);
+            RecordPackageInstallFailure(exception);
         }
     }
 
-    public async Task UninstallKeyboardAsync()
+    public async Task UninstallWorkspaceAsync(PluginWorkspaceViewModel workspace)
     {
-        ClearPluginManagerError();
-        await KeyboardTest.UninstallAsync();
-        CapturePluginError(KeyboardTest);
-        if (!KeyboardTest.IsInstalled)
+        ArgumentNullException.ThrowIfNull(workspace);
+        if (!_pluginWorkspaces.Contains(workspace))
         {
-            _settings.RemovePlugin(KeyboardPluginId);
+            throw new ArgumentOutOfRangeException(nameof(workspace));
         }
-    }
 
-    public async Task UninstallAudioRelayAsync()
-    {
         ClearPluginManagerError();
-        await AudioRelay.UninstallAsync();
-        CapturePluginError(AudioRelay);
-        if (!AudioRelay.IsInstalled)
-        {
-            _settings.RemovePlugin(AudioRelayPluginId);
-        }
+        await workspace.UninstallAsync();
+        CapturePluginError(workspace);
     }
 
     public void Dispose()
@@ -328,56 +347,44 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged, IDisposable
         }
 
         _disposed = true;
-        KeyboardTest.PropertyChanged -= OnPluginPropertyChanged;
-        AudioRelay.PropertyChanged -= OnPluginPropertyChanged;
         _diagnostics.Changed -= OnDiagnosticsChanged;
         _logger.EventWritten -= OnEventWritten;
         _localization.LanguageChanged -= OnLanguageChanged;
         _settings.Changed -= OnSettingsChanged;
-        AudioRelay.Dispose();
-        KeyboardTest.Dispose();
+        foreach (var workspace in _pluginWorkspaces)
+        {
+            workspace.PropertyChanged -= OnWorkspacePropertyChanged;
+            workspace.Dispose();
+        }
     }
 
     private void OnDiagnosticsChanged(HostDiagnosticsSnapshot snapshot)
     {
-        if (_dispatcher.CheckAccess())
-        {
-            ApplyDiagnostics(snapshot);
-        }
-        else
-        {
-            _dispatcher.BeginInvoke(new Action(() => ApplyDiagnostics(snapshot)));
-        }
+        _uiDispatcher.Dispatch(() => ApplyDiagnostics(snapshot));
     }
 
     private void OnEventWritten(LogEvent entry)
     {
-        if (_dispatcher.CheckAccess())
-        {
-            AddEvent(entry);
-        }
-        else
-        {
-            _dispatcher.BeginInvoke(new Action(() => AddEvent(entry)));
-        }
+        _uiDispatcher.Dispatch(() => AddEvent(entry));
     }
 
-    private void OnPluginPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    private void OnWorkspacePropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
-        if (!string.Equals(e.PropertyName, nameof(KeyboardTestViewModel.IsInstalled), StringComparison.Ordinal)
-            && !string.Equals(e.PropertyName, nameof(KeyboardTestViewModel.IsRuntimeEnabled), StringComparison.Ordinal))
+        if (sender is not PluginWorkspaceViewModel workspace)
         {
             return;
         }
 
-        OnPropertyChanged(nameof(IsKeyboardInstalled));
-        OnPropertyChanged(nameof(IsAudioRelayInstalled));
-        NotifyPluginPresentationProperties();
+        if (string.Equals(e.PropertyName, nameof(PluginWorkspaceViewModel.IsInstalled), StringComparison.Ordinal)
+            || string.Equals(e.PropertyName, nameof(PluginWorkspaceViewModel.IsOpened), StringComparison.Ordinal))
+        {
+            RefreshWorkspaceCollections();
+        }
 
-        if ((_selectedPage == ShellPage.KeyboardTest && !IsKeyboardOpened)
-            || (_selectedPage == ShellPage.AudioRelay && !IsAudioRelayOpened))
+        if (ReferenceEquals(_selectedPluginWorkspace, workspace) && !workspace.IsOpened)
         {
             _selectedPage = ShellPage.Settings;
+            SetSelectedPluginWorkspace(null);
             NotifyPageProperties();
         }
     }
@@ -420,8 +427,6 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged, IDisposable
         OnPropertyChanged(nameof(CurrentLanguageLabel));
         OnPropertyChanged(nameof(InstalledPluginCountLabel));
         OnPropertyChanged(nameof(PluginCountSummaryLabel));
-        OnPropertyChanged(nameof(KeyboardOpenedStateLabel));
-        OnPropertyChanged(nameof(AudioRelayOpenedStateLabel));
         OnPropertyChanged(nameof(StatusLabel));
         OnPropertyChanged(nameof(StatusDescription));
         OnPropertyChanged(nameof(StageLabel));
@@ -431,69 +436,46 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged, IDisposable
     private void NotifyPageProperties()
     {
         OnPropertyChanged(nameof(IsOverviewPage));
-        OnPropertyChanged(nameof(IsKeyboardPage));
-        OnPropertyChanged(nameof(IsAudioRelayPage));
+        OnPropertyChanged(nameof(IsPluginPage));
         OnPropertyChanged(nameof(IsSettingsPage));
     }
 
-    private async Task SetPluginOpenedAsync(string pluginId, bool opened)
+    private void SetSelectedPluginWorkspace(PluginWorkspaceViewModel? workspace)
     {
-        ClearPluginManagerError();
-
-        if (pluginId == KeyboardPluginId)
+        if (ReferenceEquals(_selectedPluginWorkspace, workspace))
         {
-            if (!KeyboardTest.IsInstalled)
-            {
-                return;
-            }
-
-            if (!opened && !await KeyboardTest.SetRuntimeEnabledAsync(enabled: false))
-            {
-                CapturePluginError(KeyboardTest);
-                return;
-            }
-        }
-        else if (pluginId == AudioRelayPluginId)
-        {
-            if (!AudioRelay.IsInstalled)
-            {
-                return;
-            }
-
-            if (!opened && !await AudioRelay.SetRuntimeEnabledAsync(enabled: false))
-            {
-                CapturePluginError(AudioRelay);
-                return;
-            }
-        }
-        else
-        {
-            throw new ArgumentOutOfRangeException(nameof(pluginId));
+            return;
         }
 
-        _settings.SetPluginOpened(pluginId, opened);
+        if (_selectedPluginWorkspace is not null)
+        {
+            _selectedPluginWorkspace.IsSelected = false;
+        }
+
+        _selectedPluginWorkspace = workspace;
+        if (_selectedPluginWorkspace is not null)
+        {
+            _selectedPluginWorkspace.IsSelected = true;
+        }
+
+        OnPropertyChanged(nameof(SelectedPluginWorkspace));
     }
 
     private void OnSettingsChanged(object? sender, EventArgs e)
     {
-        NotifyPluginPresentationProperties();
         OnPropertyChanged(nameof(CloseToTray));
         OnPropertyChanged(nameof(CloseDirectly));
-
-        if ((_selectedPage == ShellPage.KeyboardTest && !IsKeyboardOpened)
-            || (_selectedPage == ShellPage.AudioRelay && !IsAudioRelayOpened))
-        {
-            _selectedPage = ShellPage.Settings;
-            NotifyPageProperties();
-        }
     }
 
-    private void NotifyPluginPresentationProperties()
+    private void RefreshWorkspaceCollections()
     {
-        OnPropertyChanged(nameof(IsKeyboardInstalled));
-        OnPropertyChanged(nameof(IsAudioRelayInstalled));
-        OnPropertyChanged(nameof(IsKeyboardOpened));
-        OnPropertyChanged(nameof(IsAudioRelayOpened));
+        ReplaceCollection(
+            _installedPluginWorkspaces,
+            _pluginWorkspaces.Where(workspace => workspace.IsInstalled));
+        ReplaceCollection(
+            _openedPluginWorkspaces,
+            _pluginWorkspaces.Where(workspace => workspace.IsOpened));
+
         OnPropertyChanged(nameof(HasInstalledPlugins));
         OnPropertyChanged(nameof(HasNoInstalledPlugins));
         OnPropertyChanged(nameof(HasOpenedPlugins));
@@ -501,23 +483,36 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged, IDisposable
         OnPropertyChanged(nameof(OpenedPluginCount));
         OnPropertyChanged(nameof(InstalledPluginCountLabel));
         OnPropertyChanged(nameof(PluginCountSummaryLabel));
-        OnPropertyChanged(nameof(KeyboardOpenedStateLabel));
-        OnPropertyChanged(nameof(AudioRelayOpenedStateLabel));
     }
 
-    private void CapturePluginError(INotifyPropertyChanged plugin)
+    private void CapturePluginError(PluginWorkspaceViewModel workspace)
     {
-        var error = plugin switch
-        {
-            KeyboardTestViewModel keyboard when keyboard.HasError => keyboard.ErrorMessage,
-            AudioRelayViewModel audio when audio.RequiresHostRestart => T("RelayRestartRequiredDescription"),
-            AudioRelayViewModel audio when audio.HasError => audio.ErrorMessage,
-            _ => null
-        };
+        var error = workspace.RequiresHostRestart
+            ? T("RelayRestartRequiredDescription")
+            : workspace.HasError
+                ? workspace.ErrorMessage
+                : null;
 
         if (!string.IsNullOrWhiteSpace(error))
         {
             SetPluginManagerError(error);
+        }
+    }
+
+    private static void ReplaceCollection(
+        ObservableCollection<PluginWorkspaceViewModel> target,
+        IEnumerable<PluginWorkspaceViewModel> source)
+    {
+        var items = source.ToArray();
+        if (target.SequenceEqual(items))
+        {
+            return;
+        }
+
+        target.Clear();
+        foreach (var item in items)
+        {
+            target.Add(item);
         }
     }
 
@@ -531,6 +526,18 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged, IDisposable
         _pluginManagerError = message;
         OnPropertyChanged(nameof(HasPluginManagerError));
         OnPropertyChanged(nameof(PluginManagerError));
+    }
+
+    private void RecordPackageInstallFailure(Exception exception)
+    {
+        SetPluginManagerError(exception.Message);
+        _logger.Error(
+            "Package",
+            "The selected plugin package could not be installed.",
+            errorCode: exception is PluginPackageException packageException
+                ? packageException.ErrorCode
+                : "PACKAGE_INSTALL_FAILED",
+            exception: exception);
     }
 
     private static PluginManifest ReadPackageManifest(string packagePath)

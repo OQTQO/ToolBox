@@ -200,4 +200,55 @@ Shutdown ordering existed only as incidental statement order inside the WPF `App
 
 ### Remaining boundary
 
-Remote pull-request CI is complete. User-owned physical/UI regression and explicit PR #3 merge approval remain acceptance boundaries for this branch. The next architecture milestone is to replace hard-coded Host plugin navigation and page composition with a plugin-neutral workspace model without changing Plugin API v1 or the package format.
+Pull request #3 was merged at `827dff01582ef59dcf923edde39320987e975483`, and post-merge main run `33132098458` passed. No separate physical/UI result was recorded for that lifecycle-only candidate before merge, so such evidence remains user-owned. The next architecture milestone is to replace hard-coded Host plugin navigation and page composition with a plugin-neutral workspace model without changing Plugin API v1 or the package format.
+
+## 2026-08-28 — Plugin-neutral Host workspace composition
+
+### Outcome
+
+- Added a Host-internal workspace registration and projection model that exposes plugin identity, localized presentation, installed/opened/runtime state, management operations, status, icon, and page view model without changing Plugin API v1.
+- Moved built-in Keyboard & Mouse and Phone Audio Relay discovery and construction into `BuiltInPluginWorkspaceCatalog`; `App` no longer resolves individual product directories.
+- Replaced product-specific shell page enum values, navigation buttons, settings cards, install/uninstall branches, and selected-page checks with generic installed/opened workspace collections.
+- Split the two product pages and their interaction handlers out of `MainWindow` into independent workspace views. The shell now selects registered page view models through WPF data templates.
+- Added an injectable Host UI dispatcher so production workspace events marshal to the WPF dispatcher while deterministic unit tests do not require a running message loop.
+- Added generic workspace tests for collection-driven navigation, hide/restore behavior, selected-page fallback, runtime stop before hiding, uninstall state cleanup, and targeted-package identity rejection.
+- The warnings-as-errors Release build and unified validation pass with `86/86` tests, self-contained Host publish, both `.tpk` packages, exact asset checks, package identity/version/payload hashes, and SHA-256 reverse verification.
+
+### Failures and unexpected results
+
+#### 1. New view files initially hit ambiguous WPF and WinForms type names
+
+The Host enables both WPF and Windows Forms because the tray service uses WinForms. New files referred to `Brush` and `KeyEventArgs` without aliases, so the first Release build failed with ambiguous-type compiler errors.
+
+Root cause: the new files were written as if only WPF global imports existed. The project-level technology mix makes several common UI type names ambiguous.
+
+Correction: use explicit WPF aliases for conflicting presentation/input types. The next build completed with zero warnings and zero errors.
+
+#### 2. Direct use of a captured WPF Dispatcher made async unit-test state stale
+
+An initial attempt to marshal every workspace projection event through `Dispatcher.CurrentDispatcher` caused two tests to observe old opened-navigation state. After an `await`, xUnit continued on a worker thread while the originally captured dispatcher had no running WPF message pump, so queued notifications were never processed during the assertion.
+
+Root cause: dispatcher access was treated as ambient infrastructure. Production has a WPF message loop; ordinary unit tests do not, and a concrete dispatcher cannot represent both execution models correctly.
+
+Correction: introduce `IHostUiDispatcher`. `App` explicitly supplies `WpfHostUiDispatcher`, while tests use deterministic immediate dispatch. This preserves production UI-thread ownership and keeps unit tests independent of a GUI pump.
+
+#### 3. The first generic per-workspace update handler bypassed package routing
+
+The top-level Install action inspected `manifest.json` and selected the matching workspace, but the first refactor of each installed plugin's Update button called that workspace installer directly. The audio adapter performed its own identity check; the keyboard adapter did not, so a package for another plugin could have been activated through the keyboard row.
+
+Root cause: removing duplicated product handlers also removed an implicit safety path. The UI looked generic, but the targeted update operation had not retained the package-to-workspace identity invariant.
+
+Correction: every targeted workspace install now parses the Manifest and requires an ordinal PluginId match before invoking the adapter. A fake third workspace regression test proves that a mismatched package is rejected before its install callback runs.
+
+### Reusable lessons
+
+1. In mixed WPF/WinForms projects, new UI files should alias common conflicting types immediately rather than relying on implicit imports.
+2. UI-thread dispatch is infrastructure and must be injected; do not hide a concrete dispatcher lookup inside view models that also run in unit tests.
+3. Replacing product-specific branches with generic callbacks must preserve every precondition that the old routing branch enforced, especially package identity and lifecycle stop-before-hide rules.
+4. A plugin-neutral shell does not require pretending that Plugin API v1 supplies UI. Keep product page composition Host-internal until a future, explicitly versioned UI contribution contract exists.
+5. Prove neutrality with fake workspace registrations. Tests that instantiate only the two current products can pass while the shell still contains hard-coded assumptions.
+6. Format only touched files against the current BOM/CRLF baseline; do not combine a repository-wide normalization with an architecture change.
+
+### Remaining boundary
+
+Local implementation and full release validation are complete. Pull request [#4](https://github.com/OQTQO/ToolBox/pull/4) run [`33147315829`](https://github.com/OQTQO/ToolBox/actions/runs/33147315829) passed at commit `59a592c1c1f081770329072ac14ec09383073afd`; final-head run [`33147471754`](https://github.com/OQTQO/ToolBox/actions/runs/33147471754) passed at `cd396ff2369a0951081e20aef74b1d8ddec49131`. On 2026-08-28, the user reported that the corresponding physical/UI candidate passed acceptance. Merge and post-merge `main` verification remain. Release `v0.1.0` is unchanged, and this milestone does not add a public plugin UI contract or alter `.tpk` compatibility.
