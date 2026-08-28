@@ -6,8 +6,8 @@
 
 ```text
 Checkpoint date: 2026-08-28
-Current phase: ToolBox v0.1.1 release candidate verified in pull request #6
-Next phase: Merge, main CI, tag workflow, and published-asset verification
+Current phase: ToolBox v0.1.1 final release published and verified
+Next phase: Feature-driven planning; third-party plugin enablement requires a separate milestone
 Plugin API: Frozen v1
 Production updater: Deferred to v0.2
 ```
@@ -42,6 +42,10 @@ Detailed milestone failures and reusable lessons are recorded in [`PROJECT_RETRO
 - Two independent local `v0.1.1` release validations each passed a warnings-as-errors build, all `86/86` tests, self-contained `win-x64` Host publish, both product package builds, exact package/payload/hash checks, and release checksum verification. All four candidate artifacts were byte-identical across the two runs.
 - Release tooling now explicitly loads ZIP assemblies for cold Windows PowerShell 5.1 processes, computes stream hashes through compatible SHA-256 APIs, and rejects mismatched production project or Manifest versions before building.
 - Pull request [#6](https://github.com/OQTQO/ToolBox/pull/6) run [`33149697737`](https://github.com/OQTQO/ToolBox/actions/runs/33149697737) passed the unified release gate at commit `fde378495ea26d933ed644144677685018947179`.
+- Pull request [#6](https://github.com/OQTQO/ToolBox/pull/6) merged at `ae01b303e04dcd07ab38dd850f7d05fad20b4f0b`; post-merge main run [`33149935466`](https://github.com/OQTQO/ToolBox/actions/runs/33149935466) passed.
+- Public [ToolBox `v0.1.1`](https://github.com/OQTQO/ToolBox/releases/tag/v0.1.1) was published from tag commit `ae01b303e04dcd07ab38dd850f7d05fad20b4f0b`; tag-triggered Release run [`33150052667`](https://github.com/OQTQO/ToolBox/actions/runs/33150052667) passed. The Release is neither draft nor prerelease.
+- Published assets are exactly the self-contained Host, KeyboardMouse `.tpk`, PhoneAudioRelay `.tpk`, and checksum manifest. Independent downloads matched the published SHA-256 manifest; Host product version is `0.1.1+ae01b303e04dcd07ab38dd850f7d05fad20b4f0b`, and both packages carry matching `0.1.1` Manifest/package metadata with no private PluginSdk copy.
+- `v0.1.1` is the final built-in-product release for the 0.1 line. General third-party package discovery, a public plugin UI contribution contract, signatures, permissions enforcement, sandboxing, and an external developer kit are not claimed by this release.
 
 - .NET SDK `8.0.424` is installed.
 - `ToolBox.sln` restores successfully.

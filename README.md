@@ -24,6 +24,8 @@ ToolBox 是一个面向 Windows 的插件平台原型。
 
 个人学习版发布已完成，不需要服务器或官方认证；下一阶段仅在未来需要公开分发时再考虑 v0.2 签名真实性。Updater、强制权限和安全沙箱仍不在 v0.1 原型范围内。范围见 [PRODUCT_KEYBOARD_MOUSE_SCOPE.md](PRODUCT_KEYBOARD_MOUSE_SCOPE.md) 与 [PHONE_AUDIO_RELAY.md](PHONE_AUDIO_RELAY.md)，API 冻结记录见 [PLUGIN_API_V1.md](PLUGIN_API_V1.md)。
 
+当前 0.1 系列最终版本：[ToolBox v0.1.1](https://github.com/OQTQO/ToolBox/releases/tag/v0.1.1)。
+
 本地 `.tpk` 生成方式与“完整性不等于真实性”的发布边界见 [PACKAGE_RELEASE_POLICY.md](PACKAGE_RELEASE_POLICY.md)。
 
 GitHub 的 CI、Tag 发布和 Release 附件流程见 [CHANGELOG.md](CHANGELOG.md) 与 `.github/workflows/release.yml`。

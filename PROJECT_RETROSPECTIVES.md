@@ -333,4 +333,14 @@ Correction: use `SHA256.Create().ComputeHash(stream)` and stable `BitConverter` 
 
 ### Remaining boundary
 
-The local `v0.1.1` release candidate is complete, and pull request [#6](https://github.com/OQTQO/ToolBox/pull/6) run [`33149697737`](https://github.com/OQTQO/ToolBox/actions/runs/33149697737) passed at `fde378495ea26d933ed644144677685018947179`. Merge and post-merge main CI, creation of the immutable `v0.1.1` tag, tag-triggered Release workflow, and published-asset/checksum verification remain before the release is complete.
+The local `v0.1.1` release candidate completed, and pull request [#6](https://github.com/OQTQO/ToolBox/pull/6) run [`33149697737`](https://github.com/OQTQO/ToolBox/actions/runs/33149697737) passed at `fde378495ea26d933ed644144677685018947179`. PR #6 merged at `ae01b303e04dcd07ab38dd850f7d05fad20b4f0b`, and post-merge main run [`33149935466`](https://github.com/OQTQO/ToolBox/actions/runs/33149935466) passed. The immutable `v0.1.1` tag points to that merge commit; Release run [`33150052667`](https://github.com/OQTQO/ToolBox/actions/runs/33150052667) passed and published a non-draft, non-prerelease Release. Independent downloads proved the exact asset set, all three program-file hashes against the online checksum manifest, Host product version/commit identity, both package IDs and `0.1.1` versions, exact package entries, and absence of private PluginSdk copies. The ToolBox 0.1 final release milestone is complete.
+
+### Final published SHA-256
+
+- `ToolBox-Host-v0.1.1-win-x64.exe`: `43fe18c6fde7186868b293dbd85153b74cc2d1dcb8ae7b827b1a23d8f4eaa04e`
+- `KeyboardMouse-0.1.1.tpk`: `53eaf9f8aec1493f427f679226a25eddc111b6a6bef812683f0a1da624f3b430`
+- `PhoneAudioRelay-0.1.1.tpk`: `d1aa707f8efe8c3cc0c5cb34f6b7d4e88a0d9f281968ee683410929251c5b166`
+
+### Final scope boundary
+
+`v0.1.1` is the final 0.1 release for the Host and its two built-in products. Third-party plugins cannot yet be dynamically registered in the released Host, and no public UI contribution contract or production authenticity/sandbox promise is made. Those capabilities require a separately scoped future milestone and version.
