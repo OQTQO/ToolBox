@@ -251,4 +251,31 @@ Correction: every targeted workspace install now parses the Manifest and require
 
 ### Remaining boundary
 
-Local implementation and full release validation are complete. Pull request [#4](https://github.com/OQTQO/ToolBox/pull/4) run [`33147315829`](https://github.com/OQTQO/ToolBox/actions/runs/33147315829) passed at commit `59a592c1c1f081770329072ac14ec09383073afd`; final-head run [`33147471754`](https://github.com/OQTQO/ToolBox/actions/runs/33147471754) passed at `cd396ff2369a0951081e20aef74b1d8ddec49131`. On 2026-08-28, the user reported that the corresponding physical/UI candidate passed acceptance. Merge and post-merge `main` verification remain. Release `v0.1.0` is unchanged, and this milestone does not add a public plugin UI contract or alter `.tpk` compatibility.
+Local implementation and full release validation are complete. Pull request [#4](https://github.com/OQTQO/ToolBox/pull/4) run [`33147315829`](https://github.com/OQTQO/ToolBox/actions/runs/33147315829) passed at commit `59a592c1c1f081770329072ac14ec09383073afd`; final-head run [`33147471754`](https://github.com/OQTQO/ToolBox/actions/runs/33147471754) passed at `cd396ff2369a0951081e20aef74b1d8ddec49131`. On 2026-08-28, the user reported that the corresponding physical/UI candidate passed acceptance. PR #4 merged at `c70a0df6a5dc3a35fe3fd2bf99b55bd9b2be61bd`, and post-merge main run [`33148234184`](https://github.com/OQTQO/ToolBox/actions/runs/33148234184) passed. Release `v0.1.0` is unchanged, and this milestone does not add a public plugin UI contract or alter `.tpk` compatibility.
+
+## 2026-08-28 — Architecture review execution closeout
+
+### Outcome
+
+- Completed all three strong recommendations from the architecture review: one release-validation path for local/CI/Release adapters, an explicit Host lifecycle session, and a collection-driven plugin workspace.
+- Each implementation milestone passed local warnings-as-errors Release validation, pull-request CI, merge, and post-merge main CI; hardware- or UI-dependent behavior remained explicitly user-owned.
+- Preserved Plugin API v1 and `.tpk` compatibility throughout. GitHub Release `v0.1.0` was not changed by the architecture work.
+- Kept dependency-loading policy inside the existing loader because WinRT remains the only real process-shared dependency case.
+
+### Failure avoided at closeout
+
+Treating every architecture-review candidate as a sequential backlog item would make dependency-policy extraction the automatic next task, even though the review classified it as speculative.
+
+Root cause: numbered review candidates can be mistaken for mandatory phases. Architecture recommendations describe evidence and conditions, not merely execution order.
+
+Correction: stop the refactor sequence after the three strong recommendations. A dependency-policy seam will be reconsidered only when a second distinct process-level dependency requires another adapter and provides concrete substitution requirements.
+
+### Reusable lessons
+
+1. Finish a refactor program when its evidence-backed recommendations are complete; do not convert a speculative candidate into work just to keep the sequence moving.
+2. Record pull-request CI, user physical acceptance, merge SHA, and post-merge main CI as separate evidence because none substitutes for the others.
+3. The next milestone should start from a user-visible product need or a newly observed second adapter, not from module size alone.
+
+### Remaining boundary
+
+The architecture-review implementation program is complete on verified `main`. There is no active architecture refactor. The next branch should be scoped from a concrete feature, defect, or v0.2 distribution requirement; dependency-policy extraction remains deferred until its second real adapter exists.

@@ -6,8 +6,8 @@
 
 ```text
 Checkpoint date: 2026-08-28
-Current phase: Plugin-neutral Host workspace composition physically accepted
-Next phase: Merge pull request #4 and verify main
+Current phase: Architecture-review execution complete on verified main
+Next phase: Feature-driven planning; no speculative dependency-policy extraction
 Plugin API: Frozen v1
 Production updater: Deferred to v0.2
 ```
@@ -35,6 +35,8 @@ Detailed milestone failures and reusable lessons are recorded in [`PROJECT_RETRO
 - The local plugin-workspace candidate passes a warnings-as-errors Release build, all `86/86` tests, self-contained Host publish, both deterministic product packages, exact asset validation, package identity/version/hash validation, and release checksum verification.
 - Pull request [#4](https://github.com/OQTQO/ToolBox/pull/4) verifies the plugin-neutral Host workspace candidate on GitHub's Windows runner; run [`33147315829`](https://github.com/OQTQO/ToolBox/actions/runs/33147315829) passed at commit `59a592c1c1f081770329072ac14ec09383073afd`.
 - On 2026-08-28, the user reported that the physical/UI candidate from final pull-request head `cd396ff2369a0951081e20aef74b1d8ddec49131` passed acceptance. This is user-supplied evidence distinct from automated CI; pull-request run [`33147471754`](https://github.com/OQTQO/ToolBox/actions/runs/33147471754) also passed for that head.
+- Pull request [#4](https://github.com/OQTQO/ToolBox/pull/4) merged the plugin-neutral Host workspace into `main` at `c70a0df6a5dc3a35fe3fd2bf99b55bd9b2be61bd`; post-merge main run [`33148234184`](https://github.com/OQTQO/ToolBox/actions/runs/33148234184) passed.
+- The architecture review's three strong recommendations are complete: unified release artifact construction, a deep Host lifecycle session, and plugin-neutral Host workspace composition. Dependency-loading policy remains intentionally local until a second real process-level dependency creates a non-speculative seam.
 
 - .NET SDK `8.0.424` is installed.
 - `ToolBox.sln` restores successfully.
@@ -225,15 +227,15 @@ dotnet test ToolBox.sln --configuration Release
 - Implemented `TryCreateFromId → StartAsync → OpenAsync`, open-status/error mapping, connection-state recovery, disconnect, dispose, and Host shutdown cleanup.
 - Added Product 02 Host UX, package identity preflight, device selection, connection controls, status/error diagnostics, Windows-mix safety copy, dark ComboBox styling, and high-DPI window sizing.
 - Added [`tools/New-AudioRelayPackage.ps1`](tools/New-AudioRelayPackage.ps1), [`PHONE_AUDIO_RELAY.md`](PHONE_AUDIO_RELAY.md), Release workflow assets, real-platform tests, fake-transport lifecycle tests, and collectible-ALC start/unload acceptance.
-- Generated `artifacts/PhoneAudioRelay-0.1.0.tpk`; physical audio playback remains to be accepted with a paired Android phone because this machine currently has no paired A2DP Audio Source.
+- Generated `artifacts/PhoneAudioRelay-0.1.0.tpk`; on 2026-08-28, the user physically accepted Android phone playback and coexistence with PC audio using the delivered candidate.
 
-## Current architecture phase — Plugin-neutral Host workspaces
+## Completed architecture phase — Plugin-neutral Host workspaces
 
 - Product discovery and construction are isolated in the built-in workspace catalog instead of being spread through `App`, `MainWindowViewModel`, `MainWindow.xaml`, and window code-behind.
 - The shell renders opened navigation items and installed-plugin management cards from collections of `PluginWorkspaceViewModel`.
 - Product-specific page UI remains Host-owned because Plugin API v1 has no UI-contribution contract, but each product page is isolated in its own view and selected through an implicit WPF data template.
 - Adding another built-in product now requires one catalog registration and one page view/template; it does not require another shell page enum value, navigation handler, settings card, or install/uninstall branch.
-- Local automated acceptance is complete at `86/86`; pull-request CI and user-owned UI regression remain before merge.
+- Local automated acceptance completed at `86/86`; pull-request CI, user-owned UI regression, merge, and post-merge main CI all passed.
 
 仍然不在 v0.1 范围内：
 
