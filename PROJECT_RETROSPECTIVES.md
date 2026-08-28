@@ -344,3 +344,37 @@ The local `v0.1.1` release candidate completed, and pull request [#6](https://gi
 ### Final scope boundary
 
 `v0.1.1` is the final 0.1 release for the Host and its two built-in products. Third-party plugins cannot yet be dynamically registered in the released Host, and no public UI contribution contract or production authenticity/sandbox promise is made. Those capabilities require a separately scoped future milestone and version.
+
+## 2026-08-28 — Project transfer handoff
+
+### Outcome
+
+- Added `PROJECT_HANDOFF.md` as the single project-transfer entry covering product scope, repository and Release state, architecture, runtime data, package rules, build/test/release operations, risks, third-party plugin limitations, ownership transfer, and the new maintainer's first-hour checklist.
+- Linked the transfer entry from README and `PROJECT_CONTEXT.md`.
+- Replaced the stale untracked `HANDOFF_TOOLBOX_GITHUB_RELEASE.md` content with an archive pointer so its resolved pre-v0.1.0 CI instructions cannot be mistaken for current work.
+
+### Risk discovered during the milestone
+
+The only file named as a handoff document still described `v0.1.0` as unpublished, instructed the next maintainer to move an old Tag, and named a CI compatibility failure that has long been fixed. Passing that file to a new owner could have caused destructive release-history changes even though the repository's durable context was current.
+
+Root cause: the temporary release handoff was intentionally left untracked and preserved during implementation work, so later project milestones updated `PROJECT_CONTEXT.md` and retrospectives without retiring the temporary instructions.
+
+Correction: establish one clearly named authoritative transfer document, make the obsolete file self-invalidating, and cross-link the new entry from the normal repository entry points.
+
+The first staged Markdown check also reported three intentional two-space line breaks as trailing whitespace, but a semicolon-separated PowerShell command continued into `git commit` instead of treating the failed check as a gate. The content problem was minor; the process problem was that a verification command and mutation were placed in one non-fail-fast command sequence. Correction: replace the line breaks with blank blockquote lines, run `git diff --cached --check` as a separate required command, and only then amend the documentation commit.
+
+The first transfer pull-request CI run also failed `OutOfProcessHangUsesHostShutdownDeadlineAndRequiresRestart` on the newer Windows Server 2025 hosted image. The failure reported a 2.90-second “shutdown,” while the configured shutdown deadline was 100 ms. Inspection showed that the stopwatch started before Worker process launch and plugin startup, so the assertion measured environment-dependent startup plus shutdown while describing only shutdown. Correction: start timing immediately before `StopAsync`; retain the deadline, `PLUGIN_SHUTDOWN_TIMEOUT`, and `RestartRequired` assertions. This narrows the measurement to the behavior the test is named to verify rather than relaxing the production deadline.
+
+### Reusable lessons
+
+1. A transfer document must describe verified current state, not simply concatenate historical plans.
+2. Temporary handoffs need an explicit retirement step when their blocker is resolved.
+3. Public runtime API capability and released product capability must be documented separately; ToolBox can load plugin contracts but cannot yet dynamically register arbitrary third-party workspaces.
+4. Ownership-transfer instructions must never include guessed accounts, tokens, or remote URLs.
+5. The transfer checkpoint should preserve immutable Tags and Releases and direct the next owner toward a new versioned milestone.
+6. Do not place a validation command and commit in a non-fail-fast shell chain; verify first, inspect its exit code, and mutate Git state only in a later command.
+7. A timing assertion must bracket only the operation named by the test; process startup and shutdown require separate budgets and evidence.
+
+### Remaining boundary
+
+The repository is ready for technical transfer, but the GitHub ownership transfer itself has not been attempted because no receiving account or Organization was specified. `v0.1.1` remains the stable checkpoint. The new maintainer should start with feature-driven planning; a public third-party developer experience still requires a dedicated discovery/UI/tooling/security milestone.

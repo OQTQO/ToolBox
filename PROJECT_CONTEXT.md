@@ -6,13 +6,17 @@
 
 ```text
 Checkpoint date: 2026-08-28
-Current phase: ToolBox v0.1.1 final release published and verified
-Next phase: Feature-driven planning; third-party plugin enablement requires a separate milestone
+Current phase: ToolBox v0.1.1 final release published, verified, and prepared for project transfer
+Next phase: New-maintainer feature planning; third-party plugin enablement requires a separate milestone
 Plugin API: Frozen v1
 Production updater: Deferred to v0.2
 ```
 
 Detailed milestone failures and reusable lessons are recorded in [`PROJECT_RETROSPECTIVES.md`](PROJECT_RETROSPECTIVES.md). A major milestone is not complete until its retrospective has been added there.
+
+The authoritative transfer entry is [`PROJECT_HANDOFF.md`](PROJECT_HANDOFF.md). The old `HANDOFF_TOOLBOX_GITHUB_RELEASE.md` has been reduced to an archive pointer because its pre-v0.1.0 CI instructions are obsolete.
+
+The transfer PR's first Windows Server 2025 CI run exposed a timing-test defect: `OutOfProcessHangUsesHostShutdownDeadlineAndRequiresRestart` measured Worker startup together with shutdown and could fail before testing the intended deadline property. Its stopwatch now starts immediately before `StopAsync`; the 100 ms deadline, timeout error, and `RestartRequired` assertions are unchanged.
 
 ## Verified state
 
