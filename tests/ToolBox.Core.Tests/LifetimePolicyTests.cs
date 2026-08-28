@@ -1,4 +1,4 @@
-using ToolBox.Core.Lifetime;
+﻿using ToolBox.Core.Lifetime;
 using ToolBox.Core.Plugins;
 using ToolBox.PluginSdk;
 using Xunit;
@@ -53,6 +53,13 @@ public sealed class LifetimePolicyTests
         await Assert.ThrowsAnyAsync<OperationCanceledException>(
             async () => await Task.Delay(Timeout.InfiniteTimeSpan, deadline.Token));
         Assert.True(deadline.IsTimedOut);
+
+        var remainingAfterCancellation = deadline.Remaining;
+        if (remainingAfterCancellation > TimeSpan.Zero)
+        {
+            await Task.Delay(remainingAfterCancellation + TimeSpan.FromMilliseconds(20));
+        }
+
         Assert.True(deadline.IsExpired);
         Assert.Equal(TimeSpan.Zero, deadline.Remaining);
     }

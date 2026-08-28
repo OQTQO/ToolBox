@@ -365,6 +365,8 @@ The first staged Markdown check also reported three intentional two-space line b
 
 The first transfer pull-request CI run also failed `OutOfProcessHangUsesHostShutdownDeadlineAndRequiresRestart` on the newer Windows Server 2025 hosted image. The failure reported a 2.90-second “shutdown,” while the configured shutdown deadline was 100 ms. Inspection showed that the stopwatch started before Worker process launch and plugin startup, so the assertion measured environment-dependent startup plus shutdown while describing only shutdown. Correction: start timing immediately before `StopAsync`; retain the deadline, `PLUGIN_SHUTDOWN_TIMEOUT`, and `RestartRequired` assertions. This narrows the measurement to the behavior the test is named to verify rather than relaxing the production deadline.
 
+The corrected PR passed, but the first post-merge `main` run exposed another independent race in `ShutdownDeadlineProvidesOneSharedRemainingBudget`. `CancellationTokenSource.CancelAfter` and the monotonic `Stopwatch` deadline represent the same budget through different timer mechanisms; the cancellation callback can run a few milliseconds before the monotonic timestamp reaches the exact deadline. The test treated token cancellation and `IsExpired` as one atomic observation. Correction: assert timeout cancellation, read the positive monotonic remainder if present, wait for that remainder plus a small scheduling margin, then assert `IsExpired` and zero remaining time. No production timeout or tolerance was changed.
+
 ### Reusable lessons
 
 1. A transfer document must describe verified current state, not simply concatenate historical plans.
@@ -374,6 +376,7 @@ The first transfer pull-request CI run also failed `OutOfProcessHangUsesHostShut
 5. The transfer checkpoint should preserve immutable Tags and Releases and direct the next owner toward a new versioned milestone.
 6. Do not place a validation command and commit in a non-fail-fast shell chain; verify first, inspect its exit code, and mutate Git state only in a later command.
 7. A timing assertion must bracket only the operation named by the test; process startup and shutdown require separate budgets and evidence.
+8. Cancellation notification and a separately calculated monotonic deadline are not an atomic clock edge; tests must validate their ordering without assuming simultaneous observation.
 
 ### Remaining boundary
 
