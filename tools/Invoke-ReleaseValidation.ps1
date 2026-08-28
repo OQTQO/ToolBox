@@ -33,6 +33,7 @@ $assetDirectory = Join-Path $stagingRoot 'assets'
 $devKitDirectory = Join-Path $stagingRoot 'devkit'
 $sampleFeedDirectory = Join-Path $stagingRoot 'sdk-feed'
 $samplePackageCache = Join-Path $stagingRoot 'nuget-cache'
+$sampleNuGetConfigPath = Join-Path $stagingRoot 'NuGet.config'
 
 Import-Module $packageToolsModule -Force
 
@@ -222,6 +223,16 @@ if ([string]$helloManifest.version -cne $Version) { throw "HelloPlugin manifest 
 
 try {
     New-Item -ItemType Directory -Path $publishDirectory, $assetDirectory, $sampleFeedDirectory, $samplePackageCache -Force | Out-Null
+    @"
+<?xml version="1.0" encoding="utf-8"?>
+<configuration>
+  <packageSources>
+    <clear />
+    <add key="toolbox-local-sdk" value="$sampleFeedDirectory" />
+    <add key="nuget.org" value="https://api.nuget.org/v3/index.json" protocolVersion="3" />
+  </packageSources>
+</configuration>
+"@ | Set-Content -LiteralPath $sampleNuGetConfigPath -Encoding utf8
 
     Push-Location $repositoryRoot
     try {
@@ -230,7 +241,7 @@ try {
         Invoke-CheckedCommand dotnet @('build', $solutionPath, '--configuration', $Configuration, '--no-restore', '-warnaserror', "-p:Version=$Version", '-p:ContinuousIntegrationBuild=true')
         Invoke-CheckedCommand dotnet @('test', $solutionPath, '--configuration', $Configuration, '--no-build', '--no-restore', '--verbosity', 'minimal')
         Invoke-CheckedCommand dotnet @('pack', $pluginSdkProjectPath, '--configuration', $Configuration, '--no-restore', '--output', $sampleFeedDirectory, "-p:Version=$Version", "-p:PackageVersion=$Version")
-        Invoke-CheckedCommand dotnet @('restore', $helloProjectPath, '--configfile', (Join-Path $repositoryRoot 'samples\NuGet.config'), "-p:RestorePackagesPath=$samplePackageCache")
+        Invoke-CheckedCommand dotnet @('restore', $helloProjectPath, '--configfile', $sampleNuGetConfigPath, "-p:RestorePackagesPath=$samplePackageCache")
         Invoke-CheckedCommand dotnet @('build', $helloProjectPath, '--configuration', $Configuration, '--no-restore', "-p:RestorePackagesPath=$samplePackageCache")
         Invoke-CheckedCommand dotnet @('restore', $hostProjectPath, '--runtime', 'win-x64', "-p:Version=$Version")
         Invoke-CheckedCommand dotnet @('publish', $hostProjectPath, '--configuration', $Configuration, '--runtime', 'win-x64', '--self-contained', 'true', '--no-restore', '-p:PublishSingleFile=true', '-p:IncludeNativeLibrariesForSelfExtract=true', '-p:DebugType=None', "-p:Version=$Version", '-p:ContinuousIntegrationBuild=true', '-o', $publishDirectory)
