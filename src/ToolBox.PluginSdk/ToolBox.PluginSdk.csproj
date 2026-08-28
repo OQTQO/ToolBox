@@ -3,6 +3,19 @@
     <TargetFramework>net8.0</TargetFramework>
     <RootNamespace>ToolBox.PluginSdk</RootNamespace>
     <AssemblyName>ToolBox.PluginSdk</AssemblyName>
-    <Version>0.1.1</Version>
+    <PackageId>ToolBox.PluginSdk</PackageId>
+    <Version>0.2.0</Version>
+    <PackageVersion>0.2.0</PackageVersion>
+    <Authors>ToolBox</Authors>
+    <Description>Stable Plugin API v1 for ToolBox out-of-process plugins.</Description>
+    <PackageTags>ToolBox;plugin;sdk</PackageTags>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
+    <IsPackable>true</IsPackable>
+    <IncludeSymbols>false</IncludeSymbols>
   </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="README.md" Pack="true" PackagePath="/" />
+  </ItemGroup>
 </Project>

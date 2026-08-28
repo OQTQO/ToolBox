@@ -267,24 +267,5 @@
             </Setter>
         </Style>
 
-        <Style x:Key="RelayComboBoxItemStyle" TargetType="{x:Type ComboBoxItem}">
-            <Setter Property="Padding" Value="10,7" />
-            <Setter Property="Foreground" Value="{StaticResource TextBrush}" />
-            <Setter Property="Background" Value="Transparent" />
-            <Style.Triggers>
-                <Trigger Property="IsHighlighted" Value="True"><Setter Property="Background" Value="{StaticResource SurfaceBlueBrush}" /></Trigger>
-                <Trigger Property="IsSelected" Value="True"><Setter Property="Foreground" Value="{StaticResource BlueDeepBrush}" /><Setter Property="FontWeight" Value="SemiBold" /></Trigger>
-            </Style.Triggers>
-        </Style>
-
-        <Style x:Key="RelayComboBoxStyle" TargetType="{x:Type ComboBox}">
-            <Setter Property="MinHeight" Value="36" />
-            <Setter Property="Padding" Value="10,5" />
-            <Setter Property="Foreground" Value="{StaticResource TextBrush}" />
-            <Setter Property="Background" Value="{StaticResource SurfaceBrush}" />
-            <Setter Property="BorderBrush" Value="{StaticResource LineBrush}" />
-            <Setter Property="BorderThickness" Value="1" />
-            <Setter Property="ItemContainerStyle" Value="{StaticResource RelayComboBoxItemStyle}" />
-        </Style>
     </Application.Resources>
 </Application>

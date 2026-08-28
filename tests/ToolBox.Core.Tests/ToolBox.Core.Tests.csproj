@@ -30,15 +30,11 @@
                       ReferenceOutputAssembly="false" />
     <ProjectReference Include="..\..\src\ToolBox.PluginWorker\ToolBox.PluginWorker.csproj"
                       ReferenceOutputAssembly="false" />
-    <ProjectReference Include="..\..\spikes\KeyboardTest\KeyboardTest.csproj" />
   </ItemGroup>
 
   <ItemGroup>
     <None Include="..\Fixtures\HappyPathPlugin\manifest.json"
           Link="HappyPathPlugin.manifest.json"
-          CopyToOutputDirectory="PreserveNewest" />
-    <None Include="..\..\spikes\KeyboardTest\manifest.json"
-          Link="KeyboardTest.manifest.json"
           CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\Fixtures\WorkerChildProcessPlugin\manifest.json"
           Link="WorkerChildProcessPlugin.manifest.json"

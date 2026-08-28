@@ -4,6 +4,7 @@ using System.Windows;
 using System.Windows.Threading;
 using ToolBox.Core.Diagnostics;
 using ToolBox.Core.Packaging;
+using ToolBox.Core.Plugins;
 using Application = System.Windows.Application;
 using MessageBox = System.Windows.MessageBox;
 
@@ -12,7 +13,7 @@ namespace ToolBox.Host;
 [SuppressMessage("Design", "CA1001:TypesThatOwnDisposableFieldsShouldBeDisposable", Justification = "WPF Application owns and closes runtime resources in OnExit.")]
 public partial class App : Application, IHostApplicationCommands
 {
-    private readonly string _hostVersion = typeof(App).Assembly.GetName().Version?.ToString(3) ?? "0.1.1";
+    private readonly string _hostVersion = typeof(App).Assembly.GetName().Version?.ToString(3) ?? "0.2.0";
     private readonly HostLifetimeState _lifetime = new();
     private readonly HostRestartService _restartService = new();
     private StructuredLogger? _logger;
@@ -85,15 +86,16 @@ public partial class App : Application, IHostApplicationCommands
             "Plugins");
 
         _packageInstaller = new PluginPackageInstaller(pluginsRoot, pluginDataRoot);
-        var workspaceRegistrations = BuiltInPluginWorkspaceCatalog.CreateFromInstalledPackages(
-            _logger,
-            _packageInstaller,
-            _localization);
+        var pluginCatalog = new InstalledPluginCatalog(_packageInstaller);
+        var pluginRuntime = new OutOfProcessPluginRuntime(
+            Path.Combine(AppContext.BaseDirectory, "ToolBox.PluginWorker.exe"));
 
         _viewModel = new MainWindowViewModel(
             _diagnostics,
             _logger,
-            workspaceRegistrations,
+            pluginCatalog,
+            _packageInstaller,
+            pluginRuntime,
             _localization,
             _settings,
             new WpfHostUiDispatcher(Dispatcher));

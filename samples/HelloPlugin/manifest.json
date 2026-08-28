@@ -1,0 +1,20 @@
+{
+  "formatVersion": 1,
+  "id": "com.toolbox.hello",
+  "name": "Hello Plugin",
+  "version": "0.2.0",
+  "pluginApiMajor": 1,
+  "publisher": "toolbox.samples",
+  "platform": {
+    "os": "windows",
+    "arch": "x64"
+  },
+  "runtime": {
+    "supportedModes": [
+      "outOfProcess"
+    ],
+    "preferredMode": "outOfProcess",
+    "background": true
+  },
+  "entryPoint": "HelloPlugin.HelloPlugin, HelloPlugin"
+}

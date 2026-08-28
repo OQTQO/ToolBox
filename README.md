@@ -1,67 +1,51 @@
 # ToolBox
 
-ToolBox 是一个面向 Windows 的插件平台原型。
+ToolBox 是一个面向 Windows 的通用插件外壳。Host 不包含具体产品代码，只负责安装、发现、展示状态并管理插件生命周期。
 
-当前实现已完成 v0.1 原型的 Phase 0–10：
+## 运行链路
 
-- 可编译的 .NET/WPF 工程与测试基础；
-- WPF Host Shell，提供启动状态、Session、Launch Attempt 和事件流；
-- 不依赖第三方日志库的结构化 JSONL 日志；
-- 异步写入、按大小滚动和保留数量/期限限制；
-- 全局异常捕获与基础 Host Diagnostics；
-- 稳定的启动、显示、退出流程。
-- PluginSdk、生命周期状态、Manifest 校验、InProcess/OutOfProcess Worker 隔离；
-- PluginLifetimeScope、统一 Shutdown Deadline、故障状态与 Quarantine；
-- Resource Manager 的 Shared/Exclusive Lease 冲突仲裁；
-- Service Broker 的懒启动、Lease 复用、引用计数和空闲停止；
-- Keyboard & Mouse Test 产品包的真实加载、输入事件、资源占用和卸载验证；
-- `.tpk` 安全 ZIP 校验、staging 安装、Manifest/API/哈希校验、版本并存、原子状态和 Config/State 快照；
-- BadZipPackage、BadManifestPackage、IncompatibleApiPlugin 及哈希篡改攻击测试；
-- Plugin API v1 稳定公共面、接口签名、枚举/常量、Manifest 字段与兼容性规则冻结；
-- LegacyPlugin 旧版 SDK 编译兼容性 Fixture 的直接加载与卸载验证；
-- Keyboard & Mouse Test 正式产品插件的最小产品化与首轮 hardening 已完成：Host 只读取已提交的激活版本，提供 `.tpk` 安装/更新入口，支持局部输入、设置、资源冲突、升级回退和真实卸载验收。
-- Phone Audio Relay 产品插件：接收已配对 Android 手机的蓝牙 A2DP 媒体音频并送入 Windows 正常输出混音，不接管电脑应用声音；提供设备刷新、选择、连接、断开、状态恢复和 `.tpk` 发布包。
+```text
+第三方项目 → ToolBox.PluginSdk NuGet → manifest.json → .tpk
+          → ToolBox 安装器 → 已提交的动态插件目录
+          → 通用 WPF 状态卡片 → ToolBox.PluginWorker
+          → IPlugin.StartAsync / StopAsync
+```
 
-个人学习版发布已完成，不需要服务器或官方认证；下一阶段仅在未来需要公开分发时再考虑 v0.2 签名真实性。Updater、强制权限和安全沙箱仍不在 v0.1 原型范围内。范围见 [PRODUCT_KEYBOARD_MOUSE_SCOPE.md](PRODUCT_KEYBOARD_MOUSE_SCOPE.md) 与 [PHONE_AUDIO_RELAY.md](PHONE_AUDIO_RELAY.md)，API 冻结记录见 [PLUGIN_API_V1.md](PLUGIN_API_V1.md)。
+四个边界分别是：
 
-当前 0.1 系列最终版本：[ToolBox v0.1.1](https://github.com/OQTQO/ToolBox/releases/tag/v0.1.1)。
+- `ToolBox.PluginSdk`：第三方唯一依赖，稳定 Plugin API v1；
+- `ToolBox.Core`：Manifest、安装事务、目录发现、生命周期和 Worker 通信；
+- `ToolBox.PluginWorker`：隔离执行插件的进程外 Worker；
+- `ToolBox.Host`：与插件类型无关的 WPF 外壳和状态卡片。
 
-项目维护权转移或新维护者接手时，请从 [PROJECT_HANDOFF.md](PROJECT_HANDOFF.md) 开始；该文档汇总当前架构、运行数据、构建发布流程、第三方插件边界、风险和接手清单。
+安装任意合法 `.tpk` 后，Host 会按包内 Manifest 动态显示插件。用户可以在通用状态卡片中启用、停止或卸载插件；`background` 目前只用于描述和诊断。
 
-本地 `.tpk` 生成方式与“完整性不等于真实性”的发布边界见 [PACKAGE_RELEASE_POLICY.md](PACKAGE_RELEASE_POLICY.md)。
+## 用户使用
 
-GitHub 的 CI、Tag 发布和 Release 附件流程见 [CHANGELOG.md](CHANGELOG.md) 与 `.github/workflows/release.yml`。
+在设置页选择本地 `.tpk`，然后在插件状态卡片中启用、停用或卸载。插件用户数据与运行文件分离，版本回退会保留现有 Config/State 行为。
+
+## 第三方开发
+
+从 [第三方插件开发教程](docs/plugin-development.md) 开始；字段详情见 [Manifest 规范](docs/plugin-manifest.md)，生命周期和 Worker 见 [运行时说明](docs/plugin-runtime.md)。可直接参考 [HelloPlugin](samples/HelloPlugin)，KeyboardMouse 和 AudioRelay 位于独立的 [ToolBox-Plugins](https://github.com/OQTQO/ToolBox-Plugins) 仓库。
+
+仓库会先生成本地 SDK NuGet，再构建 HelloPlugin 并打包：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\tools\Validate-PluginSamples.ps1
+```
+
+通用 `.tpk` 打包入口是 `tools/New-PluginPackage.ps1`。
 
 ## 本地构建
-
-需要安装受支持的 .NET SDK（项目目标为 `net8.0` / `net8.0-windows`）：
 
 ```powershell
 dotnet restore ToolBox.sln
 dotnet build ToolBox.sln --configuration Release
 dotnet test ToolBox.sln --configuration Release
-dotnet run --project src/ToolBox.Host/ToolBox.Host.csproj
 ```
 
-发布前执行统一 dry-run：
+当前版本是 v0.2 开发方向。ToolBox 的 GitHub Release 同时提供 `ToolBox-PluginDevKit`；历史 v0.1.1 保持不改。维护资料、发布流程和历史上下文位于 [`docs/maintainer/`](docs/maintainer/) 与 [`docs/archive/`](docs/archive/)。
 
-```powershell
-.\tools\Invoke-ReleaseValidation.ps1 `
-  -Configuration Release `
-  -OutputDirectory .\artifacts\release-validation
-```
+## 当前边界
 
-该命令使用 Host 项目版本，依次执行干净构建、`-warnaserror`、完整测试、自包含 Windows x64 发布、两个 `.tpk` 生成、包结构/版本/payload 哈希检查以及发布 SHA-256 反向核对。CI 和 Tag Release 调用同一脚本。
-
-生成 Phone Audio Relay 安装包：
-
-```powershell
-powershell -ExecutionPolicy Bypass -File .\tools\New-AudioRelayPackage.ps1 `
-  -Configuration Release -Version 0.1.1 -OutputDirectory .\artifacts
-```
-
-Host 运行日志默认写入：
-
-```text
-%LocalAppData%\ToolBox\Logs
-```
+当前版本不提供签名验证、权限 enforcement、沙箱、插件商城或自动更新。插件通过 GitHub Release 以 `.tpk` 文件分发，用户下载后在本地安装；SHA-256 仅用于包完整性校验，不代表发布者身份。

@@ -3,6 +3,7 @@ using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
+using ToolBox.Core.Lifetime;
 using System.Text;
 using Microsoft.Win32.SafeHandles;
 
@@ -245,7 +246,7 @@ public sealed class WorkerProcessHandle : IDisposable
         _job.Terminate();
     }
 
-    public void Dispose()
+    public void Dispose(ShutdownDeadline? deadline = null)
     {
         if (_disposed)
         {
@@ -259,13 +260,42 @@ public sealed class WorkerProcessHandle : IDisposable
             if (!Process.HasExited)
             {
                 _job.Terminate();
-                Process.WaitForExit(5000);
+                if (deadline is not null)
+                {
+                    try
+                    {
+                        WaitForExit(deadline);
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        // The process tree has already been terminated by the
+                        // Job Object. Cleanup must still release native handles.
+                    }
+                }
             }
         }
         finally
         {
             _job.Dispose();
             Process.Dispose();
+        }
+    }
+
+    public void Dispose() => Dispose(deadline: null);
+
+    void IDisposable.Dispose() => Dispose(deadline: null);
+
+    public void WaitForExit(ShutdownDeadline deadline)
+    {
+        ArgumentNullException.ThrowIfNull(deadline);
+
+        while (!Process.HasExited)
+        {
+            deadline.ThrowIfExpired();
+            Process.WaitForExit((int)Math.Clamp(
+                Math.Ceiling(deadline.Remaining.TotalMilliseconds),
+                1,
+                25));
         }
     }
 }

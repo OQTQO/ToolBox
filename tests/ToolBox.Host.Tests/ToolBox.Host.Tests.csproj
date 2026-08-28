@@ -19,12 +19,5 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\ToolBox.Host\ToolBox.Host.csproj" />
-    <ProjectReference Include="..\..\spikes\KeyboardTest\KeyboardTest.csproj" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <None Include="..\..\spikes\KeyboardTest\manifest.json"
-          Link="KeyboardTest.manifest.json"
-          CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>

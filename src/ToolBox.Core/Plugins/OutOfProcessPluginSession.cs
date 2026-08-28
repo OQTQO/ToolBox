@@ -144,6 +144,13 @@ public sealed class OutOfProcessPluginSession : IAsyncDisposable
         ObjectDisposedException.ThrowIf(_disposed, this);
         ArgumentNullException.ThrowIfNull(options);
 
+        using var deadline = ShutdownDeadline.Start(options, cancellationToken);
+        await StopCoreAsync(deadline).ConfigureAwait(false);
+    }
+
+    private async Task StopCoreAsync(ShutdownDeadline deadline)
+    {
+
         if (_channelClosed)
         {
             return;
@@ -164,8 +171,6 @@ public sealed class OutOfProcessPluginSession : IAsyncDisposable
             _state = _state.TransitionTo(PluginLifecycleState.Stopping);
         }
 
-        using var deadline = ShutdownDeadline.Start(options, cancellationToken);
-
         try
         {
             if (wasRunning)
@@ -183,7 +188,7 @@ public sealed class OutOfProcessPluginSession : IAsyncDisposable
                     deadline.Token)
                 .ConfigureAwait(false);
             await WaitForWorkerExitAsync(deadline).ConfigureAwait(false);
-            DisposeWorker();
+            DisposeWorker(deadline);
 
             if (wasRunning)
             {
@@ -213,7 +218,7 @@ public sealed class OutOfProcessPluginSession : IAsyncDisposable
                     errorMessage: surfacedException.Message);
             }
 
-            TerminateWorker();
+            TerminateWorker(deadline);
             CloseChannel();
             throw surfacedException;
         }
@@ -282,17 +287,19 @@ public sealed class OutOfProcessPluginSession : IAsyncDisposable
             return;
         }
 
+        using var deadline = ShutdownDeadline.Start(PluginShutdownOptions.Default);
+
         try
         {
             if (!_channelClosed)
             {
                 try
                 {
-                    await StopAsync().ConfigureAwait(false);
+                    await StopCoreAsync(deadline).ConfigureAwait(false);
                 }
                 catch
                 {
-                    TerminateWorker();
+                    TerminateWorker(deadline);
                     CloseChannel();
                 }
             }
@@ -300,7 +307,7 @@ public sealed class OutOfProcessPluginSession : IAsyncDisposable
         finally
         {
             CloseChannel();
-            DisposeWorker();
+            DisposeWorker(deadline);
             _writeGate.Dispose();
             _disposed = true;
         }
@@ -412,13 +419,17 @@ public sealed class OutOfProcessPluginSession : IAsyncDisposable
 
             if (deadline is not null && deadline.Remaining > TimeSpan.Zero)
             {
-                _worker.Process.WaitForExit(
-                    (int)Math.Min(deadline.Remaining.TotalMilliseconds, 250));
+                _worker.WaitForExit(deadline);
             }
         }
         catch (InvalidOperationException)
         {
             // The process may have exited between the state check and termination.
+        }
+        catch (OperationCanceledException)
+        {
+            // The deadline owns the remaining shutdown budget. The Job Object
+            // still guarantees process-tree termination when its handle closes.
         }
     }
 
@@ -443,14 +454,14 @@ public sealed class OutOfProcessPluginSession : IAsyncDisposable
         return milliseconds.ToString(CultureInfo.InvariantCulture);
     }
 
-    private void DisposeWorker()
+    private void DisposeWorker(ShutdownDeadline? deadline = null)
     {
         if (_workerDisposed)
         {
             return;
         }
 
-        _worker.Dispose();
+        _worker.Dispose(deadline);
         _workerDisposed = true;
     }
 

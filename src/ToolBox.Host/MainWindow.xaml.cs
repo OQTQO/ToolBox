@@ -287,9 +287,13 @@ public partial class MainWindow : Window
         }
     }
 
-    private void OnAudioRelayRestartRequested(object sender, RoutedEventArgs e)
+    private async void OnWorkspaceRuntimeToggleClick(object sender, RoutedEventArgs e)
     {
-        _applicationCommands.RequestRestart();
+        if (DataContext is MainWindowViewModel viewModel
+            && sender is FrameworkElement { DataContext: PluginWorkspaceViewModel workspace })
+        {
+            await viewModel.ToggleWorkspaceRuntimeAsync(workspace);
+        }
     }
 
     private async void OnWorkspaceUninstallClick(object sender, RoutedEventArgs e)

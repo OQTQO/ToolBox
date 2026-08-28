@@ -26,11 +26,49 @@
     </shell:WindowChrome.WindowChrome>
 
     <Window.Resources>
-        <DataTemplate DataType="{x:Type local:KeyboardTestViewModel}">
-            <local:KeyboardTestWorkspaceView />
-        </DataTemplate>
-        <DataTemplate DataType="{x:Type local:AudioRelayViewModel}">
-            <local:AudioRelayWorkspaceView RestartRequested="OnAudioRelayRestartRequested" />
+        <DataTemplate DataType="{x:Type local:PluginWorkspaceViewModel}">
+            <ScrollViewer Padding="42,34,34,58" VerticalScrollBarVisibility="Auto">
+                <StackPanel MaxWidth="920">
+                    <TextBlock Style="{StaticResource EyebrowText}" Text="{DynamicResource PluginWorkspace}" />
+                    <TextBlock Margin="0,7,0,0" Style="{StaticResource PageTitleText}" Text="{Binding DisplayName}" />
+                    <TextBlock Margin="0,8,0,0" FontSize="12" Foreground="{StaticResource MutedTextBrush}" Text="{Binding Publisher}" />
+
+                    <Border Margin="0,25,0,0" Padding="24" Style="{StaticResource CardStyle}">
+                        <StackPanel>
+                            <Grid>
+                                <Grid.ColumnDefinitions><ColumnDefinition /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                                <StackPanel>
+                                    <TextBlock Style="{StaticResource SectionTitleText}" Text="{DynamicResource PluginStatus}" />
+                                    <StackPanel Margin="0,10,0,0" Orientation="Horizontal">
+                                        <Ellipse Width="8" Height="8" Margin="0,0,8,0" VerticalAlignment="Center" Fill="{Binding StatusAccentBrush}" />
+                                        <TextBlock FontSize="12" FontWeight="SemiBold" Text="{Binding LifecycleStateLabel}" />
+                                    </StackPanel>
+                                </StackPanel>
+                                <StackPanel Grid.Column="1" HorizontalAlignment="Right">
+                                    <Button MinWidth="98" Content="{Binding RuntimeActionLabel}" IsEnabled="{Binding IsRuntimeActionEnabled}" Click="OnWorkspaceRuntimeToggleClick" Style="{StaticResource AccentButtonStyle}" />
+                                    <Button Margin="0,8,0,0" MinWidth="98" Content="{DynamicResource Uninstall}" IsEnabled="{Binding IsUninstallEnabled}" Click="OnWorkspaceUninstallClick" Style="{StaticResource DangerButtonStyle}" />
+                                </StackPanel>
+                            </Grid>
+                            <TextBlock Margin="0,17,0,0" FontSize="11" Foreground="{StaticResource MutedTextBrush}" Text="{Binding StatusDescription}" TextWrapping="Wrap" />
+                            <TextBlock Margin="0,8,0,0" FontSize="10" Foreground="{StaticResource RedBrush}" Text="{Binding ErrorMessage}" TextWrapping="Wrap" Visibility="{Binding HasError, Converter={StaticResource BooleanToVisibilityConverter}}" />
+
+                            <Grid Margin="0,25,0,0">
+                                <Grid.ColumnDefinitions><ColumnDefinition /><ColumnDefinition /><ColumnDefinition /></Grid.ColumnDefinitions>
+                                <StackPanel><TextBlock FontSize="9" Foreground="{StaticResource FaintTextBrush}" Text="{DynamicResource InstalledVersionLabel}" /><TextBlock Margin="0,6,0,0" FontSize="12" Text="{Binding InstalledVersion}" /></StackPanel>
+                                <StackPanel Grid.Column="1"><TextBlock FontSize="9" Foreground="{StaticResource FaintTextBrush}" Text="{DynamicResource RuntimeModeLabel}" /><TextBlock Margin="0,6,0,0" FontSize="12" Text="{Binding RuntimeDescription}" /></StackPanel>
+                                <StackPanel Grid.Column="2"><TextBlock FontSize="9" Foreground="{StaticResource FaintTextBrush}" Text="{DynamicResource PluginIdLabel}" /><TextBlock Margin="0,6,0,0" FontSize="12" Text="{Binding PluginId}" TextTrimming="CharacterEllipsis" /></StackPanel>
+                            </Grid>
+                        </StackPanel>
+                    </Border>
+
+                    <Border Margin="0,12,0,0" Padding="18" Style="{StaticResource CardStyle}">
+                        <StackPanel>
+                            <TextBlock Style="{StaticResource SectionTitleText}" Text="{DynamicResource PluginHostBoundary}" />
+                            <TextBlock Margin="0,7,0,0" FontSize="10" Foreground="{StaticResource MutedTextBrush}" Text="{DynamicResource PluginHostBoundaryDescription}" TextWrapping="Wrap" />
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
+            </ScrollViewer>
         </DataTemplate>
     </Window.Resources>
 
@@ -192,7 +230,7 @@
                 </ScrollViewer>
 
                 <!-- Plugin workspace selected from the opened-workspace collection -->
-                <ContentControl Content="{Binding SelectedPluginWorkspace.PageViewModel}"
+                <ContentControl Content="{Binding SelectedPluginWorkspace}"
                                 Visibility="{Binding IsPluginPage, Converter={StaticResource BooleanToVisibilityConverter}}" />
 
                 <!-- Settings -->

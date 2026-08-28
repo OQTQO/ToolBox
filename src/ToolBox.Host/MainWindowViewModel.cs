@@ -1,12 +1,11 @@
-﻿using System.Collections.ObjectModel;
+using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Globalization;
-using System.IO;
-using System.IO.Compression;
 using System.Runtime.CompilerServices;
 using System.Windows.Media;
 using ToolBox.Core.Diagnostics;
 using ToolBox.Core.Packaging;
+using ToolBox.Core.Plugins;
 using ToolBox.PluginSdk;
 using Brush = System.Windows.Media.Brush;
 using Color = System.Windows.Media.Color;
@@ -29,6 +28,10 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged, IDisposable
 
     private readonly HostDiagnostics _diagnostics;
     private readonly IStructuredLogger _logger;
+    private readonly InstalledPluginCatalog _pluginCatalog;
+    private readonly PluginPackageInstaller _packageInstaller;
+    private readonly PluginPackageInspector _packageInspector;
+    private readonly OutOfProcessPluginRuntime _runtime;
     private readonly LocalizationService _localization;
     private readonly HostSettingsService _settings;
     private readonly IHostUiDispatcher _uiDispatcher;
@@ -44,47 +47,34 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged, IDisposable
     internal MainWindowViewModel(
         HostDiagnostics diagnostics,
         IStructuredLogger logger,
-        IEnumerable<PluginWorkspaceRegistration> workspaceRegistrations,
+        InstalledPluginCatalog pluginCatalog,
+        PluginPackageInstaller packageInstaller,
+        OutOfProcessPluginRuntime runtime,
         LocalizationService localization,
         HostSettingsService settings,
         IHostUiDispatcher? uiDispatcher = null)
     {
         _diagnostics = diagnostics ?? throw new ArgumentNullException(nameof(diagnostics));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        _pluginCatalog = pluginCatalog ?? throw new ArgumentNullException(nameof(pluginCatalog));
+        _packageInstaller = packageInstaller ?? throw new ArgumentNullException(nameof(packageInstaller));
+        _packageInspector = new PluginPackageInspector();
+        _runtime = runtime ?? throw new ArgumentNullException(nameof(runtime));
         _localization = localization ?? throw new ArgumentNullException(nameof(localization));
         _settings = settings ?? throw new ArgumentNullException(nameof(settings));
         _uiDispatcher = uiDispatcher ?? ImmediateHostUiDispatcher.Instance;
         _snapshot = _diagnostics.Snapshot();
 
         RecentEvents = new ObservableCollection<DiagnosticEventViewModel>();
-        var pluginIds = new HashSet<string>(StringComparer.Ordinal);
-        foreach (var registration in workspaceRegistrations
-                     ?? throw new ArgumentNullException(nameof(workspaceRegistrations)))
-        {
-            if (!pluginIds.Add(registration.PluginId))
-            {
-                throw new InvalidOperationException(
-                    $"Plugin workspace '{registration.PluginId}' is registered more than once.");
-            }
-
-            var workspace = new PluginWorkspaceViewModel(
-                registration,
-                _localization,
-                _settings,
-                _uiDispatcher);
-            workspace.PropertyChanged += OnWorkspacePropertyChanged;
-            _pluginWorkspaces.Add(workspace);
-        }
-
-        PluginWorkspaces = new ReadOnlyObservableCollection<PluginWorkspaceViewModel>(_pluginWorkspaces);
-        InstalledPluginWorkspaces = new ReadOnlyObservableCollection<PluginWorkspaceViewModel>(_installedPluginWorkspaces);
-        OpenedPluginWorkspaces = new ReadOnlyObservableCollection<PluginWorkspaceViewModel>(_openedPluginWorkspaces);
-        RefreshWorkspaceCollections();
-
         _diagnostics.Changed += OnDiagnosticsChanged;
         _logger.EventWritten += OnEventWritten;
         _localization.LanguageChanged += OnLanguageChanged;
         _settings.Changed += OnSettingsChanged;
+
+        PluginWorkspaces = new ReadOnlyObservableCollection<PluginWorkspaceViewModel>(_pluginWorkspaces);
+        InstalledPluginWorkspaces = new ReadOnlyObservableCollection<PluginWorkspaceViewModel>(_installedPluginWorkspaces);
+        OpenedPluginWorkspaces = new ReadOnlyObservableCollection<PluginWorkspaceViewModel>(_openedPluginWorkspaces);
+        RefreshPluginWorkspaces();
     }
 
     public event PropertyChangedEventHandler? PropertyChanged;
@@ -248,13 +238,22 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged, IDisposable
     public async Task ToggleWorkspaceOpenedAsync(PluginWorkspaceViewModel workspace)
     {
         ArgumentNullException.ThrowIfNull(workspace);
-        if (!_pluginWorkspaces.Contains(workspace))
-        {
-            throw new ArgumentOutOfRangeException(nameof(workspace));
-        }
+        EnsureWorkspace(workspace);
 
         ClearPluginManagerError();
-        if (!await workspace.SetOpenedAsync(!workspace.IsOpened))
+        if (!await workspace.SetOpenedAsync(!workspace.IsOpened).ConfigureAwait(false))
+        {
+            CapturePluginError(workspace);
+        }
+    }
+
+    public async Task ToggleWorkspaceRuntimeAsync(PluginWorkspaceViewModel workspace)
+    {
+        ArgumentNullException.ThrowIfNull(workspace);
+        EnsureWorkspace(workspace);
+
+        ClearPluginManagerError();
+        if (!await workspace.SetRuntimeEnabledAsync(!workspace.IsRuntimeEnabled).ConfigureAwait(false))
         {
             CapturePluginError(workspace);
         }
@@ -266,15 +265,13 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged, IDisposable
     {
         ArgumentNullException.ThrowIfNull(workspace);
         ArgumentException.ThrowIfNullOrWhiteSpace(packagePath);
-        if (!_pluginWorkspaces.Contains(workspace))
-        {
-            throw new ArgumentOutOfRangeException(nameof(workspace));
-        }
+        EnsureWorkspace(workspace);
 
         try
         {
             ClearPluginManagerError();
-            var manifest = ReadPackageManifest(packagePath);
+            var manifest = _packageInspector.ReadManifest(packagePath);
+            EnsureOutOfProcessSupport(manifest);
             if (!string.Equals(manifest.Id, workspace.PluginId, StringComparison.Ordinal))
             {
                 throw new InvalidOperationException(string.Format(
@@ -283,13 +280,9 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged, IDisposable
                     manifest.Id));
             }
 
-            if (!workspace.IsInstallEnabled)
-            {
-                throw new InvalidOperationException(T("DisablePluginBeforeUpdate"));
-            }
-
-            await workspace.InstallPackageAsync(packagePath);
-            CapturePluginError(workspace);
+            await workspace.InstallPackageAsync(packagePath).ConfigureAwait(false);
+            _settings.SetPluginOpened(manifest.Id, opened: true);
+            RefreshPluginWorkspaces();
         }
         catch (Exception exception)
         {
@@ -305,20 +298,28 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged, IDisposable
 
         try
         {
-            var manifest = ReadPackageManifest(packagePath);
-            var workspace = _pluginWorkspaces.SingleOrDefault(candidate => string.Equals(
+            var manifest = _packageInspector.ReadManifest(packagePath);
+            EnsureOutOfProcessSupport(manifest);
+            var existing = _pluginWorkspaces.SingleOrDefault(candidate => string.Equals(
                 candidate.PluginId,
                 manifest.Id,
                 StringComparison.Ordinal));
-            if (workspace is null)
+
+            if (existing is not null)
             {
-                throw new InvalidOperationException(string.Format(
-                    CultureInfo.CurrentCulture,
-                    T("UnsupportedPluginPackage"),
-                    manifest.Id));
+                await InstallWorkspacePackageAsync(existing, packagePath).ConfigureAwait(false);
+                return;
             }
 
-            await InstallWorkspacePackageAsync(workspace, packagePath);
+            var result = await _packageInstaller.InstallAsync(packagePath).ConfigureAwait(false);
+            _settings.SetPluginOpened(result.PluginId, opened: true);
+            _logger.Log(
+                LogLevel.Information,
+                "Package",
+                $"Installed plugin package '{result.PluginId}' version '{result.Version}'.",
+                pluginId: result.PluginId,
+                pluginVersion: result.Version);
+            RefreshPluginWorkspaces();
         }
         catch (Exception exception)
         {
@@ -329,14 +330,30 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged, IDisposable
     public async Task UninstallWorkspaceAsync(PluginWorkspaceViewModel workspace)
     {
         ArgumentNullException.ThrowIfNull(workspace);
-        if (!_pluginWorkspaces.Contains(workspace))
-        {
-            throw new ArgumentOutOfRangeException(nameof(workspace));
-        }
+        EnsureWorkspace(workspace);
 
-        ClearPluginManagerError();
-        await workspace.UninstallAsync();
-        CapturePluginError(workspace);
+        try
+        {
+            ClearPluginManagerError();
+            var result = await workspace.UninstallAsync().ConfigureAwait(false);
+            if (result.ActiveVersionAfterUninstall is null)
+            {
+                _settings.RemovePlugin(workspace.PluginId);
+            }
+
+            RefreshPluginWorkspaces();
+        }
+        catch (Exception exception)
+        {
+            SetPluginManagerError(exception.Message);
+            _logger.Error(
+                "Package",
+                $"Plugin '{workspace.PluginId}' could not be uninstalled.",
+                errorCode: exception is PluginPackageException packageException
+                    ? packageException.ErrorCode
+                    : "PACKAGE_UNINSTALL_FAILED",
+                exception: exception);
+        }
     }
 
     public void Dispose()
@@ -351,11 +368,63 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged, IDisposable
         _logger.EventWritten -= OnEventWritten;
         _localization.LanguageChanged -= OnLanguageChanged;
         _settings.Changed -= OnSettingsChanged;
-        foreach (var workspace in _pluginWorkspaces)
+        foreach (var workspace in _pluginWorkspaces.ToArray())
         {
             workspace.PropertyChanged -= OnWorkspacePropertyChanged;
             workspace.Dispose();
         }
+
+        _pluginWorkspaces.Clear();
+        _installedPluginWorkspaces.Clear();
+        _openedPluginWorkspaces.Clear();
+    }
+
+    private void RefreshPluginWorkspaces()
+    {
+        if (_disposed)
+        {
+            return;
+        }
+
+        var selectedPluginId = _selectedPluginWorkspace?.PluginId;
+        foreach (var workspace in _pluginWorkspaces.ToArray())
+        {
+            workspace.PropertyChanged -= OnWorkspacePropertyChanged;
+            workspace.Dispose();
+        }
+
+        _pluginWorkspaces.Clear();
+        var snapshot = _pluginCatalog.Scan();
+        foreach (var issue in snapshot.Issues)
+        {
+            _logger.Error(
+                "Package",
+                $"Plugin '{issue.PluginId}' was skipped during discovery: {issue.Message}",
+                errorCode: issue.ErrorCode,
+                exception: issue.Exception);
+        }
+
+        foreach (var descriptor in snapshot.Plugins)
+        {
+            var workspace = new PluginWorkspaceViewModel(
+                descriptor,
+                _packageInstaller,
+                _runtime,
+                _logger,
+                _localization,
+                _settings,
+                _uiDispatcher);
+            workspace.PropertyChanged += OnWorkspacePropertyChanged;
+            _pluginWorkspaces.Add(workspace);
+        }
+
+        var selected = selectedPluginId is null
+            ? null
+            : _pluginWorkspaces.SingleOrDefault(workspace =>
+                string.Equals(workspace.PluginId, selectedPluginId, StringComparison.Ordinal)
+                && workspace.IsOpened);
+        SetSelectedPluginWorkspace(selected);
+        RefreshWorkspaceCollections();
     }
 
     private void OnDiagnosticsChanged(HostDiagnosticsSnapshot snapshot)
@@ -469,12 +538,8 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged, IDisposable
 
     private void RefreshWorkspaceCollections()
     {
-        ReplaceCollection(
-            _installedPluginWorkspaces,
-            _pluginWorkspaces.Where(workspace => workspace.IsInstalled));
-        ReplaceCollection(
-            _openedPluginWorkspaces,
-            _pluginWorkspaces.Where(workspace => workspace.IsOpened));
+        ReplaceCollection(_installedPluginWorkspaces, _pluginWorkspaces.Where(workspace => workspace.IsInstalled));
+        ReplaceCollection(_openedPluginWorkspaces, _pluginWorkspaces.Where(workspace => workspace.IsOpened));
 
         OnPropertyChanged(nameof(HasInstalledPlugins));
         OnPropertyChanged(nameof(HasNoInstalledPlugins));
@@ -487,15 +552,18 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged, IDisposable
 
     private void CapturePluginError(PluginWorkspaceViewModel workspace)
     {
-        var error = workspace.RequiresHostRestart
-            ? T("RelayRestartRequiredDescription")
-            : workspace.HasError
-                ? workspace.ErrorMessage
-                : null;
-
-        if (!string.IsNullOrWhiteSpace(error))
+        if (workspace.HasError)
         {
-            SetPluginManagerError(error);
+            SetPluginManagerError(workspace.ErrorMessage);
+        }
+    }
+
+    private void EnsureWorkspace(PluginWorkspaceViewModel workspace)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        if (!_pluginWorkspaces.Contains(workspace))
+        {
+            throw new ArgumentOutOfRangeException(nameof(workspace));
         }
     }
 
@@ -540,23 +608,15 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged, IDisposable
             exception: exception);
     }
 
-    private static PluginManifest ReadPackageManifest(string packagePath)
+    private static void EnsureOutOfProcessSupport(PluginManifest manifest)
     {
-        using var archive = ZipFile.OpenRead(packagePath);
-        var entry = archive.Entries.SingleOrDefault(candidate => string.Equals(
-            candidate.FullName.Replace('\\', '/'),
-            "manifest.json",
-            StringComparison.Ordinal));
-        if (entry is null || entry.Length > 1024 * 1024)
+        if (manifest.Runtime is null
+            || !manifest.Runtime.SupportedModes.Contains(PluginExecutionMode.OutOfProcess))
         {
-            throw new PluginPackageException(
-                "BAD_MANIFEST_PACKAGE",
-                "The selected package does not contain a valid root manifest.json.");
+            throw new PluginLoadException(
+                "PLUGIN_RUNTIME_MODE_UNSUPPORTED",
+                $"Plugin '{manifest.Id}' does not support the required 'outOfProcess' execution mode.");
         }
-
-        using var stream = entry.Open();
-        using var reader = new StreamReader(stream);
-        return new PluginManifestParser().Parse(reader.ReadToEnd());
     }
 
     private void OnPropertyChanged([CallerMemberName] string? propertyName = null)
@@ -596,13 +656,9 @@ public sealed class DiagnosticEventViewModel
     }
 
     public string TimestampText { get; }
-
     public string LevelText { get; }
-
     public string Module { get; }
-
     public string Message { get; }
-
     public Brush LevelBrush { get; }
 
     private static SolidColorBrush CreateBrush(string hex)

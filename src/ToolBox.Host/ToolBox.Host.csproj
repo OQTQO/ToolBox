@@ -7,7 +7,7 @@
     <UseWindowsForms>true</UseWindowsForms>
     <RootNamespace>ToolBox.Host</RootNamespace>
     <AssemblyName>ToolBox.Host</AssemblyName>
-    <Version>0.1.1</Version>
+    <Version>0.2.0</Version>
     <ApplicationIcon>Assets\ToolBox.ico</ApplicationIcon>
   </PropertyGroup>
 

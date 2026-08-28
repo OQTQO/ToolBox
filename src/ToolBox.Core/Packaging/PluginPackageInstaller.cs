@@ -40,6 +40,40 @@ public sealed class PluginPackageInstaller : IDisposable
 
     public string PluginDataRoot => _pluginDataRoot;
 
+    /// <summary>
+    /// Returns plugin roots that may contain a committed installation.
+    /// Transaction staging folders are intentionally never exposed to callers.
+    /// </summary>
+    public IReadOnlyList<string> GetInstalledPluginIds()
+    {
+        ObjectDisposedException.ThrowIf(Volatile.Read(ref _disposed) != 0, this);
+        EnsureDirectoryRoot(_pluginsRoot);
+
+        return Directory
+            .EnumerateDirectories(_pluginsRoot)
+            .Where(path => !string.Equals(
+                Path.GetFileName(path),
+                ".staging",
+                StringComparison.OrdinalIgnoreCase))
+            .Where(path =>
+            {
+                try
+                {
+                    EnsureDirectoryIsSafe(path);
+                    ValidatePathSegment(Path.GetFileName(path), "plugin id");
+                    return true;
+                }
+                catch (PluginPackageException)
+                {
+                    return false;
+                }
+            })
+            .Select(path => Path.GetFileName(path))
+            .Where(id => !string.IsNullOrWhiteSpace(id))
+            .OrderBy(id => id, StringComparer.OrdinalIgnoreCase)
+            .ToArray()!;
+    }
+
     public async Task<PluginPackageInstallResult> InstallAsync(
         string packagePath,
         CancellationToken cancellationToken = default)

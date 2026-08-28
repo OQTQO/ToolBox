@@ -3,6 +3,7 @@ using System.Runtime.Versioning;
 using System.Text;
 using ToolBox.PluginSdk;
 using ToolBox.Core.Plugins.Worker;
+using ToolBox.Core.Lifetime;
 
 namespace ToolBox.Core.Plugins;
 
@@ -149,7 +150,13 @@ public sealed class OutOfProcessPluginRuntime
             writer?.Dispose();
             reader?.Dispose();
             pipe.Dispose();
-            worker?.Dispose();
+            if (worker is not null)
+            {
+                using var cleanupDeadline = ShutdownDeadline.Start(
+                    PluginShutdownOptions.Default,
+                    CancellationToken.None);
+                worker.Dispose(cleanupDeadline);
+            }
             throw;
         }
     }

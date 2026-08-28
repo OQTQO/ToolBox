@@ -34,18 +34,6 @@ public sealed class PluginApiV1CompatibilityTests
         "ToolBox.PluginSdk.ResourceKey"
     ];
 
-    private static readonly string[] FrozenExperimentalTypeNames =
-    [
-        "ToolBox.PluginSdk.Experimental.AudioRelayDevice",
-        "ToolBox.PluginSdk.Experimental.AudioRelaySnapshot",
-        "ToolBox.PluginSdk.Experimental.AudioRelayStatus",
-        "ToolBox.PluginSdk.Experimental.IAudioRelayPlugin",
-        "ToolBox.PluginSdk.Experimental.IKeyboardTestPlugin",
-        "ToolBox.PluginSdk.Experimental.KeyboardTestMouseButton",
-        "ToolBox.PluginSdk.Experimental.KeyboardTestSettings",
-        "ToolBox.PluginSdk.Experimental.KeyboardTestSnapshot"
-    ];
-
     [Fact]
     public void StableExportedTypeSetMatchesV1Baseline()
     {
@@ -60,19 +48,16 @@ public sealed class PluginApiV1CompatibilityTests
     }
 
     [Fact]
-    public void ExperimentalExportedTypeSetRemainsExplicitlySeparated()
+    public void ProductContractsAreNotExportedByTheSdk()
     {
         var actual = typeof(IPlugin).Assembly
             .GetExportedTypes()
-            .Where(type => string.Equals(
-                type.Namespace,
-                "ToolBox.PluginSdk.Experimental",
-                StringComparison.Ordinal))
+            .Where(type => string.Equals(type.Namespace, "ToolBox.PluginSdk.Experimental", StringComparison.Ordinal))
             .Select(type => type.FullName!)
             .OrderBy(name => name, StringComparer.Ordinal)
             .ToArray();
 
-        Assert.Equal(FrozenExperimentalTypeNames, actual);
+        Assert.Empty(actual);
     }
 
     [Fact]

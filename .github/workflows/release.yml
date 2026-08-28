@@ -42,8 +42,8 @@ jobs:
           $version = $env:RELEASE_TAG.TrimStart('v')
           $releaseAssets = @(
             "artifacts/release-validation/ToolBox-Host-$env:RELEASE_TAG-win-x64.exe"
-            "artifacts/release-validation/KeyboardMouse-$version.tpk"
-            "artifacts/release-validation/PhoneAudioRelay-$version.tpk"
+            "artifacts/release-validation/HelloPlugin-$version.tpk"
+            "artifacts/release-validation/ToolBox-PluginDevKit-$version.zip"
             "artifacts/release-validation/SHA256SUMS-$env:RELEASE_TAG.txt"
           )
 

@@ -4,7 +4,13 @@
 
 ## [Unreleased]
 
-暂无。
+### Changed
+
+- ToolBox Host 改为 Manifest 驱动的通用插件外壳，移除 Keyboard/Audio 产品专用页面、ViewModel 和注册器。
+- 动态插件统一通过 `ToolBox.PluginWorker` 进程外运行，安装后进入可管理状态，用户从通用卡片启用。
+- `ToolBox.PluginSdk` 可打包为 NuGet；新增 `HelloPlugin`、通用 `.tpk` 打包脚本和 Sample 验证入口。
+- KeyboardMouse 和 AudioRelay 从主仓库迁移到独立的 `ToolBox-Plugins` 仓库，插件通过 GitHub Release 交换 `.tpk`。
+- 历史维护资料迁移到 `docs/maintainer/`，第三方开发文档集中到 `docs/`。
 
 ## [0.1.1] - 2026-08-28
 
