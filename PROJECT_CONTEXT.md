@@ -6,8 +6,8 @@
 
 ```text
 Checkpoint date: 2026-08-28
-Current phase: ToolBox v0.1.1 release candidate verified locally
-Next phase: Release pull request, main CI, tag workflow, and published-asset verification
+Current phase: ToolBox v0.1.1 release candidate verified in pull request #6
+Next phase: Merge, main CI, tag workflow, and published-asset verification
 Plugin API: Frozen v1
 Production updater: Deferred to v0.2
 ```
@@ -41,6 +41,7 @@ Detailed milestone failures and reusable lessons are recorded in [`PROJECT_RETRO
 - The `v0.1.1` release candidate consistently versions Host, Core, Worker, PluginSdk, Keyboard & Mouse, Phone Audio Relay, and both source Manifests as `0.1.1`; historical compatibility fixtures retain their intentional versions.
 - Two independent local `v0.1.1` release validations each passed a warnings-as-errors build, all `86/86` tests, self-contained `win-x64` Host publish, both product package builds, exact package/payload/hash checks, and release checksum verification. All four candidate artifacts were byte-identical across the two runs.
 - Release tooling now explicitly loads ZIP assemblies for cold Windows PowerShell 5.1 processes, computes stream hashes through compatible SHA-256 APIs, and rejects mismatched production project or Manifest versions before building.
+- Pull request [#6](https://github.com/OQTQO/ToolBox/pull/6) run [`33149697737`](https://github.com/OQTQO/ToolBox/actions/runs/33149697737) passed the unified release gate at commit `fde378495ea26d933ed644144677685018947179`.
 
 - .NET SDK `8.0.424` is installed.
 - `ToolBox.sln` restores successfully.

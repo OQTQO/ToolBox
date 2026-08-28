@@ -333,4 +333,4 @@ Correction: use `SHA256.Create().ComputeHash(stream)` and stable `BitConverter` 
 
 ### Remaining boundary
 
-The local `v0.1.1` release candidate is complete. Pull-request CI, merge and post-merge main CI, creation of the immutable `v0.1.1` tag, tag-triggered Release workflow, and published-asset/checksum verification remain before the release is complete.
+The local `v0.1.1` release candidate is complete, and pull request [#6](https://github.com/OQTQO/ToolBox/pull/6) run [`33149697737`](https://github.com/OQTQO/ToolBox/actions/runs/33149697737) passed at `fde378495ea26d933ed644144677685018947179`. Merge and post-merge main CI, creation of the immutable `v0.1.1` tag, tag-triggered Release workflow, and published-asset/checksum verification remain before the release is complete.
