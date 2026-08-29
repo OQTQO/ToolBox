@@ -10,7 +10,7 @@ powershell -ExecutionPolicy Bypass -File .\tools\Validate-PluginSamples.ps1
 
 该脚本验证 `ToolBox.PluginSdk` 包、NuGet-only HelloPlugin、Manifest、runtime 文件和 `.tpk`。
 
-ToolBox 的 Release 另外包含 `ToolBox-PluginDevKit-<version>.zip`，供插件仓库和朋友的独立插件项目使用。KeyboardMouse、AudioRelay 等具体插件由 `ToolBox-Plugins` 仓库单独构建和发布。
+ToolBox 的 Release 提供 `ToolBox-v<version>-win-x64.zip`，其中必须同时包含 `ToolBox.Host.exe` 和 `ToolBox.PluginWorker.exe`；用户应解压整个 ZIP 后运行 Host。Release 另外包含 `ToolBox-PluginDevKit-<version>.zip`，供插件仓库和朋友的独立插件项目使用。KeyboardMouse、AudioRelay 等具体插件由 `ToolBox-Plugins` 仓库单独构建和发布。
 
 ## 通用插件包
 

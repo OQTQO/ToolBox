@@ -12,6 +12,21 @@
 - KeyboardMouse 和 AudioRelay 从主仓库迁移到独立的 `ToolBox-Plugins` 仓库，插件通过 GitHub Release 交换 `.tpk`。
 - 历史维护资料迁移到 `docs/maintainer/`，第三方开发文档集中到 `docs/`。
 
+## [0.2.1] - 2026-08-29
+
+### Fixed
+
+- 安装、更新和卸载插件后的工作区刷新统一回到 WPF UI 调度线程，避免 `CollectionView` 跨线程异常。
+- 卸载完成后立即重新扫描动态插件目录，已卸载插件不再残留在设置页和工作区列表。
+- Release 改为发布同时包含 Host 与 `ToolBox.PluginWorker.exe` 的 Windows x64 ZIP，修复启用插件时找不到 Worker 的问题。
+
+### Release assets
+
+- `ToolBox-v0.2.1-win-x64.zip`：解压后同时运行 Host 与 Worker 所需的完整程序包。
+- `HelloPlugin-0.2.1.tpk`：通用 Sample 插件包。
+- `ToolBox-PluginDevKit-0.2.1.zip`：SDK NuGet、开发文档和打包工具。
+- `SHA256SUMS-v0.2.1.txt`：发布附件完整性校验清单。
+
 ## [0.1.1] - 2026-08-28
 
 ### Changed

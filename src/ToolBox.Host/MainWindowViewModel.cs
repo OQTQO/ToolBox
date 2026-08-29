@@ -381,6 +381,14 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged, IDisposable
 
     private void RefreshPluginWorkspaces()
     {
+        // Package installation/uninstallation completes on a thread-pool
+        // continuation. ObservableCollection is bound to WPF, so all catalog
+        // replacement must be marshalled back to the dispatcher thread.
+        _uiDispatcher.Dispatch(RefreshPluginWorkspacesCore);
+    }
+
+    private void RefreshPluginWorkspacesCore()
+    {
         if (_disposed)
         {
             return;
@@ -492,14 +500,17 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged, IDisposable
 
     private void OnLanguageChanged(object? sender, EventArgs e)
     {
-        OnPropertyChanged(nameof(WindowTitle));
-        OnPropertyChanged(nameof(CurrentLanguageLabel));
-        OnPropertyChanged(nameof(InstalledPluginCountLabel));
-        OnPropertyChanged(nameof(PluginCountSummaryLabel));
-        OnPropertyChanged(nameof(StatusLabel));
-        OnPropertyChanged(nameof(StatusDescription));
-        OnPropertyChanged(nameof(StageLabel));
-        OnPropertyChanged(nameof(EventCountLabel));
+        _uiDispatcher.Dispatch(() =>
+        {
+            OnPropertyChanged(nameof(WindowTitle));
+            OnPropertyChanged(nameof(CurrentLanguageLabel));
+            OnPropertyChanged(nameof(InstalledPluginCountLabel));
+            OnPropertyChanged(nameof(PluginCountSummaryLabel));
+            OnPropertyChanged(nameof(StatusLabel));
+            OnPropertyChanged(nameof(StatusDescription));
+            OnPropertyChanged(nameof(StageLabel));
+            OnPropertyChanged(nameof(EventCountLabel));
+        });
     }
 
     private void NotifyPageProperties()
@@ -532,11 +543,19 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged, IDisposable
 
     private void OnSettingsChanged(object? sender, EventArgs e)
     {
-        OnPropertyChanged(nameof(CloseToTray));
-        OnPropertyChanged(nameof(CloseDirectly));
+        _uiDispatcher.Dispatch(() =>
+        {
+            OnPropertyChanged(nameof(CloseToTray));
+            OnPropertyChanged(nameof(CloseDirectly));
+        });
     }
 
     private void RefreshWorkspaceCollections()
+    {
+        _uiDispatcher.Dispatch(RefreshWorkspaceCollectionsCore);
+    }
+
+    private void RefreshWorkspaceCollectionsCore()
     {
         ReplaceCollection(_installedPluginWorkspaces, _pluginWorkspaces.Where(workspace => workspace.IsInstalled));
         ReplaceCollection(_openedPluginWorkspaces, _pluginWorkspaces.Where(workspace => workspace.IsOpened));
@@ -591,9 +610,17 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged, IDisposable
 
     private void SetPluginManagerError(string? message)
     {
-        _pluginManagerError = message;
-        OnPropertyChanged(nameof(HasPluginManagerError));
-        OnPropertyChanged(nameof(PluginManagerError));
+        _uiDispatcher.Dispatch(() =>
+        {
+            if (_disposed)
+            {
+                return;
+            }
+
+            _pluginManagerError = message;
+            OnPropertyChanged(nameof(HasPluginManagerError));
+            OnPropertyChanged(nameof(PluginManagerError));
+        });
     }
 
     private void RecordPackageInstallFailure(Exception exception)

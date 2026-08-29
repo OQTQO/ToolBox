@@ -22,7 +22,7 @@ ToolBox 是一个面向 Windows 的通用插件外壳。Host 不包含具体产�
 
 ## 用户使用
 
-在设置页选择本地 `.tpk`，然后在插件状态卡片中启用、停用或卸载。插件用户数据与运行文件分离，版本回退会保留现有 Config/State 行为。
+下载 GitHub Release 中的 `ToolBox-vX.Y.Z-win-x64.zip`，解压后运行其中的 `ToolBox.Host.exe`。Host 和 `ToolBox.PluginWorker.exe` 必须保留在同一目录。然后在设置页选择本地 `.tpk`，再在插件状态卡片中启用、停用或卸载。插件用户数据与运行文件分离，版本回退会保留现有 Config/State 行为。
 
 ## 第三方开发
 

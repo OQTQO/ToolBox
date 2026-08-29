@@ -60,6 +60,50 @@ public sealed class DynamicPluginWorkspaceTests
     }
 
     [Fact]
+    public async Task PackageOperationsRefreshWorkspaceCollectionsOnTheUiDispatcher()
+    {
+        using var fixture = new Fixture();
+        var packagePath = fixture.CreatePackage("com.example.dispatch", "1.0.0", "Dispatch Sample");
+        using var installer = new PluginPackageInstaller(fixture.PluginsRoot, fixture.DataRoot);
+        var settings = new HostSettingsService(fixture.SettingsPath);
+        var localization = new LocalizationService(settings);
+        await using var logger = new StructuredLogger(
+            new LoggerOptions { DirectoryPath = fixture.LogsRoot },
+            "session",
+            "0.2.0");
+        var dispatcher = new QueuedHostUiDispatcher();
+        using var viewModel = new MainWindowViewModel(
+            new HostDiagnostics("launch", "session", "0.2.0"),
+            logger,
+            new InstalledPluginCatalog(installer),
+            installer,
+            new OutOfProcessPluginRuntime(Path.Combine(AppContext.BaseDirectory, "ToolBox.PluginWorker.exe")),
+            localization,
+            settings,
+            dispatcher);
+
+        dispatcher.Drain();
+        Assert.Empty(viewModel.PluginWorkspaces);
+
+        await viewModel.InstallPackageAsync(packagePath);
+
+        // The package operation resumes off the WPF thread. The collection
+        // must remain untouched until its queued UI refresh is processed.
+        Assert.Empty(viewModel.PluginWorkspaces);
+        dispatcher.Drain();
+        var workspace = Assert.Single(viewModel.PluginWorkspaces);
+
+        await viewModel.UninstallWorkspaceAsync(workspace);
+
+        Assert.Single(viewModel.PluginWorkspaces);
+        dispatcher.Drain();
+        Assert.Empty(viewModel.PluginWorkspaces);
+        Assert.Empty(viewModel.InstalledPluginWorkspaces);
+        Assert.Empty(installer.GetInstalledVersions(workspace.PluginId));
+        Assert.Null(installer.GetActiveVersionDirectory(workspace.PluginId));
+    }
+
+    [Fact]
     public async Task InvalidStateAndStagingDirectoriesDoNotPreventHostStartup()
     {
         using var fixture = new Fixture();
@@ -242,6 +286,51 @@ public sealed class DynamicPluginWorkspaceTests
             if (Directory.Exists(_root))
             {
                 Directory.Delete(_root, recursive: true);
+            }
+        }
+    }
+
+    private sealed class QueuedHostUiDispatcher : IHostUiDispatcher
+    {
+        private readonly Queue<Action> _pending = new();
+        private int _uiThreadId;
+
+        public void Dispatch(Action action)
+        {
+            ArgumentNullException.ThrowIfNull(action);
+
+            if (_uiThreadId == Environment.CurrentManagedThreadId)
+            {
+                action();
+                return;
+            }
+
+            lock (_pending)
+            {
+                _pending.Enqueue(action);
+            }
+        }
+
+        public void Drain()
+        {
+            _uiThreadId = Environment.CurrentManagedThreadId;
+            while (true)
+            {
+                Action? action = null;
+                lock (_pending)
+                {
+                    if (_pending.Count > 0)
+                    {
+                        action = _pending.Dequeue();
+                    }
+                }
+
+                if (action is null)
+                {
+                    return;
+                }
+
+                action();
             }
         }
     }

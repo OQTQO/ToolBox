@@ -3,11 +3,11 @@
     <TargetFramework>net8.0</TargetFramework>
     <RootNamespace>HelloPlugin</RootNamespace>
     <AssemblyName>HelloPlugin</AssemblyName>
-    <Version>0.2.0</Version>
+    <Version>0.2.1</Version>
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="ToolBox.PluginSdk" Version="0.2.0" />
+    <PackageReference Include="ToolBox.PluginSdk" Version="0.2.1" />
   </ItemGroup>
 
   <ItemGroup>

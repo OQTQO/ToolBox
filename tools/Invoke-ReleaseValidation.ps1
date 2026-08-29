@@ -29,7 +29,9 @@ $OutputDirectory = if ([string]::IsNullOrWhiteSpace($OutputDirectory)) {
 $outputRoot = [System.IO.Path]::GetFullPath($OutputDirectory)
 $stagingRoot = Join-Path ([System.IO.Path]::GetTempPath()) "ToolBoxReleaseValidation\$([Guid]::NewGuid().ToString('N'))"
 $publishDirectory = Join-Path $stagingRoot 'publish'
+$workerPublishDirectory = Join-Path $stagingRoot 'worker-publish'
 $assetDirectory = Join-Path $stagingRoot 'assets'
+$bundleDirectory = Join-Path $stagingRoot 'toolbox-bundle'
 $devKitDirectory = Join-Path $stagingRoot 'devkit'
 $sampleFeedDirectory = Join-Path $stagingRoot 'sdk-feed'
 $samplePackageCache = Join-Path $stagingRoot 'nuget-cache'
@@ -210,7 +212,7 @@ function Write-AndValidateChecksums {
 if ([string]::IsNullOrWhiteSpace($Version)) { $Version = Get-ProjectVersion -ProjectPath $hostProjectPath }
 
 $releaseTag = "v$Version"
-$hostAssetName = "ToolBox-Host-$releaseTag-win-x64.exe"
+$toolBoxAssetName = "ToolBox-$releaseTag-win-x64.zip"
 $helloAssetName = "HelloPlugin-$Version.tpk"
 $devKitAssetName = "ToolBox-PluginDevKit-$Version.zip"
 $checksumAssetName = "SHA256SUMS-$releaseTag.txt"
@@ -222,7 +224,7 @@ $helloManifest = Get-Content -LiteralPath $helloManifestPath -Raw | ConvertFrom-
 if ([string]$helloManifest.version -cne $Version) { throw "HelloPlugin manifest does not declare version '$Version'." }
 
 try {
-    New-Item -ItemType Directory -Path $publishDirectory, $assetDirectory, $sampleFeedDirectory, $samplePackageCache -Force | Out-Null
+    New-Item -ItemType Directory -Path $publishDirectory, $workerPublishDirectory, $assetDirectory, $bundleDirectory, $sampleFeedDirectory, $samplePackageCache -Force | Out-Null
     @"
 <?xml version="1.0" encoding="utf-8"?>
 <configuration>
@@ -244,7 +246,9 @@ try {
         Invoke-CheckedCommand dotnet @('restore', $helloProjectPath, '--configfile', $sampleNuGetConfigPath, "-p:RestorePackagesPath=$samplePackageCache")
         Invoke-CheckedCommand dotnet @('build', $helloProjectPath, '--configuration', $Configuration, '--no-restore', "-p:RestorePackagesPath=$samplePackageCache")
         Invoke-CheckedCommand dotnet @('restore', $hostProjectPath, '--runtime', 'win-x64', "-p:Version=$Version")
+        Invoke-CheckedCommand dotnet @('restore', $pluginWorkerProjectPath, '--runtime', 'win-x64', "-p:Version=$Version")
         Invoke-CheckedCommand dotnet @('publish', $hostProjectPath, '--configuration', $Configuration, '--runtime', 'win-x64', '--self-contained', 'true', '--no-restore', '-p:PublishSingleFile=true', '-p:IncludeNativeLibrariesForSelfExtract=true', '-p:DebugType=None', "-p:Version=$Version", '-p:ContinuousIntegrationBuild=true', '-o', $publishDirectory)
+        Invoke-CheckedCommand dotnet @('publish', $pluginWorkerProjectPath, '--configuration', $Configuration, '--runtime', 'win-x64', '--self-contained', 'true', '--no-restore', '-p:PublishSingleFile=true', '-p:IncludeNativeLibrariesForSelfExtract=true', '-p:DebugType=None', "-p:Version=$Version", '-p:ContinuousIntegrationBuild=true', '-o', $workerPublishDirectory)
     }
     finally { Pop-Location }
 
@@ -253,6 +257,11 @@ try {
 
     $publishedHostPath = Join-Path $publishDirectory 'ToolBox.Host.exe'
     if (-not (Test-Path -LiteralPath $publishedHostPath -PathType Leaf)) { throw "Published Host executable is missing." }
+    $publishedWorkerPath = Join-Path $workerPublishDirectory 'ToolBox.PluginWorker.exe'
+    if (-not (Test-Path -LiteralPath $publishedWorkerPath -PathType Leaf)) { throw "Published PluginWorker executable is missing." }
+
+    Copy-Item -LiteralPath $publishedHostPath -Destination (Join-Path $bundleDirectory 'ToolBox.Host.exe')
+    Copy-Item -LiteralPath $publishedWorkerPath -Destination (Join-Path $bundleDirectory 'ToolBox.PluginWorker.exe')
 
     New-Item -ItemType Directory -Path (Join-Path $devKitDirectory 'sdk'), (Join-Path $devKitDirectory 'tools'), (Join-Path $devKitDirectory 'docs'), (Join-Path $devKitDirectory 'samples\HelloPlugin') -Force | Out-Null
     Copy-Item -LiteralPath (Join-Path $sampleFeedDirectory "ToolBox.PluginSdk.$Version.nupkg") -Destination (Join-Path $devKitDirectory 'sdk')
@@ -273,15 +282,15 @@ try {
     $devKitPath = Join-Path $assetDirectory $devKitAssetName
     New-DeterministicZipArchive -SourceDirectory $devKitDirectory -DestinationPath $devKitPath
 
-    $hostAssetPath = Join-Path $assetDirectory $hostAssetName
+    $toolBoxAssetPath = Join-Path $assetDirectory $toolBoxAssetName
     $helloAssetPath = Join-Path $assetDirectory $helloAssetName
     $checksumAssetPath = Join-Path $assetDirectory $checksumAssetName
-    Copy-Item -LiteralPath $publishedHostPath -Destination $hostAssetPath
+    New-DeterministicZipArchive -SourceDirectory $bundleDirectory -DestinationPath $toolBoxAssetPath
     Assert-PluginPackage -PackagePath $helloAssetPath -ExpectedPluginId 'com.toolbox.hello' -ExpectedVersion $Version -ExpectedEntries (Get-ExpectedPackageEntries -RuntimeDirectory (Join-Path $repositoryRoot "samples\HelloPlugin\bin\$Configuration\net8.0"))
 
-    $releaseArtifactPaths = @($hostAssetPath, $helloAssetPath, $devKitPath)
+    $releaseArtifactPaths = @($toolBoxAssetPath, $helloAssetPath, $devKitPath)
     Write-AndValidateChecksums -ArtifactPaths $releaseArtifactPaths -ChecksumPath $checksumAssetPath
-    Assert-ExactSet -Actual @(Get-ChildItem -LiteralPath $assetDirectory -File | ForEach-Object { $_.Name }) -Expected @($hostAssetName, $helloAssetName, $devKitAssetName, $checksumAssetName) -Label 'Release artifact files'
+    Assert-ExactSet -Actual @(Get-ChildItem -LiteralPath $assetDirectory -File | ForEach-Object { $_.Name }) -Expected @($toolBoxAssetName, $helloAssetName, $devKitAssetName, $checksumAssetName) -Label 'Release artifact files'
 
     New-Item -ItemType Directory -Path $outputRoot -Force | Out-Null
     foreach ($assetPath in @($releaseArtifactPaths + $checksumAssetPath)) { Copy-Item -LiteralPath $assetPath -Destination (Join-Path $outputRoot (Split-Path -Leaf $assetPath)) -Force }
