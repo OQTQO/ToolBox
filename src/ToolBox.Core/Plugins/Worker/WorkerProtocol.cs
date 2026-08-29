@@ -106,6 +106,36 @@ public static class WorkerProtocol
             Payload: "alive");
     }
 
+    public static string SerializePayload<T>(T value)
+    {
+        return JsonSerializer.Serialize(value, JsonOptions);
+    }
+
+    public static T DeserializePayload<T>(string? payload)
+    {
+        if (string.IsNullOrWhiteSpace(payload))
+        {
+            throw new WorkerProtocolException(
+                "WORKER_PAYLOAD_EMPTY",
+                "The Worker control message did not contain the required payload.");
+        }
+
+        try
+        {
+            return JsonSerializer.Deserialize<T>(payload, JsonOptions)
+                ?? throw new WorkerProtocolException(
+                    "WORKER_PAYLOAD_EMPTY",
+                    "The Worker control message returned an empty payload.");
+        }
+        catch (JsonException exception)
+        {
+            throw new WorkerProtocolException(
+                "WORKER_PAYLOAD_INVALID",
+                "The Worker control message returned an invalid payload.",
+                exception);
+        }
+    }
+
     public static async ValueTask WriteAsync(
         StreamWriter writer,
         WorkerMessage message,

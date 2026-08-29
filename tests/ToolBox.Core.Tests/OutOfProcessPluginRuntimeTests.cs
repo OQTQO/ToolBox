@@ -42,6 +42,37 @@ public sealed class OutOfProcessPluginRuntimeTests
     }
 
     [Fact]
+    public async Task WorkerExposesOptionalPluginControlsWithoutLoadingPluginIntoTheHost()
+    {
+        var pluginDirectory = PrepareWorkerChildPlugin();
+
+        try
+        {
+            var runtime = new OutOfProcessPluginRuntime(GetWorkerPath());
+            await using var session = await runtime.StartAsync(pluginDirectory);
+            await session.StartPluginAsync();
+
+            var initial = await session.GetUiSnapshotAsync();
+            Assert.NotNull(initial);
+            Assert.Contains(initial!.Actions, action => action.Id == "touch");
+            Assert.Equal("0", Assert.Single(initial.Values).Value);
+
+            var afterAction = await session.ExecuteUiActionAsync("touch");
+            Assert.Equal("1", Assert.Single(afterAction.Values).Value);
+
+            var afterInput = await session.SendUiInputAsync(
+                new PluginInputEvent(PluginInputEventType.KeyDown, Key: "A"));
+            Assert.Equal("1", Assert.Single(afterInput.Values).Value);
+
+            await session.StopAsync();
+        }
+        finally
+        {
+            DeleteDirectoryWithRetry(pluginDirectory);
+        }
+    }
+
+    [Fact]
     public async Task WorkerCrashIsIsolatedAndJobObjectCleansChildProcess()
     {
         var pluginDirectory = PrepareWorkerChildPlugin();

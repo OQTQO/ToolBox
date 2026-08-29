@@ -61,6 +61,50 @@
                         </StackPanel>
                     </Border>
 
+                    <Border Margin="0,12,0,0" Padding="24" Style="{StaticResource CardStyle}" Visibility="{Binding HasPluginUi, Converter={StaticResource BooleanToVisibilityConverter}}">
+                        <StackPanel>
+                            <TextBlock Style="{StaticResource SectionTitleText}" Text="{DynamicResource PluginControls}" />
+                            <TextBlock Margin="0,7,0,0" FontSize="11" Foreground="{StaticResource MutedTextBrush}" Text="{Binding PluginUiStatusMessage}" TextWrapping="Wrap" />
+
+                            <Border Margin="0,18,0,0" Padding="18" MinHeight="170" Background="{StaticResource SurfaceRaisedBrush}" BorderBrush="{StaticResource LineBrush}" BorderThickness="1" CornerRadius="9" Focusable="True" IsEnabled="{Binding IsPluginInputEnabled}" Visibility="{Binding HasInputSurface, Converter={StaticResource BooleanToVisibilityConverter}}" KeyDown="OnPluginInputKeyDown" KeyUp="OnPluginInputKeyUp" MouseDown="OnPluginInputMouseDown" MouseUp="OnPluginInputMouseUp">
+                                <StackPanel>
+                                    <TextBlock Style="{StaticResource EyebrowText}" Text="{Binding InputSurface.Label}" />
+                                    <TextBlock Margin="0,12,0,0" FontFamily="{StaticResource DisplayFont}" FontSize="21" FontWeight="SemiBold" Text="{Binding PluginUiStatusMessage}" TextWrapping="Wrap" />
+                                    <TextBlock Margin="0,8,0,0" FontSize="11" Foreground="{StaticResource MutedTextBrush}" Text="{Binding InputSurface.Description}" TextWrapping="Wrap" />
+                                </StackPanel>
+                            </Border>
+
+                            <ItemsControl Margin="0,17,0,0" ItemsSource="{Binding UiValues}" Visibility="{Binding HasUiValues, Converter={StaticResource BooleanToVisibilityConverter}}">
+                                <ItemsControl.ItemsPanel><ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Border Margin="0,0,10,8" Padding="13" MinWidth="125" Background="{StaticResource SurfaceRaisedBrush}" BorderBrush="{StaticResource LineBrush}" BorderThickness="1" CornerRadius="7">
+                                            <StackPanel><TextBlock FontSize="9" Foreground="{StaticResource FaintTextBrush}" Text="{Binding Label}" /><TextBlock Margin="0,6,0,0" FontSize="16" FontWeight="SemiBold" Text="{Binding Value}" TextWrapping="Wrap" /></StackPanel>
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+
+                            <ItemsControl Margin="0,9,0,0" ItemsSource="{Binding UiActions}" Visibility="{Binding HasUiActions, Converter={StaticResource BooleanToVisibilityConverter}}">
+                                <ItemsControl.ItemsPanel><ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Button Margin="0,0,9,8" Content="{Binding Label}" IsEnabled="{Binding IsEnabled}" Click="OnPluginUiActionClick" Style="{StaticResource AccentButtonStyle}" ToolTip="{Binding Description}" />
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+
+                            <TextBlock Margin="0,9,0,0" FontSize="11" Foreground="{StaticResource RedBrush}" Text="{Binding PluginUiErrorMessage}" TextWrapping="Wrap" Visibility="{Binding HasPluginUiError, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                        </StackPanel>
+                    </Border>
+
+                    <Border Margin="0,12,0,0" Padding="24" Style="{StaticResource CardStyle}" Visibility="{Binding HasPluginUiUnavailable, Converter={StaticResource BooleanToVisibilityConverter}}">
+                        <StackPanel>
+                            <TextBlock Style="{StaticResource SectionTitleText}" Text="{DynamicResource PluginNoControls}" />
+                            <TextBlock Margin="0,7,0,0" FontSize="11" Foreground="{StaticResource MutedTextBrush}" Text="{DynamicResource PluginNoControlsDescription}" TextWrapping="Wrap" />
+                        </StackPanel>
+                    </Border>
+
                     <Border Margin="0,12,0,0" Padding="18" Style="{StaticResource CardStyle}">
                         <StackPanel>
                             <TextBlock Style="{StaticResource SectionTitleText}" Text="{DynamicResource PluginHostBoundary}" />

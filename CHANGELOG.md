@@ -12,6 +12,14 @@
 - KeyboardMouse 和 AudioRelay 从主仓库迁移到独立的 `ToolBox-Plugins` 仓库，插件通过 GitHub Release 交换 `.tpk`。
 - 历史维护资料迁移到 `docs/maintainer/`，第三方开发文档集中到 `docs/`。
 
+## [0.2.2] - 2026-08-29
+
+### Added
+
+- 新增可选的 `IPluginUiProvider`：插件可以声明通用状态、数据项、操作按钮和键鼠输入区域。
+- Host 通过 Worker 转发插件操作，不再需要为具体插件添加 WPF 页面或 Host 类型引用。
+- HelloPlugin、KeyboardMouse 和 AudioRelay 提供可操作的通用工作区示例。
+
 ## [0.2.1] - 2026-08-29
 
 ### Fixed

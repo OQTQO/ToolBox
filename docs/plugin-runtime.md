@@ -4,7 +4,7 @@
 
 主要状态包括：`Disabled`、`Starting`、`Running`、`Stopping`、`DisableFailed`、`RestartRequired`、`Faulted` 和 `Quarantined`。停止失败保留故障状态，不会伪装成 `Disabled`。
 
-插件程序集、依赖和后台任务都在独立 Worker 进程内。Host 只持有 Manifest、安装版本、生命周期状态和错误事件；首版没有插件自定义 WPF 页面、声明式设置或插件命令。
+插件程序集、依赖和后台任务都在独立 Worker 进程内。Host 不加载插件类型，也不接受插件注入 WPF 页面；它只渲染 SDK 定义的通用 `IPluginUiProvider` 数据。插件可选提供状态值、按钮和键鼠输入区域，按钮/输入通过 Worker 转发，返回的新快照再刷新工作区。未提供 `IPluginUiProvider` 的插件仍可作为纯后台插件运行。
 
 `IPluginContext.LifetimeScope` 的 Token 会在插件卸载时取消。通过 `Track(Task)` 追踪后台任务，通过 `Register(IDisposable)` 或 `Register(IAsyncDisposable)` 注册资源释放。独占资源使用 `IResourceManager.Acquire` 获取 `IResourceLease`；服务使用 `IServiceBroker` 获取 `IServiceLease<T>`。
 

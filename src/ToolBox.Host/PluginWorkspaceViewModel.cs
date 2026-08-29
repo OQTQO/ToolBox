@@ -1,3 +1,4 @@
+using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
 using System.Windows.Media;
@@ -34,11 +35,17 @@ public sealed class PluginWorkspaceViewModel : INotifyPropertyChanged, IDisposab
     private readonly IHostUiDispatcher _uiDispatcher;
     private readonly Geometry _iconGeometry = GenericIcon;
     private readonly bool _isInstalled = true;
+    private readonly ObservableCollection<PluginUiActionViewModel> _uiActions = [];
+    private readonly ObservableCollection<PluginUiValueViewModel> _uiValues = [];
+    private readonly SemaphoreSlim _uiOperationGate = new(1, 1);
     private OutOfProcessPluginSession? _session;
     private PluginState _state;
+    private PluginUiSnapshot? _uiSnapshot;
     private string? _errorMessage;
+    private string? _uiErrorMessage;
     private bool _isSelected;
     private bool _operationInProgress;
+    private bool _uiOperationInProgress;
     private bool _disposed;
 
     internal PluginWorkspaceViewModel(
@@ -65,6 +72,9 @@ public sealed class PluginWorkspaceViewModel : INotifyPropertyChanged, IDisposab
 
         _localization.LanguageChanged += OnLanguageChanged;
         _settings.Changed += OnSettingsChanged;
+
+        UiActions = new ReadOnlyObservableCollection<PluginUiActionViewModel>(_uiActions);
+        UiValues = new ReadOnlyObservableCollection<PluginUiValueViewModel>(_uiValues);
     }
 
     public event PropertyChangedEventHandler? PropertyChanged;
@@ -86,6 +96,36 @@ public sealed class PluginWorkspaceViewModel : INotifyPropertyChanged, IDisposab
     public bool IsInstalled => _isInstalled;
 
     public bool IsOpened => _settings.IsPluginOpened(PluginId);
+
+    public ReadOnlyObservableCollection<PluginUiActionViewModel> UiActions { get; }
+
+    public ReadOnlyObservableCollection<PluginUiValueViewModel> UiValues { get; }
+
+    public PluginInputSurface? InputSurface => _uiSnapshot?.InputSurface;
+
+    public bool HasPluginUi => IsRuntimeEnabled && _uiSnapshot is not null;
+
+    public bool HasPluginUiUnavailable => IsRuntimeEnabled && _uiSnapshot is null;
+
+    public bool HasUiActions => HasPluginUi && UiActions.Count > 0;
+
+    public bool HasUiValues => HasPluginUi && UiValues.Count > 0;
+
+    public bool HasInputSurface => HasPluginUi && InputSurface is not null;
+
+    public string PluginUiStatusMessage => _uiSnapshot?.StatusMessage ?? string.Empty;
+
+    public bool IsPluginUiActionEnabled => IsRuntimeEnabled
+        && !_operationInProgress
+        && !_uiOperationInProgress;
+
+    public bool IsPluginInputEnabled => IsRuntimeEnabled
+        && !_operationInProgress
+        && !_uiOperationInProgress;
+
+    public string PluginUiErrorMessage => _uiErrorMessage ?? string.Empty;
+
+    public bool HasPluginUiError => !string.IsNullOrWhiteSpace(_uiErrorMessage);
 
     public bool IsRuntimeEnabled => _state.LifecycleState == PluginLifecycleState.Running;
 
@@ -115,6 +155,7 @@ public sealed class PluginWorkspaceViewModel : INotifyPropertyChanged, IDisposab
     public bool SupportsOutOfProcess => Manifest.Runtime.SupportedModes.Contains(PluginExecutionMode.OutOfProcess);
 
     public bool IsRuntimeActionEnabled => !_operationInProgress
+        && !_uiOperationInProgress
         && (LifecycleState is PluginLifecycleState.Disabled or PluginLifecycleState.Running)
         && SupportsOutOfProcess;
 
@@ -123,6 +164,7 @@ public sealed class PluginWorkspaceViewModel : INotifyPropertyChanged, IDisposab
         : _localization["EnablePlugin"];
 
     public bool IsInstallEnabled => !_operationInProgress
+        && !_uiOperationInProgress
         && LifecycleState is not PluginLifecycleState.Running
         and not PluginLifecycleState.Starting
         and not PluginLifecycleState.Stopping;
@@ -246,6 +288,8 @@ public sealed class PluginWorkspaceViewModel : INotifyPropertyChanged, IDisposab
         {
             _session = null;
         }
+
+        _uiOperationGate.Dispose();
     }
 
     private async Task<bool> EnableAsync()
@@ -277,6 +321,7 @@ public sealed class PluginWorkspaceViewModel : INotifyPropertyChanged, IDisposab
             RefreshState();
             _session = await _runtime.StartAsync(VersionDirectory).ConfigureAwait(false);
             await _session.StartPluginAsync().ConfigureAwait(false);
+            await RefreshUiAsync().ConfigureAwait(false);
             _state = _session.State;
             _logger.Log(
                 LogLevel.Information,
@@ -302,6 +347,8 @@ public sealed class PluginWorkspaceViewModel : INotifyPropertyChanged, IDisposab
 
                 _session = null;
             }
+
+            ApplyUiSnapshot(null);
 
             if (_state.LifecycleState == PluginLifecycleState.Starting)
             {
@@ -368,6 +415,7 @@ public sealed class PluginWorkspaceViewModel : INotifyPropertyChanged, IDisposab
             {
                 await _session.DisposeAsync().ConfigureAwait(false);
                 _session = null;
+                ApplyUiSnapshot(null);
             }
         }
         finally
@@ -395,6 +443,112 @@ public sealed class PluginWorkspaceViewModel : INotifyPropertyChanged, IDisposab
         RefreshState();
     }
 
+    internal Task ExecuteUiActionAsync(PluginUiActionViewModel action)
+    {
+        ArgumentNullException.ThrowIfNull(action);
+        return ExecuteUiActionCoreAsync(action);
+    }
+
+    internal Task HandleUiInputAsync(PluginInputEvent input)
+    {
+        ArgumentNullException.ThrowIfNull(input);
+        return HandleUiInputCoreAsync(input);
+    }
+
+    private async Task RefreshUiAsync()
+    {
+        var session = _session;
+        if (session is null)
+        {
+            ApplyUiSnapshot(null);
+            return;
+        }
+
+        try
+        {
+            ClearUiError();
+            ApplyUiSnapshot(await session.GetUiSnapshotAsync().ConfigureAwait(false));
+        }
+        catch (Exception exception)
+        {
+            SetUiError(exception);
+        }
+    }
+
+    private async Task ExecuteUiActionCoreAsync(PluginUiActionViewModel action)
+    {
+        if (!IsPluginUiActionEnabled || !action.Descriptor.IsEnabled)
+        {
+            return;
+        }
+
+        await _uiOperationGate.WaitAsync().ConfigureAwait(false);
+        var session = _session;
+        if (session is null || !IsRuntimeEnabled)
+        {
+            _uiOperationGate.Release();
+            return;
+        }
+
+        _uiOperationInProgress = true;
+        RefreshUiState();
+
+        try
+        {
+            ClearUiError();
+            var snapshot = await session.ExecuteUiActionAsync(
+                    action.Descriptor.Id,
+                    action.Descriptor.Argument)
+                .ConfigureAwait(false);
+            ApplyUiSnapshot(snapshot);
+        }
+        catch (Exception exception)
+        {
+            SetUiError(exception);
+        }
+        finally
+        {
+            _uiOperationInProgress = false;
+            RefreshUiState();
+            _uiOperationGate.Release();
+        }
+    }
+
+    private async Task HandleUiInputCoreAsync(PluginInputEvent input)
+    {
+        if (!IsPluginInputEnabled || InputSurface is null)
+        {
+            return;
+        }
+
+        await _uiOperationGate.WaitAsync().ConfigureAwait(false);
+        var session = _session;
+        if (session is null || !IsRuntimeEnabled)
+        {
+            _uiOperationGate.Release();
+            return;
+        }
+
+        _uiOperationInProgress = true;
+        RefreshUiState();
+
+        try
+        {
+            ClearUiError();
+            ApplyUiSnapshot(await session.SendUiInputAsync(input).ConfigureAwait(false));
+        }
+        catch (Exception exception)
+        {
+            SetUiError(exception);
+        }
+        finally
+        {
+            _uiOperationInProgress = false;
+            RefreshUiState();
+            _uiOperationGate.Release();
+        }
+    }
+
     private void SetError(Exception exception)
     {
         _errorMessage = exception.Message;
@@ -405,6 +559,28 @@ public sealed class PluginWorkspaceViewModel : INotifyPropertyChanged, IDisposab
     {
         _errorMessage = null;
         RefreshState();
+    }
+
+    private void SetUiError(Exception exception)
+    {
+        _uiErrorMessage = exception.Message;
+        _uiDispatcher.Dispatch(() =>
+        {
+            OnPropertyChanged(nameof(HasPluginUiError));
+            OnPropertyChanged(nameof(PluginUiErrorMessage));
+            RefreshUiStateCore();
+        });
+    }
+
+    private void ClearUiError()
+    {
+        _uiErrorMessage = null;
+        _uiDispatcher.Dispatch(() =>
+        {
+            OnPropertyChanged(nameof(HasPluginUiError));
+            OnPropertyChanged(nameof(PluginUiErrorMessage));
+            RefreshUiStateCore();
+        });
     }
 
     private void OnLanguageChanged(object? sender, EventArgs e)
@@ -447,7 +623,67 @@ public sealed class PluginWorkspaceViewModel : INotifyPropertyChanged, IDisposab
             OnPropertyChanged(nameof(ErrorMessage));
             OnPropertyChanged(nameof(RequiresHostRestart));
             OnPropertyChanged(nameof(OpenedStateLabel));
+            OnPropertyChanged(nameof(HasPluginUi));
+            OnPropertyChanged(nameof(HasPluginUiUnavailable));
+            OnPropertyChanged(nameof(HasUiActions));
+            OnPropertyChanged(nameof(HasUiValues));
+            OnPropertyChanged(nameof(HasInputSurface));
+            RefreshUiState();
         });
+    }
+
+    private void ApplyUiSnapshot(PluginUiSnapshot? snapshot)
+    {
+        _uiDispatcher.Dispatch(() =>
+        {
+            if (_disposed)
+            {
+                return;
+            }
+
+            _uiSnapshot = snapshot;
+            _uiActions.Clear();
+            _uiValues.Clear();
+
+            if (snapshot is not null)
+            {
+                foreach (var action in snapshot.Actions ?? Array.Empty<PluginUiAction>())
+                {
+                    _uiActions.Add(new PluginUiActionViewModel(this, action));
+                }
+
+                foreach (var value in snapshot.Values ?? Array.Empty<PluginUiValue>())
+                {
+                    _uiValues.Add(new PluginUiValueViewModel(value));
+                }
+            }
+
+            OnPropertyChanged(nameof(HasPluginUi));
+            OnPropertyChanged(nameof(HasPluginUiUnavailable));
+            OnPropertyChanged(nameof(HasUiActions));
+            OnPropertyChanged(nameof(HasUiValues));
+            OnPropertyChanged(nameof(HasInputSurface));
+            OnPropertyChanged(nameof(InputSurface));
+            OnPropertyChanged(nameof(PluginUiStatusMessage));
+            OnPropertyChanged(nameof(HasPluginUiError));
+            OnPropertyChanged(nameof(PluginUiErrorMessage));
+            RefreshUiState();
+        });
+    }
+
+    private void RefreshUiState()
+    {
+        _uiDispatcher.Dispatch(RefreshUiStateCore);
+    }
+
+    private void RefreshUiStateCore()
+    {
+        OnPropertyChanged(nameof(IsPluginUiActionEnabled));
+        OnPropertyChanged(nameof(IsPluginInputEnabled));
+        foreach (var action in _uiActions)
+        {
+            action.RefreshEnabled();
+        }
     }
 
     private void OnPropertyChanged([CallerMemberName] string? propertyName = null)
@@ -472,4 +708,53 @@ public sealed class PluginWorkspaceViewModel : INotifyPropertyChanged, IDisposab
         brush.Freeze();
         return brush;
     }
+}
+
+public sealed class PluginUiActionViewModel : INotifyPropertyChanged
+{
+    private readonly PluginWorkspaceViewModel _workspace;
+
+    internal PluginUiActionViewModel(
+        PluginWorkspaceViewModel workspace,
+        PluginUiAction descriptor)
+    {
+        _workspace = workspace ?? throw new ArgumentNullException(nameof(workspace));
+        Descriptor = descriptor ?? throw new ArgumentNullException(nameof(descriptor));
+    }
+
+    public event PropertyChangedEventHandler? PropertyChanged;
+
+    internal PluginUiAction Descriptor { get; }
+
+    public string Label => Descriptor.Label;
+
+    public string Description => Descriptor.Description ?? string.Empty;
+
+    public bool HasDescription => !string.IsNullOrWhiteSpace(Descriptor.Description);
+
+    public bool IsEnabled => Descriptor.IsEnabled && _workspace.IsPluginUiActionEnabled;
+
+    internal void RefreshEnabled()
+    {
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsEnabled)));
+    }
+
+    internal Task ExecuteAsync()
+    {
+        return _workspace.ExecuteUiActionAsync(this);
+    }
+}
+
+public sealed class PluginUiValueViewModel
+{
+    internal PluginUiValueViewModel(PluginUiValue value)
+    {
+        ArgumentNullException.ThrowIfNull(value);
+        Label = value.Label;
+        Value = value.Value;
+    }
+
+    public string Label { get; }
+
+    public string Value { get; }
 }

@@ -8,9 +8,11 @@ using System.Windows.Input;
 using System.Windows.Interop;
 using System.Windows.Media;
 using Microsoft.Win32;
+using ToolBox.PluginSdk;
 using Application = System.Windows.Application;
 using MessageBox = System.Windows.MessageBox;
 using OpenFileDialog = Microsoft.Win32.OpenFileDialog;
+using WpfKeyEventArgs = System.Windows.Input.KeyEventArgs;
 
 namespace ToolBox.Host;
 
@@ -294,6 +296,79 @@ public partial class MainWindow : Window
         {
             await viewModel.ToggleWorkspaceRuntimeAsync(workspace);
         }
+    }
+
+    private async void OnPluginUiActionClick(object sender, RoutedEventArgs e)
+    {
+        if (sender is FrameworkElement { DataContext: PluginUiActionViewModel action })
+        {
+            await action.ExecuteAsync();
+        }
+    }
+
+    private async void OnPluginInputKeyDown(object sender, WpfKeyEventArgs e)
+    {
+        if (sender is not FrameworkElement { DataContext: PluginWorkspaceViewModel workspace }
+            || workspace.InputSurface?.CaptureKeyboard != true)
+        {
+            return;
+        }
+
+        e.Handled = true;
+        var key = e.Key == Key.System ? e.SystemKey : e.Key;
+        await workspace.HandleUiInputAsync(new PluginInputEvent(
+            PluginInputEventType.KeyDown,
+            Key: key.ToString()));
+    }
+
+    private async void OnPluginInputKeyUp(object sender, WpfKeyEventArgs e)
+    {
+        if (sender is not FrameworkElement { DataContext: PluginWorkspaceViewModel workspace }
+            || workspace.InputSurface?.CaptureKeyboard != true)
+        {
+            return;
+        }
+
+        e.Handled = true;
+        var key = e.Key == Key.System ? e.SystemKey : e.Key;
+        await workspace.HandleUiInputAsync(new PluginInputEvent(
+            PluginInputEventType.KeyUp,
+            Key: key.ToString()));
+    }
+
+    private async void OnPluginInputMouseDown(object sender, MouseButtonEventArgs e)
+    {
+        if (sender is not FrameworkElement { DataContext: PluginWorkspaceViewModel workspace } surface
+            || workspace.InputSurface?.CaptureMouse != true)
+        {
+            return;
+        }
+
+        Keyboard.Focus(surface);
+        e.Handled = true;
+        var position = e.GetPosition(surface);
+        await workspace.HandleUiInputAsync(new PluginInputEvent(
+            PluginInputEventType.MouseDown,
+            MouseButton: e.ChangedButton.ToString(),
+            X: (int)Math.Round(position.X),
+            Y: (int)Math.Round(position.Y)));
+    }
+
+    private async void OnPluginInputMouseUp(object sender, MouseButtonEventArgs e)
+    {
+        if (sender is not FrameworkElement { DataContext: PluginWorkspaceViewModel workspace } surface
+            || workspace.InputSurface?.CaptureMouse != true)
+        {
+            return;
+        }
+
+        e.Handled = true;
+        var position = e.GetPosition(surface);
+        await workspace.HandleUiInputAsync(new PluginInputEvent(
+            PluginInputEventType.MouseUp,
+            MouseButton: e.ChangedButton.ToString(),
+            X: (int)Math.Round(position.X),
+            Y: (int)Math.Round(position.Y)));
     }
 
     private async void OnWorkspaceUninstallClick(object sender, RoutedEventArgs e)

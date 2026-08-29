@@ -4,9 +4,10 @@ using ToolBox.PluginSdk;
 
 namespace WorkerChildProcessPlugin;
 
-public sealed class WorkerChildProcessPlugin : IPlugin
+public sealed class WorkerChildProcessPlugin : IPlugin, IPluginUiProvider
 {
     private Process? _childProcess;
+    private int _actionCount;
 
     public string Id => "com.toolbox.worker-child-process";
 
@@ -33,6 +34,7 @@ public sealed class WorkerChildProcessPlugin : IPlugin
         File.WriteAllText(
             Path.Combine(pluginDirectory, "child.pid"),
             _childProcess.Id.ToString(CultureInfo.InvariantCulture));
+        _actionCount = 0;
 
         return ValueTask.CompletedTask;
     }
@@ -49,5 +51,38 @@ public sealed class WorkerChildProcessPlugin : IPlugin
         _childProcess?.Dispose();
         _childProcess = null;
         return ValueTask.CompletedTask;
+    }
+
+    public PluginUiSnapshot GetSnapshot()
+    {
+        return new PluginUiSnapshot(
+            "Worker child test plugin is running.",
+            [new PluginUiValue("Actions", _actionCount.ToString(CultureInfo.InvariantCulture))],
+            [new PluginUiAction("touch", "Touch plugin")],
+            null);
+    }
+
+    public ValueTask<PluginUiSnapshot> ExecuteAsync(
+        string actionId,
+        string? argument,
+        CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        if (!string.Equals(actionId, "touch", StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException($"Unknown action '{actionId}'.");
+        }
+
+        _actionCount++;
+        return ValueTask.FromResult(GetSnapshot());
+    }
+
+    public ValueTask<PluginUiSnapshot> HandleInputAsync(
+        PluginInputEvent input,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(input);
+        cancellationToken.ThrowIfCancellationRequested();
+        return ValueTask.FromResult(GetSnapshot());
     }
 }

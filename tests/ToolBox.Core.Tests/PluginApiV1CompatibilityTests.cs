@@ -12,12 +12,16 @@ public sealed class PluginApiV1CompatibilityTests
         "ToolBox.PluginSdk.IPlugin",
         "ToolBox.PluginSdk.IPluginContext",
         "ToolBox.PluginSdk.IPluginLifetimeScope",
+        "ToolBox.PluginSdk.IPluginUiProvider",
         "ToolBox.PluginSdk.IResourceLease",
         "ToolBox.PluginSdk.IResourceManager",
         "ToolBox.PluginSdk.IServiceBroker",
         "ToolBox.PluginSdk.IServiceLease`1",
         "ToolBox.PluginSdk.PluginContract",
         "ToolBox.PluginSdk.PluginExecutionMode",
+        "ToolBox.PluginSdk.PluginInputEvent",
+        "ToolBox.PluginSdk.PluginInputEventType",
+        "ToolBox.PluginSdk.PluginInputSurface",
         "ToolBox.PluginSdk.PluginLifecycle",
         "ToolBox.PluginSdk.PluginLifecycleState",
         "ToolBox.PluginSdk.PluginLifecycleTransitionException",
@@ -29,6 +33,9 @@ public sealed class PluginApiV1CompatibilityTests
         "ToolBox.PluginSdk.PluginPlatform",
         "ToolBox.PluginSdk.PluginRuntime",
         "ToolBox.PluginSdk.PluginState",
+        "ToolBox.PluginSdk.PluginUiAction",
+        "ToolBox.PluginSdk.PluginUiSnapshot",
+        "ToolBox.PluginSdk.PluginUiValue",
         "ToolBox.PluginSdk.ResourceAccessMode",
         "ToolBox.PluginSdk.ResourceConflictException",
         "ToolBox.PluginSdk.ResourceKey"
@@ -101,6 +108,24 @@ public sealed class PluginApiV1CompatibilityTests
             typeof(ValueTask),
             typeof(CancellationToken));
         Assert.Contains(typeof(IAsyncDisposable), typeof(IPlugin).GetInterfaces());
+
+        AssertMethod(
+            typeof(IPluginUiProvider),
+            nameof(IPluginUiProvider.GetSnapshot),
+            typeof(PluginUiSnapshot));
+        AssertMethod(
+            typeof(IPluginUiProvider),
+            nameof(IPluginUiProvider.ExecuteAsync),
+            typeof(ValueTask<PluginUiSnapshot>),
+            typeof(string),
+            typeof(string),
+            typeof(CancellationToken));
+        AssertMethod(
+            typeof(IPluginUiProvider),
+            nameof(IPluginUiProvider.HandleInputAsync),
+            typeof(ValueTask<PluginUiSnapshot>),
+            typeof(PluginInputEvent),
+            typeof(CancellationToken));
 
         AssertProperty(typeof(IPluginContext), nameof(IPluginContext.PluginId), typeof(string));
         AssertProperty(

@@ -18,7 +18,7 @@ ToolBox 是一个面向 Windows 的通用插件外壳。Host 不包含具体产�
 - `ToolBox.PluginWorker`：隔离执行插件的进程外 Worker；
 - `ToolBox.Host`：与插件类型无关的 WPF 外壳和状态卡片。
 
-安装任意合法 `.tpk` 后，Host 会按包内 Manifest 动态显示插件。用户可以在通用状态卡片中启用、停止或卸载插件；`background` 目前只用于描述和诊断。
+安装任意合法 `.tpk` 后，Host 会按包内 Manifest 动态显示插件。用户可以在通用状态卡片中启用、停止或卸载插件；实现 `IPluginUiProvider` 的插件还会显示通用状态、操作按钮或键鼠输入区域。`background` 目前只用于描述和诊断。
 
 ## 用户使用
 

@@ -4,6 +4,7 @@ using System.Text;
 using ToolBox.Core.Lifetime;
 using ToolBox.Core.Plugins;
 using ToolBox.Core.Plugins.Worker;
+using ToolBox.PluginSdk;
 
 namespace ToolBox.PluginWorker;
 
@@ -286,6 +287,31 @@ public static class WorkerEntryPoint
                         .ConfigureAwait(false);
                 }
 
+            case "ui.snapshot":
+                return CreateUiSnapshotResult(
+                    arguments,
+                    requestId,
+                    loadedPlugin,
+                    provider => provider.GetSnapshot());
+
+            case "ui.action":
+                return await ExecuteUiRequestAsync(
+                        message,
+                        arguments,
+                        requestId,
+                        loadedPlugin,
+                        static (provider, request, cancellationToken) =>
+                            provider.ExecuteAsync(request.ActionId, request.Argument, cancellationToken))
+                    .ConfigureAwait(false);
+
+            case "ui.input":
+                return await ExecuteInputRequestAsync(
+                        message,
+                        arguments,
+                        requestId,
+                        loadedPlugin)
+                    .ConfigureAwait(false);
+
             case "stop":
                 if (loadedPlugin is null)
                 {
@@ -376,16 +402,190 @@ public static class WorkerEntryPoint
         string requestId,
         string errorCode,
         string errorMessage,
+        LoadedInProcessPlugin? loadedPlugin = null,
         bool shouldShutdown = false,
         int exitCode = 0)
     {
         // The main loop writes the response after this method returns. Keeping the
         // error as a result avoids concurrent writes on the single control channel.
         return Task.FromResult(new WorkerRequestResult(
-            null,
+            loadedPlugin,
             shouldShutdown,
             exitCode,
             WorkerProtocol.CreateError(arguments.LaunchId, requestId, errorCode, errorMessage)));
+    }
+
+    private static WorkerRequestResult CreateUiSnapshotResult(
+        WorkerArguments arguments,
+        string requestId,
+        LoadedInProcessPlugin? loadedPlugin,
+        Func<IPluginUiProvider, PluginUiSnapshot> getSnapshot)
+    {
+        if (loadedPlugin is null)
+        {
+            return new WorkerRequestResult(
+                null,
+                ShouldShutdown: false,
+                ExitCode: 0,
+                Response: WorkerProtocol.CreateError(
+                    arguments.LaunchId,
+                    requestId,
+                    "PLUGIN_NOT_RUNNING",
+                    "The plugin must be running before its controls can be used."));
+        }
+
+        try
+        {
+            var provider = loadedPlugin.GetCapability<IPluginUiProvider>();
+            if (provider is null)
+            {
+                return new WorkerRequestResult(
+                    loadedPlugin,
+                    ShouldShutdown: false,
+                    ExitCode: 0,
+                    Response: WorkerProtocol.CreateError(
+                        arguments.LaunchId,
+                        requestId,
+                        "PLUGIN_UI_UNSUPPORTED",
+                        "The plugin does not provide a ToolBox UI surface."));
+            }
+
+            var snapshot = getSnapshot(provider)
+                ?? throw new PluginLoadException(
+                    "PLUGIN_UI_SNAPSHOT_MISSING",
+                    "The plugin returned an empty UI snapshot.");
+            return new WorkerRequestResult(
+                loadedPlugin,
+                ShouldShutdown: false,
+                ExitCode: 0,
+                Response: WorkerProtocol.CreateResponse(
+                    arguments.LaunchId,
+                    requestId,
+                    "ui.snapshot",
+                    WorkerProtocol.SerializePayload(snapshot)));
+        }
+        catch (Exception exception)
+        {
+            return new WorkerRequestResult(
+                loadedPlugin,
+                ShouldShutdown: false,
+                ExitCode: 0,
+                Response: WorkerProtocol.CreateError(
+                    arguments.LaunchId,
+                    requestId,
+                    GetErrorCode(exception, "PLUGIN_UI_FAILED"),
+                    exception.Message));
+        }
+    }
+
+    private static async Task<WorkerRequestResult> ExecuteUiRequestAsync(
+        WorkerMessage message,
+        WorkerArguments arguments,
+        string requestId,
+        LoadedInProcessPlugin? loadedPlugin,
+        Func<IPluginUiProvider, UiActionRequest, CancellationToken, ValueTask<PluginUiSnapshot>> execute)
+    {
+        if (loadedPlugin is null)
+        {
+            return await ErrorResultAsync(
+                    arguments,
+                    requestId,
+                    "PLUGIN_NOT_RUNNING",
+                    "The plugin must be running before its controls can be used.")
+                .ConfigureAwait(false);
+        }
+
+        try
+        {
+            var provider = loadedPlugin.GetCapability<IPluginUiProvider>();
+            if (provider is null)
+            {
+                return await ErrorResultAsync(
+                        arguments,
+                        requestId,
+                        "PLUGIN_UI_UNSUPPORTED",
+                        "The plugin does not provide a ToolBox UI surface.",
+                        loadedPlugin: loadedPlugin)
+                    .ConfigureAwait(false);
+            }
+
+            var request = WorkerProtocol.DeserializePayload<UiActionRequest>(message.Payload);
+            ArgumentException.ThrowIfNullOrWhiteSpace(request.ActionId);
+            var snapshot = await execute(provider, request, CancellationToken.None).ConfigureAwait(false);
+            return new WorkerRequestResult(
+                loadedPlugin,
+                ShouldShutdown: false,
+                ExitCode: 0,
+                Response: WorkerProtocol.CreateResponse(
+                    arguments.LaunchId,
+                    requestId,
+                    "ui.action",
+                    WorkerProtocol.SerializePayload(snapshot)));
+        }
+        catch (Exception exception)
+        {
+            return await ErrorResultAsync(
+                    arguments,
+                    requestId,
+                    GetErrorCode(exception, "PLUGIN_UI_ACTION_FAILED"),
+                    exception.Message,
+                    loadedPlugin: loadedPlugin)
+                .ConfigureAwait(false);
+        }
+    }
+
+    private static async Task<WorkerRequestResult> ExecuteInputRequestAsync(
+        WorkerMessage message,
+        WorkerArguments arguments,
+        string requestId,
+        LoadedInProcessPlugin? loadedPlugin)
+    {
+        if (loadedPlugin is null)
+        {
+            return await ErrorResultAsync(
+                    arguments,
+                    requestId,
+                    "PLUGIN_NOT_RUNNING",
+                    "The plugin must be running before its controls can be used.")
+                .ConfigureAwait(false);
+        }
+
+        try
+        {
+            var provider = loadedPlugin.GetCapability<IPluginUiProvider>();
+            if (provider is null)
+            {
+                return await ErrorResultAsync(
+                        arguments,
+                        requestId,
+                        "PLUGIN_UI_UNSUPPORTED",
+                        "The plugin does not provide a ToolBox UI surface.",
+                        loadedPlugin: loadedPlugin)
+                    .ConfigureAwait(false);
+            }
+
+            var input = WorkerProtocol.DeserializePayload<PluginInputEvent>(message.Payload);
+            var snapshot = await provider.HandleInputAsync(input, CancellationToken.None).ConfigureAwait(false);
+            return new WorkerRequestResult(
+                loadedPlugin,
+                ShouldShutdown: false,
+                ExitCode: 0,
+                Response: WorkerProtocol.CreateResponse(
+                    arguments.LaunchId,
+                    requestId,
+                    "ui.input",
+                    WorkerProtocol.SerializePayload(snapshot)));
+        }
+        catch (Exception exception)
+        {
+            return await ErrorResultAsync(
+                    arguments,
+                    requestId,
+                    GetErrorCode(exception, "PLUGIN_UI_INPUT_FAILED"),
+                    exception.Message,
+                    loadedPlugin: loadedPlugin)
+                .ConfigureAwait(false);
+        }
     }
 
     private static async Task TryWriteErrorAsync(
@@ -469,4 +669,6 @@ public static class WorkerEntryPoint
         int ExitCode,
         WorkerMessage Response,
         WorkerMessage? Event = null);
+
+    private sealed record UiActionRequest(string ActionId, string? Argument);
 }

@@ -16,6 +16,7 @@ public sealed class OutOfProcessPluginSession : IAsyncDisposable
     private readonly StreamReader _reader;
     private readonly StreamWriter _writer;
     private readonly SemaphoreSlim _writeGate = new(1, 1);
+    private readonly SemaphoreSlim _requestGate = new(1, 1);
     private PluginState _state;
     private bool _channelClosed;
     private bool _workerDisposed;
@@ -78,6 +79,63 @@ public sealed class OutOfProcessPluginSession : IAsyncDisposable
                 errorMessage: exception.Message);
             throw;
         }
+    }
+
+    public async Task<PluginUiSnapshot?> GetUiSnapshotAsync(
+        CancellationToken cancellationToken = default)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+
+        try
+        {
+            var response = await RequestAsync("ui.snapshot", cancellationToken: cancellationToken)
+                .ConfigureAwait(false);
+            return DeserializeUiSnapshot(response.Payload);
+        }
+        catch (WorkerProtocolException exception)
+            when (exception.ErrorCode == "PLUGIN_UI_UNSUPPORTED")
+        {
+            return null;
+        }
+    }
+
+    public async Task<PluginUiSnapshot> ExecuteUiActionAsync(
+        string actionId,
+        string? argument = null,
+        CancellationToken cancellationToken = default)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        ArgumentException.ThrowIfNullOrWhiteSpace(actionId);
+
+        var payload = WorkerProtocol.SerializePayload(new
+        {
+            actionId,
+            argument
+        });
+        var response = await RequestAsync("ui.action", payload, cancellationToken)
+            .ConfigureAwait(false);
+        return DeserializeUiSnapshot(response.Payload)
+            ?? throw new WorkerProtocolException(
+                "PLUGIN_UI_SNAPSHOT_MISSING",
+                "The plugin action completed without returning a UI snapshot.");
+    }
+
+    public async Task<PluginUiSnapshot> SendUiInputAsync(
+        PluginInputEvent input,
+        CancellationToken cancellationToken = default)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        ArgumentNullException.ThrowIfNull(input);
+
+        var response = await RequestAsync(
+                "ui.input",
+                WorkerProtocol.SerializePayload(input),
+                cancellationToken)
+            .ConfigureAwait(false);
+        return DeserializeUiSnapshot(response.Payload)
+            ?? throw new WorkerProtocolException(
+                "PLUGIN_UI_SNAPSHOT_MISSING",
+                "The plugin input was accepted without returning a UI snapshot.");
     }
 
     public async Task SendHeartbeatAsync(CancellationToken cancellationToken = default)
@@ -309,6 +367,7 @@ public sealed class OutOfProcessPluginSession : IAsyncDisposable
             CloseChannel();
             DisposeWorker(deadline);
             _writeGate.Dispose();
+            _requestGate.Dispose();
             _disposed = true;
         }
     }
@@ -320,27 +379,36 @@ public sealed class OutOfProcessPluginSession : IAsyncDisposable
     {
         EnsureChannelOpen();
 
-        var requestId = Guid.NewGuid().ToString("N");
-        await WriteAsync(
-                WorkerProtocol.CreateRequest(LaunchId, requestId, operation, payload),
-                cancellationToken)
-            .ConfigureAwait(false);
+        await _requestGate.WaitAsync(cancellationToken).ConfigureAwait(false);
 
-        while (true)
+        try
         {
-            var message = await WorkerProtocol.ReadAsync(_reader, cancellationToken).ConfigureAwait(false);
-            ValidateEnvelope(message);
+            var requestId = Guid.NewGuid().ToString("N");
+            await WriteAsync(
+                    WorkerProtocol.CreateRequest(LaunchId, requestId, operation, payload),
+                    cancellationToken)
+                .ConfigureAwait(false);
 
-            if (message.Type == WorkerMessageType.Error)
+            while (true)
             {
-                throw CreateProtocolError(message);
-            }
+                var message = await WorkerProtocol.ReadAsync(_reader, cancellationToken).ConfigureAwait(false);
+                ValidateEnvelope(message);
 
-            if (message.Type == WorkerMessageType.Response
-                && string.Equals(message.RequestId, requestId, StringComparison.Ordinal))
-            {
-                return message;
+                if (message.Type == WorkerMessageType.Error)
+                {
+                    throw CreateProtocolError(message);
+                }
+
+                if (message.Type == WorkerMessageType.Response
+                    && string.Equals(message.RequestId, requestId, StringComparison.Ordinal))
+                {
+                    return message;
+                }
             }
+        }
+        finally
+        {
+            _requestGate.Release();
         }
     }
 
@@ -389,6 +457,13 @@ public sealed class OutOfProcessPluginSession : IAsyncDisposable
         return new WorkerProtocolException(
             message.ErrorCode ?? "WORKER_REQUEST_FAILED",
             message.ErrorMessage ?? "The PluginWorker rejected the request.");
+    }
+
+    private static PluginUiSnapshot? DeserializeUiSnapshot(string? payload)
+    {
+        return string.IsNullOrWhiteSpace(payload)
+            ? null
+            : WorkerProtocol.DeserializePayload<PluginUiSnapshot>(payload);
     }
 
     private static string GetErrorCode(Exception exception, string fallback)
