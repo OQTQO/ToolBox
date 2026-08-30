@@ -1,0 +1,454 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>ToolBox Generic Glass UI Lab</title>
+  <style>
+    :root {
+      --page-bg: #dce3e8;
+      --page-ink: #172027;
+      --page-sub: #64727c;
+      --page-line: rgba(23, 32, 39, .15);
+      --white: #f8fafb;
+      --accent: #5c8df6;
+      --accent-soft: #dbe6ff;
+      --display: "Bahnschrift", "Segoe UI Variable Display", "Segoe UI", sans-serif;
+      --body: "Segoe UI Variable", "Segoe UI", "Microsoft YaHei UI", sans-serif;
+      --mono: "Cascadia Code", "Consolas", monospace;
+    }
+    :root[data-theme="coral"] { --accent: #d97772; --accent-soft: #f5d9d5; }
+    :root[data-theme="ice"] { --accent: #39a6b5; --accent-soft: #d7eff1; }
+    :root[data-theme="coral"] .aero-panel { --aero-accent:#d97772; --aero-bg:#d4c1c3; --aero-line:rgba(63,35,40,.15); }
+    :root[data-theme="ice"] .aero-panel { --aero-accent:#39a6b5; --aero-bg:#b9d5dc; --aero-line:rgba(24,55,62,.15); }
+    :root[data-theme="coral"] .bloom-panel { --bloom-accent:#f2a69a; --bloom-green:#b6e2d5; }
+    :root[data-theme="ice"] .bloom-panel { --bloom-accent:#70d1db; --bloom-green:#b8efdd; }
+    :root[data-theme="coral"] .ribbon-panel { --ribbon-accent:#d97772; }
+    :root[data-theme="ice"] .ribbon-panel { --ribbon-accent:#39a6b5; }
+
+    * { box-sizing: border-box; }
+    html, body { min-width: 320px; min-height: 100%; }
+    body { margin: 0; color: var(--page-ink); background: var(--page-bg); font-family: var(--body); }
+    button { border: 0; font: inherit; cursor: pointer; }
+    button:focus-visible { outline: 2px solid #3c65ef; outline-offset: 3px; }
+    .review { width: min(1680px, 100%); min-height: 100dvh; margin: 0 auto; padding: 30px 38px 58px; }
+    .review-head { display: flex; justify-content: space-between; align-items: flex-end; gap: 30px; padding-bottom: 23px; border-bottom: 1px solid var(--page-line); }
+    .review-kicker { color: #64727c; font: 700 10px/1 var(--mono); letter-spacing: .17em; text-transform: uppercase; }
+    .review h1 { max-width: 760px; margin: 11px 0 0; font: 500 clamp(34px, 5vw, 67px)/.94 var(--display); letter-spacing: -.08em; }
+    .review-lead { max-width: 680px; margin: 14px 0 0; color: var(--page-sub); font-size: 13px; line-height: 1.65; }
+    .review-note { min-width: 250px; padding: 15px 17px; border: 1px solid var(--page-line); background: rgba(248,250,251,.62); color: var(--page-sub); font: 10px/1.7 var(--mono); }
+    .review-note strong { display: block; margin-bottom: 3px; color: var(--page-ink); font-family: var(--body); font-size: 12px; }
+    .mode-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 21px 0 17px; }
+    .mode-button { display: flex; align-items: center; gap: 10px; min-height: 42px; padding: 0 15px; border: 1px solid var(--page-line); border-radius: 14px; background: rgba(248,250,251,.64); color: #66737c; font-size: 12px; transition: transform .22s ease, background .22s ease, color .22s ease, border-color .22s ease; }
+    .mode-button:hover { transform: translateY(-2px); color: var(--page-ink); }
+    .mode-button.is-active { border-color: #1a252d; background: #1a252d; color: #fff; box-shadow: 0 10px 24px rgba(23,32,39,.16); }
+    .mode-button b { font: 700 10px var(--mono); opacity: .68; }
+    .mode-tools { display: flex; align-items: center; gap: 7px; margin-left: auto; }
+    .tool-button { min-height: 34px; padding: 0 11px; border: 1px solid var(--page-line); border-radius: 12px; background: rgba(248,250,251,.56); color: var(--page-sub); font-size: 10px; }
+    .tool-button:hover { border-color: var(--page-ink); color: var(--page-ink); }
+    .design-panel { display: none; animation: panel-enter .5s cubic-bezier(.16,1,.3,1) both; }
+    .design-panel.is-active { display: block; }
+    .design-caption { display: flex; justify-content: space-between; align-items: baseline; gap: 20px; margin: 0 0 13px; color: var(--page-sub); }
+    .design-caption h2 { margin: 0; color: var(--page-ink); font: 500 18px/1 var(--display); letter-spacing: -.04em; }
+    .design-caption p { margin: 0; font-size: 11px; }
+    .design-caption code { color: #63717c; font: 10px var(--mono); }
+    .app-window { position: relative; min-height: 760px; overflow: hidden; border: 1px solid rgba(24,34,42,.2); box-shadow: 0 30px 80px rgba(33,49,59,.2); }
+    .app-window button { transition: transform .18s ease, background .22s ease, color .22s ease, border-color .22s ease, box-shadow .22s ease; }
+    .app-window button:active { transform: scale(.975); }
+    .glass { border: 1px solid rgba(255,255,255,.27); background: linear-gradient(135deg, rgba(255,255,255,.38), rgba(255,255,255,.12)); box-shadow: inset 0 1px 0 rgba(255,255,255,.42), inset 0 -1px 0 rgba(255,255,255,.09), 0 18px 50px rgba(19,38,52,.13); backdrop-filter: blur(27px) saturate(145%); -webkit-backdrop-filter: blur(27px) saturate(145%); }
+    .glass-dark { border: 1px solid rgba(255,255,255,.18); background: linear-gradient(135deg, rgba(255,255,255,.15), rgba(255,255,255,.045)); box-shadow: inset 0 1px 0 rgba(255,255,255,.2), inset 0 -1px 0 rgba(255,255,255,.04), 0 20px 55px rgba(0,0,0,.19); backdrop-filter: blur(28px) saturate(145%); -webkit-backdrop-filter: blur(28px) saturate(145%); }
+    .status-light { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #66d69b; box-shadow: 0 0 0 4px rgba(102,214,155,.14); }
+    .status-light.running { background: #f0c065; box-shadow: 0 0 0 4px rgba(240,192,101,.14); }
+    .status-light.disabled { background: #aab3bb; box-shadow: none; }
+    .status-light.attention { background: #ed7a68; box-shadow: 0 0 0 4px rgba(237,122,104,.12); }
+    .state-label { display: inline-flex; align-items: center; gap: 8px; }
+    .plugin-glyph { display: grid; place-items: center; flex: none; width: 42px; height: 42px; border-radius: 14px; background: var(--accent-soft); color: var(--accent); font: 700 10px var(--mono); letter-spacing: .03em; }
+    .plugin-glyph.dark { background: rgba(255,255,255,.12); color: #eef4ff; }
+    .hidden-view { display: none !important; }
+
+    /* AERO GLASS. Stable daily workspace with a contextual inspector. */
+    .aero-panel { --aero-bg: #bdcad3; --aero-ink: #15232d; --aero-sub: #657681; --aero-line: rgba(21,35,45,.15); --aero-surface: rgba(248,251,252,.5); --aero-accent: #5c8df6; }
+    .aero-app { min-height: 760px; color: var(--aero-ink); background: radial-gradient(circle at 18% 10%, rgba(248,255,255,.75), transparent 28%), radial-gradient(circle at 84% 72%, rgba(129,164,255,.5), transparent 31%), linear-gradient(135deg, #ccd8de, #b2c0ca 62%, #dce5e8); }
+    .aero-app::before, .aero-app::after { content:""; position:absolute; z-index:0; border-radius:50%; filter:blur(58px); pointer-events:none; }
+    .aero-app::before { top:-110px; left:22%; width:280px; height:280px; background:rgba(255,255,255,.55); animation:drift-one 15s ease-in-out infinite alternate; }
+    .aero-app::after { right:-70px; bottom:40px; width:310px; height:310px; background:rgba(100,136,250,.3); animation:drift-two 18s ease-in-out infinite alternate; }
+    .aero-top { position:relative; z-index:2; display:flex; align-items:center; justify-content:space-between; min-height:69px; padding:0 25px; border-bottom:1px solid rgba(21,35,45,.12); background:rgba(246,250,251,.32); backdrop-filter:blur(18px); -webkit-backdrop-filter:blur(18px); }
+    .aero-brand { display:flex; align-items:center; gap:11px; font-size:14px; font-weight:700; letter-spacing:-.04em; }
+    .aero-mark { display:grid; place-items:center; width:28px; height:28px; border:1px solid rgba(21,35,45,.65); border-radius:10px; color:var(--aero-accent); font:700 11px var(--mono); }
+    .aero-context { margin-left:25px; color:var(--aero-sub); font-size:11px; }
+    .aero-top-actions { display:flex; align-items:center; gap:8px; }
+    .aero-top-actions button { min-height:32px; padding:0 11px; border:1px solid rgba(21,35,45,.14); border-radius:11px; background:rgba(255,255,255,.2); color:var(--aero-sub); font-size:10px; }
+    .aero-top-actions button:hover { border-color:var(--aero-ink); color:var(--aero-ink); background:rgba(255,255,255,.45); }
+    .aero-layout { position:relative; z-index:1; display:grid; grid-template-columns:224px minmax(0,1fr) 270px; gap:16px; min-height:691px; padding:17px; }
+    .aero-sidebar { display:flex; flex-direction:column; padding:17px 12px; border-radius:22px; }
+    .aero-sidebar-title { display:flex; justify-content:space-between; align-items:center; padding:0 9px 14px; color:var(--aero-sub); font:10px var(--mono); letter-spacing:.08em; text-transform:uppercase; }
+    .aero-sidebar-title button { display:grid; place-items:center; width:25px; height:25px; border-radius:8px; background:rgba(255,255,255,.26); color:var(--aero-ink); font-size:15px; }
+    .aero-nav { display:grid; gap:4px; margin-bottom:18px; }
+    .aero-nav button { display:flex; align-items:center; gap:11px; min-height:38px; padding:0 10px; border-radius:11px; background:transparent; color:var(--aero-sub); text-align:left; font-size:11px; }
+    .aero-nav button:hover, .aero-nav button.is-active { background:rgba(255,255,255,.42); color:var(--aero-ink); box-shadow:0 5px 14px rgba(25,43,53,.07); }
+    .aero-nav button span:first-child { width:19px; color:var(--aero-accent); font:12px var(--mono); text-align:center; }
+    .aero-plugin-stack { display:grid; gap:5px; }
+    .aero-plugin { display:flex; align-items:center; gap:10px; min-height:55px; padding:0 8px; border:1px solid transparent; border-radius:14px; background:transparent; color:var(--aero-sub); text-align:left; }
+    .aero-plugin:hover, .aero-plugin.is-active { border-color:rgba(255,255,255,.3); background:rgba(255,255,255,.32); color:var(--aero-ink); }
+    .aero-plugin .plugin-glyph { width:30px; height:30px; border-radius:10px; font-size:8px; }
+    .aero-plugin strong { display:block; font-size:10px; font-weight:600; }
+    .aero-plugin small { display:block; margin-top:3px; color:var(--aero-sub); font-size:9px; }
+    .aero-sidebar-foot { margin-top:auto; padding:14px 9px 2px; border-top:1px solid var(--aero-line); color:var(--aero-sub); font-size:9px; line-height:1.6; }
+    .aero-main { min-width:0; padding:25px 17px 24px; }
+    .aero-main-head { display:flex; align-items:flex-start; justify-content:space-between; gap:20px; }
+    .aero-main-head small { color:var(--aero-accent); font:700 10px var(--mono); letter-spacing:.14em; text-transform:uppercase; }
+    .aero-main-head h2 { max-width:580px; margin:10px 0 7px; font:500 clamp(34px,4.3vw,58px)/.9 var(--display); letter-spacing:-.08em; }
+    .aero-main-head p { max-width:530px; margin:0; color:var(--aero-sub); font-size:11px; line-height:1.6; }
+    .aero-quick { display:flex; align-items:center; gap:8px; padding-top:5px; color:var(--aero-sub); font-size:10px; white-space:nowrap; }
+    .aero-quick strong { color:var(--aero-ink); font-size:11px; }
+    .aero-tabs { display:flex; gap:20px; margin-top:31px; border-bottom:1px solid var(--aero-line); }
+    .aero-tab { position:relative; padding:0 0 12px; background:transparent; color:var(--aero-sub); font-size:10px; }
+    .aero-tab::after { content:""; position:absolute; right:0; bottom:-1px; left:0; height:2px; transform:scaleX(0); background:var(--aero-accent); transition:transform .22s ease; }
+    .aero-tab.is-active, .aero-tab:hover { color:var(--aero-ink); }
+    .aero-tab.is-active::after { transform:scaleX(1); }
+    .aero-view { display:none; padding-top:18px; }
+    .aero-view.is-active { display:block; animation:view-in .3s ease both; }
+    .aero-bento { display:grid; grid-template-columns:1.08fr .92fr; grid-template-rows:188px 188px; gap:12px; }
+    .aero-card { min-width:0; padding:19px; border-radius:18px; }
+    .aero-card.large { grid-row:span 2; display:flex; flex-direction:column; justify-content:space-between; background:linear-gradient(145deg,rgba(252,255,255,.6),rgba(218,231,255,.34)); }
+    .aero-card-head { display:flex; align-items:flex-start; justify-content:space-between; gap:15px; }
+    .aero-card-head small { color:var(--aero-sub); font:9px var(--mono); }
+    .aero-card h3 { margin:16px 0 6px; font:500 24px/.94 var(--display); letter-spacing:-.065em; }
+    .aero-card p { max-width:300px; margin:0; color:var(--aero-sub); font-size:10px; line-height:1.55; }
+    .aero-card-bottom { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-top:21px; color:var(--aero-sub); font-size:10px; }
+    .aero-primary { min-height:34px; padding:0 12px; border-radius:11px; background:var(--aero-accent); color:#fff; font-size:10px; box-shadow:0 8px 20px rgba(92,141,246,.26); }
+    .aero-primary:hover { background:#3f70dd; transform:translateY(-2px); }
+    .aero-mini-stat strong { display:block; font:500 30px/.9 var(--display); letter-spacing:-.07em; }
+    .aero-mini-stat span { display:block; margin-top:9px; color:var(--aero-sub); font-size:10px; }
+    .aero-mini-stat b { display:block; margin-top:14px; color:var(--aero-accent); font:10px var(--mono); }
+    .aero-card.activity { grid-column:span 1; background:rgba(255,255,255,.28); }
+    .aero-card.activity .event-row { display:flex; align-items:center; gap:9px; margin-top:12px; color:var(--aero-sub); font-size:10px; }
+    .event-row time { margin-left:auto; color:var(--aero-sub); font:9px var(--mono); }
+    .aero-empty { padding:34px 21px; border:1px solid var(--aero-line); border-radius:18px; background:rgba(255,255,255,.28); color:var(--aero-sub); font-size:11px; line-height:1.7; }
+    .aero-inspector { align-self:start; min-width:0; padding:18px; border-radius:22px; }
+    .aero-inspector-head { display:flex; align-items:center; gap:11px; padding-bottom:18px; border-bottom:1px solid var(--aero-line); }
+    .aero-inspector-head h3 { margin:0; font:500 17px/.95 var(--display); letter-spacing:-.05em; }
+    .aero-inspector-head small { display:block; margin-top:5px; color:var(--aero-sub); font-size:9px; }
+    .aero-inspector-section { padding:17px 0; border-bottom:1px solid var(--aero-line); }
+    .aero-label { display:block; margin-bottom:12px; color:var(--aero-sub); font:9px var(--mono); letter-spacing:.1em; text-transform:uppercase; }
+    .aero-detail-row { display:flex; justify-content:space-between; gap:12px; padding:7px 0; color:var(--aero-sub); font-size:10px; }
+    .aero-detail-row b { color:var(--aero-ink); font-weight:600; text-align:right; }
+    .aero-action { width:100%; min-height:38px; margin-top:7px; border-radius:12px; background:var(--aero-accent); color:#fff; font-size:10px; box-shadow:0 8px 20px rgba(92,141,246,.22); }
+    .aero-action:hover { background:#3f70dd; }
+    .aero-action.secondary { border:1px solid var(--aero-line); background:rgba(255,255,255,.22); color:var(--aero-ink); box-shadow:none; }
+    .aero-action.secondary:hover { border-color:var(--aero-accent); color:var(--aero-accent); }
+
+    /* BLOOM SPACE. A rounded spatial library with an expanding focus sheet. */
+    .bloom-panel { --bloom-bg:#171824; --bloom-ink:#f1f1f7; --bloom-sub:#a3a7b9; --bloom-line:rgba(241,241,247,.15); --bloom-accent:#ef9ccf; --bloom-green:#a4e9d0; }
+    .bloom-app { min-height:760px; color:var(--bloom-ink); background:radial-gradient(circle at 10% 2%,#454267 0,transparent 29%), radial-gradient(circle at 92% 82%,#552d4a 0,transparent 28%), #171824; }
+    .bloom-app::before { content:""; position:absolute; inset:-80px; background:radial-gradient(circle at 48% 16%,rgba(239,156,207,.18),transparent 25%); filter:blur(42px); animation:bloom-glow 13s ease-in-out infinite alternate; pointer-events:none; }
+    .bloom-top { position:relative; z-index:2; display:flex; align-items:center; justify-content:space-between; min-height:78px; padding:0 28px; border-bottom:1px solid var(--bloom-line); }
+    .bloom-brand { display:flex; align-items:center; gap:11px; font-weight:700; font-size:14px; letter-spacing:-.04em; }
+    .bloom-mark { display:grid; place-items:center; width:29px; height:29px; border-radius:11px; background:var(--bloom-ink); color:var(--bloom-bg); font:700 11px var(--mono); }
+    .bloom-nav { display:flex; align-items:center; gap:5px; padding:4px; border:1px solid var(--bloom-line); border-radius:15px; background:rgba(255,255,255,.06); }
+    .bloom-nav button { min-height:30px; padding:0 13px; border-radius:11px; background:transparent; color:var(--bloom-sub); font-size:10px; }
+    .bloom-nav button:hover, .bloom-nav button.is-active { background:rgba(255,255,255,.13); color:var(--bloom-ink); }
+    .bloom-head-actions { display:flex; align-items:center; gap:8px; }
+    .bloom-head-actions button { min-height:32px; padding:0 11px; border:1px solid var(--bloom-line); border-radius:11px; background:rgba(255,255,255,.06); color:var(--bloom-sub); font-size:10px; }
+    .bloom-head-actions button:hover { border-color:var(--bloom-accent); color:var(--bloom-accent); }
+    .bloom-layout { position:relative; z-index:1; min-height:682px; padding:40px 44px 44px; }
+    .bloom-heading { display:flex; justify-content:space-between; align-items:flex-end; gap:20px; }
+    .bloom-heading small { color:var(--bloom-accent); font:700 10px var(--mono); letter-spacing:.15em; text-transform:uppercase; }
+    .bloom-heading h2 { max-width:620px; margin:11px 0 0; font:500 clamp(41px,5.6vw,78px)/.86 var(--display); letter-spacing:-.095em; }
+    .bloom-heading p { max-width:290px; margin:0 0 4px; color:var(--bloom-sub); font-size:11px; line-height:1.6; }
+    .bloom-space { display:grid; grid-template-columns:1.18fr .82fr; gap:14px; margin-top:34px; }
+    .bloom-cluster { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
+    .bloom-card { min-height:170px; padding:20px; border-radius:23px; }
+    .bloom-card.hero { grid-row:span 2; min-height:354px; background:linear-gradient(145deg,rgba(255,255,255,.16),rgba(239,156,207,.09)); }
+    .bloom-card.tinted { background:linear-gradient(145deg,rgba(164,233,208,.17),rgba(255,255,255,.05)); }
+    .bloom-card.plain { background:rgba(255,255,255,.06); }
+    .bloom-card-head { display:flex; justify-content:space-between; align-items:flex-start; gap:16px; }
+    .bloom-card small { color:var(--bloom-sub); font:9px var(--mono); }
+    .bloom-card h3 { margin:17px 0 7px; font:500 25px/.92 var(--display); letter-spacing:-.07em; }
+    .bloom-card p { max-width:280px; margin:0; color:var(--bloom-sub); font-size:10px; line-height:1.55; }
+    .bloom-card-footer { display:flex; align-items:center; justify-content:space-between; gap:10px; margin-top:24px; color:var(--bloom-sub); font-size:10px; }
+    .bloom-card-action { min-height:31px; padding:0 11px; border-radius:11px; background:var(--bloom-accent); color:#241625; font-size:10px; font-weight:700; }
+    .bloom-card-action:hover { background:#ffb9e2; transform:translateY(-2px); }
+    .bloom-activity { padding:21px; border-radius:23px; }
+    .bloom-activity h3 { margin:0; font:500 19px/.95 var(--display); letter-spacing:-.06em; }
+    .bloom-activity p { margin:7px 0 0; color:var(--bloom-sub); font-size:10px; }
+    .bloom-event { display:grid; grid-template-columns:28px minmax(0,1fr) auto; gap:10px; align-items:center; padding:15px 0; border-bottom:1px solid var(--bloom-line); color:var(--bloom-sub); font-size:10px; }
+    .bloom-event:last-child { border-bottom:0; }
+    .bloom-event i { display:grid; place-items:center; width:28px; height:28px; border-radius:10px; background:rgba(255,255,255,.1); color:var(--bloom-green); font:700 8px var(--mono); font-style:normal; }
+    .bloom-event b { display:block; color:var(--bloom-ink); font-weight:600; }
+    .bloom-event time { font:9px var(--mono); }
+    .bloom-focus { position:absolute; z-index:3; top:119px; right:44px; width:min(335px,calc(100% - 88px)); padding:21px; border-radius:26px; opacity:0; transform:translateY(12px) scale(.98); pointer-events:none; transition:opacity .3s ease, transform .3s ease; }
+    .bloom-focus.is-open { opacity:1; transform:none; pointer-events:auto; }
+    .bloom-focus::before { content:""; position:absolute; inset:0; border-radius:inherit; box-shadow:0 0 0 999px rgba(3,4,8,.22); pointer-events:none; }
+    .bloom-focus-inner { position:relative; z-index:1; }
+    .bloom-focus-head { display:flex; justify-content:space-between; align-items:flex-start; gap:12px; padding-bottom:17px; border-bottom:1px solid var(--bloom-line); }
+    .bloom-focus-head h3 { margin:0; font:500 24px/.92 var(--display); letter-spacing:-.065em; }
+    .bloom-focus-head p { margin:8px 0 0; color:var(--bloom-sub); font-size:10px; }
+    .bloom-close { display:grid; place-items:center; width:28px; height:28px; border:1px solid var(--bloom-line); border-radius:10px; background:rgba(255,255,255,.08); color:var(--bloom-sub); font-size:16px; }
+    .bloom-close:hover { color:var(--bloom-ink); border-color:var(--bloom-accent); }
+    .bloom-focus-section { padding:16px 0; border-bottom:1px solid var(--bloom-line); }
+    .bloom-focus-row { display:flex; justify-content:space-between; gap:14px; padding:7px 0; color:var(--bloom-sub); font-size:10px; }
+    .bloom-focus-row b { color:var(--bloom-ink); font-weight:600; text-align:right; }
+    .bloom-focus-action { width:100%; min-height:38px; margin-top:7px; border-radius:12px; background:var(--bloom-accent); color:#241625; font-size:10px; font-weight:700; }
+    .bloom-focus-action:hover { background:#ffb9e2; }
+    .bloom-focus-action.alt { border:1px solid var(--bloom-line); background:rgba(255,255,255,.06); color:var(--bloom-ink); }
+    .bloom-focus-action.alt:hover { border-color:var(--bloom-accent); color:var(--bloom-accent); }
+
+    /* RIBBON FLOW. Immersive workbench with bottom commands and a slide-out inspector. */
+    .ribbon-panel { --ribbon-bg:#e7e4df; --ribbon-ink:#252728; --ribbon-sub:#777975; --ribbon-line:rgba(37,39,40,.14); --ribbon-accent:#dc785f; --ribbon-deep:#302f32; }
+    .ribbon-app { min-height:760px; color:var(--ribbon-ink); background:radial-gradient(circle at 74% 13%,rgba(255,255,255,.9),transparent 27%), linear-gradient(145deg,#d6d5d0,#ede9e2 46%,#cac9c2); }
+    .ribbon-app::before { content:""; position:absolute; right:-120px; bottom:-160px; width:470px; height:470px; border:1px solid rgba(220,120,95,.2); border-radius:50%; box-shadow:0 0 0 47px rgba(220,120,95,.06),0 0 0 96px rgba(220,120,95,.035); animation:slow-spin 35s linear infinite; pointer-events:none; }
+    .ribbon-top { position:relative; z-index:2; display:flex; align-items:center; justify-content:space-between; min-height:70px; padding:0 28px; border-bottom:1px solid var(--ribbon-line); }
+    .ribbon-brand { display:flex; align-items:center; gap:12px; font-weight:700; font-size:14px; letter-spacing:-.04em; }
+    .ribbon-mark { display:grid; place-items:center; width:28px; height:28px; border-radius:50%; background:var(--ribbon-deep); color:#f3eee7; font:700 11px var(--mono); }
+    .ribbon-route { display:flex; align-items:center; gap:9px; color:var(--ribbon-sub); font:10px var(--mono); }
+    .ribbon-top-actions { display:flex; gap:8px; }
+    .ribbon-top-actions button { min-height:32px; padding:0 11px; border:1px solid var(--ribbon-line); border-radius:12px; background:rgba(255,255,255,.24); color:var(--ribbon-sub); font-size:10px; }
+    .ribbon-top-actions button:hover { border-color:var(--ribbon-accent); color:var(--ribbon-accent); background:rgba(255,255,255,.5); }
+    .ribbon-body { position:relative; z-index:1; min-height:615px; padding:38px 47px 112px; }
+    .ribbon-heading { display:flex; justify-content:space-between; align-items:flex-start; gap:22px; }
+    .ribbon-heading small { color:var(--ribbon-accent); font:700 10px var(--mono); letter-spacing:.14em; text-transform:uppercase; }
+    .ribbon-heading h2 { max-width:670px; margin:10px 0 0; font:500 clamp(42px,6vw,82px)/.84 var(--display); letter-spacing:-.1em; }
+    .ribbon-heading p { max-width:255px; margin:1px 0 0; color:var(--ribbon-sub); font-size:11px; line-height:1.6; }
+    .ribbon-workspace { display:grid; grid-template-columns:1.25fr .75fr; gap:13px; margin-top:35px; }
+    .ribbon-main-card { min-height:270px; padding:23px; border-radius:25px; background:rgba(255,255,255,.38); }
+    .ribbon-main-card-head { display:flex; align-items:flex-start; justify-content:space-between; gap:18px; }
+    .ribbon-main-card h3 { margin:0; font:500 27px/.9 var(--display); letter-spacing:-.07em; }
+    .ribbon-main-card small { color:var(--ribbon-sub); font:9px var(--mono); }
+    .ribbon-main-card p { max-width:370px; margin:11px 0 0; color:var(--ribbon-sub); font-size:10px; line-height:1.55; }
+    .ribbon-plugin-row { display:grid; grid-template-columns:1fr 1fr; gap:9px; margin-top:31px; }
+    .ribbon-plugin-pill { display:flex; align-items:center; gap:9px; min-height:46px; padding:0 10px; border:1px solid var(--ribbon-line); border-radius:15px; background:rgba(255,255,255,.25); color:var(--ribbon-ink); text-align:left; }
+    .ribbon-plugin-pill:hover, .ribbon-plugin-pill.is-active { border-color:var(--ribbon-accent); background:rgba(255,255,255,.62); }
+    .ribbon-plugin-pill .plugin-glyph { width:27px; height:27px; border-radius:9px; font-size:8px; }
+    .ribbon-plugin-pill strong { display:block; font-size:10px; font-weight:600; }
+    .ribbon-plugin-pill span { display:block; margin-top:3px; color:var(--ribbon-sub); font-size:9px; }
+    .ribbon-status-card { min-height:270px; padding:23px; border-radius:25px; background:var(--ribbon-deep); color:#f3eee7; box-shadow:0 18px 38px rgba(48,47,50,.18); }
+    .ribbon-status-card small { color:#b9b5ae; font:9px var(--mono); }
+    .ribbon-status-number { margin-top:27px; font:500 59px/.8 var(--display); letter-spacing:-.1em; }
+    .ribbon-status-card p { max-width:190px; margin:12px 0 0; color:#b9b5ae; font-size:10px; line-height:1.5; }
+    .ribbon-status-card button { min-height:34px; margin-top:21px; padding:0 12px; border-radius:11px; background:var(--ribbon-accent); color:#fff9f1; font-size:10px; }
+    .ribbon-status-card button:hover { background:#ee9075; transform:translateY(-2px); }
+    .ribbon-events { display:grid; grid-template-columns:1fr 1fr 1fr; gap:1px; margin-top:13px; background:var(--ribbon-line); }
+    .ribbon-event { min-height:111px; padding:17px; background:rgba(255,255,255,.28); }
+    .ribbon-event small { color:var(--ribbon-sub); font:9px var(--mono); }
+    .ribbon-event strong { display:block; margin-top:18px; font:500 15px/.95 var(--display); letter-spacing:-.04em; }
+    .ribbon-event span { display:block; margin-top:7px; color:var(--ribbon-sub); font-size:9px; }
+    .ribbon-commands { position:absolute; right:47px; bottom:31px; left:47px; display:flex; align-items:center; justify-content:space-between; gap:18px; min-height:62px; padding:0 12px 0 17px; border-radius:20px; }
+    .ribbon-commands-label { display:flex; align-items:center; gap:10px; color:var(--ribbon-sub); font-size:10px; }
+    .ribbon-commands-label b { color:var(--ribbon-ink); font-weight:600; }
+    .ribbon-command-list { display:flex; align-items:center; gap:6px; }
+    .ribbon-command-list button { min-height:34px; padding:0 11px; border:1px solid var(--ribbon-line); border-radius:11px; background:rgba(255,255,255,.24); color:var(--ribbon-ink); font-size:10px; }
+    .ribbon-command-list button.primary { background:var(--ribbon-accent); color:#fff9f1; border-color:transparent; }
+    .ribbon-command-list button:hover { border-color:var(--ribbon-accent); color:var(--ribbon-accent); }
+    .ribbon-command-list button.primary:hover { background:#ee9075; color:#fff9f1; }
+    .ribbon-drawer { position:absolute; z-index:4; top:70px; right:0; bottom:0; width:min(355px,100%); padding:28px 23px; border-left:1px solid rgba(255,255,255,.45); background:rgba(244,241,235,.68); box-shadow:-20px 0 55px rgba(50,45,37,.13); backdrop-filter:blur(28px) saturate(140%); -webkit-backdrop-filter:blur(28px) saturate(140%); transform:translateX(102%); transition:transform .34s cubic-bezier(.16,1,.3,1); }
+    .ribbon-drawer.is-open { transform:none; }
+    .ribbon-drawer-head { display:flex; justify-content:space-between; align-items:flex-start; gap:14px; padding-bottom:17px; border-bottom:1px solid var(--ribbon-line); }
+    .ribbon-drawer-head h3 { margin:0; font:500 25px/.9 var(--display); letter-spacing:-.07em; }
+    .ribbon-drawer-head p { margin:8px 0 0; color:var(--ribbon-sub); font-size:10px; }
+    .ribbon-close { display:grid; place-items:center; width:28px; height:28px; border:1px solid var(--ribbon-line); border-radius:10px; background:rgba(255,255,255,.38); color:var(--ribbon-sub); font-size:16px; }
+    .ribbon-close:hover { border-color:var(--ribbon-accent); color:var(--ribbon-accent); }
+    .ribbon-drawer-section { padding:16px 0; border-bottom:1px solid var(--ribbon-line); }
+    .ribbon-row { display:flex; justify-content:space-between; gap:15px; padding:7px 0; color:var(--ribbon-sub); font-size:10px; }
+    .ribbon-row b { color:var(--ribbon-ink); font-weight:600; text-align:right; }
+    .ribbon-drawer-action { width:100%; min-height:38px; margin-top:7px; border-radius:12px; background:var(--ribbon-accent); color:#fff9f1; font-size:10px; }
+    .ribbon-drawer-action:hover { background:#ee9075; }
+    .ribbon-drawer-action.secondary { border:1px solid var(--ribbon-line); background:rgba(255,255,255,.35); color:var(--ribbon-ink); }
+    .ribbon-drawer-action.secondary:hover { border-color:var(--ribbon-accent); color:var(--ribbon-accent); }
+
+    .toast { position:fixed; right:28px; bottom:24px; z-index:8; max-width:350px; padding:13px 16px; border:1px solid rgba(255,255,255,.18); border-radius:14px; background:rgba(19,24,31,.9); color:#fff; box-shadow:0 18px 46px rgba(0,0,0,.22); backdrop-filter:blur(17px); font-size:11px; opacity:0; transform:translateY(15px); pointer-events:none; transition:opacity .22s ease, transform .22s ease; }
+    .toast.is-visible { opacity:1; transform:none; }
+    .app-window.motion-off *, .app-window.motion-off *::before, .app-window.motion-off *::after { animation-play-state:paused !important; transition-duration:.01ms !important; }
+    @keyframes panel-enter { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:none; } }
+    @keyframes view-in { from { opacity:0; transform:translateY(5px); } to { opacity:1; transform:none; } }
+    @keyframes drift-one { from { transform:translate3d(-12px,6px,0) scale(.96); } to { transform:translate3d(45px,28px,0) scale(1.08); } }
+    @keyframes drift-two { from { transform:translate3d(10px,0,0) scale(1); } to { transform:translate3d(-34px,-26px,0) scale(.9); } }
+    @keyframes bloom-glow { from { transform:translate3d(-4%,0,0) scale(.96); opacity:.7; } to { transform:translate3d(5%,8%,0) scale(1.08); opacity:1; } }
+    @keyframes slow-spin { from { transform:rotate(0); } to { transform:rotate(360deg); } }
+    @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration:.01ms !important; animation-iteration-count:1 !important; transition-duration:.01ms !important; } }
+    @media (max-width: 1080px) {
+      .review { padding:24px 20px 45px; }
+      .review-head { display:block; }
+      .review-note { margin-top:17px; }
+      .aero-layout { grid-template-columns:190px minmax(0,1fr); }
+      .aero-inspector { grid-column:span 2; }
+      .bloom-layout { padding:34px 27px 40px; }
+      .ribbon-body { padding-right:30px; padding-left:30px; }
+      .ribbon-commands { right:30px; left:30px; }
+    }
+    @media (max-width: 700px) {
+      .review h1 { font-size:44px; }
+      .design-caption { display:block; }
+      .design-caption p { margin-top:7px; }
+      .mode-button { flex:1 1 calc(50% - 8px); justify-content:center; }
+      .mode-tools { width:100%; margin-left:0; }
+      .tool-button { flex:1; }
+      .app-window { min-height:0; }
+      .aero-top, .bloom-top, .ribbon-top { padding:0 16px; }
+      .aero-context, .bloom-nav, .ribbon-route { display:none; }
+      .aero-layout { display:block; padding:10px; }
+      .aero-sidebar { margin-bottom:10px; padding:9px; }
+      .aero-sidebar-title { padding-bottom:9px; }
+      .aero-nav { grid-template-columns:repeat(3,1fr); margin-bottom:8px; }
+      .aero-plugin-stack { grid-template-columns:repeat(4, minmax(0,1fr)); overflow:auto; }
+      .aero-plugin { min-height:47px; padding:0 6px; }
+      .aero-plugin strong { font-size:9px; }
+      .aero-plugin small { display:none; }
+      .aero-main { padding:22px 8px 18px; }
+      .aero-main-head { display:block; }
+      .aero-quick { margin-top:15px; }
+      .aero-bento { grid-template-columns:1fr; grid-template-rows:auto; }
+      .aero-card.large { grid-row:auto; min-height:250px; }
+      .aero-card.activity { grid-column:auto; }
+      .aero-inspector { margin-top:10px; }
+      .bloom-top { min-height:65px; }
+      .bloom-head-actions button:first-child { display:none; }
+      .bloom-layout { padding:29px 17px 100px; }
+      .bloom-heading { display:block; }
+      .bloom-heading h2 { font-size:57px; }
+      .bloom-heading p { margin-top:17px; }
+      .bloom-space { grid-template-columns:1fr; margin-top:26px; }
+      .bloom-card.hero { grid-row:auto; min-height:280px; }
+      .bloom-focus { top:96px; right:17px; width:calc(100% - 34px); }
+      .ribbon-top { min-height:65px; }
+      .ribbon-top-actions button:first-child { display:none; }
+      .ribbon-body { padding:29px 17px 112px; }
+      .ribbon-heading { display:block; }
+      .ribbon-heading h2 { font-size:58px; }
+      .ribbon-heading p { margin-top:17px; }
+      .ribbon-workspace { grid-template-columns:1fr; margin-top:26px; }
+      .ribbon-plugin-row { grid-template-columns:1fr; }
+      .ribbon-events { grid-template-columns:1fr; }
+      .ribbon-commands { right:17px; bottom:20px; left:17px; display:block; padding:10px 13px; }
+      .ribbon-command-list { overflow:auto; margin-top:8px; }
+      .ribbon-command-list button { flex:none; }
+    }
+  </style>
+</head>
+<body>
+  <div class="review">
+    <header class="review-head">
+      <div>
+        <div class="review-kicker">ToolBox / GENERIC SHELL STUDY</div>
+        <h1>一个外壳，很多插件。先把外壳做得值得打开。</h1>
+        <p class="review-lead">这里展示的是 ToolBox 自己的通用界面，不是 Audio Relay 的专属页面。Audio Relay、Hello Plugin、Keyboard &amp; Mouse 和 Clipboard Tools 只是被外壳管理的插件样本。</p>
+      </div>
+      <div class="review-note"><strong>本轮设计重点</strong>动态毛玻璃、柔和圆角、真实状态切换<br />Host 统一布局，插件只提供信息和动作</div>
+    </header>
+
+    <nav class="mode-bar" aria-label="选择通用外壳方案">
+      <button class="mode-button is-active" data-design-target="aero"><b>01</b> Aero Glass / 日常工作区</button>
+      <button class="mode-button" data-design-target="bloom"><b>02</b> Bloom Space / 插件空间</button>
+      <button class="mode-button" data-design-target="ribbon"><b>03</b> Ribbon Flow / 动作工作台</button>
+      <div class="mode-tools"><button class="tool-button" data-motion-toggle>动态效果：开启</button><button class="tool-button" data-theme-toggle>外观：薄荷蓝</button></div>
+    </nav>
+
+    <main>
+      <section class="design-panel aero-panel is-active" data-design-panel="aero">
+        <div class="design-caption"><h2>01 / Aero Glass</h2><p>稳定、清晰、适合每天使用。插件是对象，右侧检查器负责上下文动作。</p><code>DAILY / GLASS / INSPECTOR</code></div>
+        <div class="app-window aero-app">
+          <header class="aero-top"><div class="aero-brand"><span class="aero-mark">TB</span><span>ToolBox</span><span class="aero-context">本地插件工作区 / 总览</span></div><div class="aero-top-actions"><button data-action="refresh">刷新状态</button><button data-action="settings">设置</button></div></header>
+          <div class="aero-layout">
+            <aside class="aero-sidebar glass"><div class="aero-sidebar-title"><span>工作区</span><button aria-label="添加插件" data-action="install">+</button></div><nav class="aero-nav"><button class="is-active" data-shell-view="overview"><span>⌂</span><span>总览</span></button><button data-shell-view="plugins"><span>◌</span><span>插件</span></button><button data-shell-view="activity"><span>≡</span><span>活动</span></button></nav><div class="aero-sidebar-title"><span>已安装</span><span>04</span></div><div class="aero-plugin-stack"><button class="aero-plugin" data-plugin="audio"><span class="plugin-glyph">AR</span><span><strong>Audio Relay</strong><small data-plugin-status-text="audio">运行中</small></span></button><button class="aero-plugin is-active" data-plugin="hello"><span class="plugin-glyph">HP</span><span><strong>Hello Plugin</strong><small data-plugin-status-text="hello">就绪</small></span></button><button class="aero-plugin" data-plugin="keyboard"><span class="plugin-glyph">KM</span><span><strong>Keyboard</strong><small data-plugin-status-text="keyboard">已停用</small></span></button><button class="aero-plugin" data-plugin="clipboard"><span class="plugin-glyph">CL</span><span><strong>Clipboard</strong><small data-plugin-status-text="clipboard">需关注</small></span></button></div><div class="aero-sidebar-foot">插件由独立 Worker 承载。ToolBox 只管理目录、状态和生命周期。</div></aside>
+            <section class="aero-main"><div class="aero-main-head"><div><small>全部插件</small><h2>你的工具，已经准备好。</h2><p>在一个安静的工作区里，查看插件状态，进入插件工作区，处理需要你决定的动作。</p></div><div class="aero-quick"><span class="status-light"></span><div><strong>系统正常</strong><br />4 个插件已发现</div></div></div><div class="aero-tabs"><button class="aero-tab is-active" data-shell-view="overview">总览</button><button class="aero-tab" data-shell-view="plugins">插件列表</button><button class="aero-tab" data-shell-view="activity">活动记录</button></div><div class="aero-view is-active" data-shell-content="overview"><div class="aero-bento"><article class="aero-card large glass"><div><div class="aero-card-head"><span class="plugin-glyph">HP</span><small>示例插件 / 进程外</small></div><h3 data-active-plugin-name>Hello Plugin</h3><p data-active-plugin-desc>展示后台任务、资源 Lease 和独立 Worker 的生命周期。</p></div><div class="aero-card-bottom"><span class="state-label"><span class="status-light" data-active-status-light></span><span data-active-status>就绪</span></span><button class="aero-primary" data-action="open">打开工作区</button></div></article><article class="aero-card glass"><div class="aero-card-head"><div class="aero-mini-stat"><strong>04</strong><span>已安装插件</span></div><span class="plugin-glyph">TB</span></div><div class="aero-card-bottom"><span>全部已发现</span><button class="aero-action secondary" data-shell-view="plugins">查看全部</button></div></article><article class="aero-card activity glass"><div class="aero-card-head"><div class="aero-mini-stat"><strong>03</strong><span>今天的活动</span></div><small>最近更新</small></div><div class="event-row"><span class="status-light"></span><span>Audio Relay 已运行</span><time>刚刚</time></div><div class="event-row"><span class="status-light"></span><span>Hello Plugin 已准备</span><time>2 分钟前</time></div></article></div></div><div class="aero-view" data-shell-content="plugins"><div class="aero-empty">这里是通用插件列表视图。任何合法插件都会以同样的结构出现，Host 不需要认识插件类型。</div></div><div class="aero-view" data-shell-content="activity"><div class="aero-empty">这里显示 Host 产生的安装、启停、错误和 Worker 生命周期事件。</div></div></section>
+            <aside class="aero-inspector glass"><div class="aero-inspector-head"><span class="plugin-glyph" data-active-plugin-glyph>HP</span><div><h3 data-active-plugin-name>Hello Plugin</h3><small data-active-plugin-category>示例插件</small></div></div><div class="aero-inspector-section"><span class="aero-label">插件信息</span><div class="aero-detail-row"><span>状态</span><b data-active-status>就绪</b></div><div class="aero-detail-row"><span>版本</span><b data-active-plugin-version>0.1.0</b></div><div class="aero-detail-row"><span>运行方式</span><b>OutOfProcess</b></div><div class="aero-detail-row"><span>发布者</span><b data-active-plugin-publisher>ToolBox Samples</b></div></div><div class="aero-inspector-section"><span class="aero-label">生命周期</span><button class="aero-action" data-action="enable">启用插件</button><button class="aero-action secondary" data-action="disable">停用插件</button><button class="aero-action secondary" data-action="uninstall">卸载插件</button></div><div class="aero-inspector-section"><span class="aero-label">最近事件</span><div class="aero-detail-row"><span>Worker</span><b>已连接</b></div><div class="aero-detail-row"><span>数据目录</span><b>保留正常</b></div></div></aside>
+          </div>
+        </div>
+      </section>
+
+      <section class="design-panel bloom-panel" data-design-panel="bloom">
+        <div class="design-caption"><h2>02 / Bloom Space</h2><p>更年轻、更有探索感。插件先作为空间中的对象被发现，点击后详情层才展开。</p><code>SPATIAL / SOFT / DISCOVERY</code></div>
+        <div class="app-window bloom-app">
+          <header class="bloom-top"><div class="bloom-brand"><span class="bloom-mark">TB</span><span>ToolBox</span></div><nav class="bloom-nav"><button class="is-active" data-shell-view="overview">总览</button><button data-shell-view="plugins">插件</button><button data-shell-view="activity">活动</button><button data-shell-view="settings">设置</button></nav><div class="bloom-head-actions"><button data-action="refresh">同步状态</button><button data-action="settings">偏好</button></div></header>
+          <div class="bloom-layout"><div class="bloom-heading"><div><small>插件空间</small><h2>把工具放在<br />它们该在的地方。</h2></div><p>一个插件一个独立单元。你可以先看清它，再决定是否启用。</p></div><div class="bloom-space"><div class="bloom-cluster"><article class="bloom-card hero glass-dark" data-plugin="audio"><div><div class="bloom-card-head"><span class="plugin-glyph dark">AR</span><small>设备连接</small></div><h3>Phone Audio Relay</h3><p>接收已配对手机的媒体音频。它只是插件库里的一个工具，不会改变 ToolBox 的页面结构。</p></div><div class="bloom-card-footer"><span class="state-label"><span class="status-light running"></span><span data-plugin-status-text="audio">运行中</span></span><button class="bloom-card-action" data-action="open">查看详情</button></div></article><article class="bloom-card tinted glass-dark" data-plugin="hello"><div class="bloom-card-head"><span class="plugin-glyph dark">HP</span><small>示例插件</small></div><h3>Hello Plugin</h3><p>后台任务与资源 Lease 示例。</p><div class="bloom-card-footer"><span data-plugin-status-text="hello">就绪</span><button class="bloom-card-action" data-action="open">打开</button></div></article><article class="bloom-card plain glass-dark" data-plugin="keyboard"><div class="bloom-card-head"><span class="plugin-glyph dark">KM</span><small>设备工具</small></div><h3>Keyboard</h3><p>键鼠测试插件。</p><div class="bloom-card-footer"><span data-plugin-status-text="keyboard">已停用</span><button class="bloom-card-action" data-action="open">打开</button></div></article></div><aside class="bloom-activity glass-dark"><h3>最近活动</h3><p>由 ToolBox 统一记录</p><div class="bloom-event"><i>AR</i><span><b>Audio Relay</b> Worker 运行中</span><time>刚刚</time></div><div class="bloom-event"><i>HP</i><span><b>Hello Plugin</b> 完成初始化</span><time>2 分钟前</time></div><div class="bloom-event"><i>KM</i><span><b>Keyboard</b> 已停用</span><time>昨天</time></div><button class="bloom-card-action" style="width:100%;margin-top:18px" data-shell-view="activity">查看完整记录</button></aside></div><aside class="bloom-focus glass-dark" data-focus-drawer><div class="bloom-focus-inner"><div class="bloom-focus-head"><div><h3 data-active-plugin-name>Hello Plugin</h3><p data-active-plugin-desc>展示后台任务、资源 Lease 和独立 Worker 的生命周期。</p></div><button class="bloom-close" data-action="close">×</button></div><div class="bloom-focus-section"><div class="bloom-focus-row"><span>状态</span><b data-active-status>就绪</b></div><div class="bloom-focus-row"><span>版本</span><b data-active-plugin-version>0.1.0</b></div><div class="bloom-focus-row"><span>运行方式</span><b>OutOfProcess</b></div><div class="bloom-focus-row"><span>数据目录</span><b>可用</b></div></div><button class="bloom-focus-action" data-action="enable">启用插件</button><button class="bloom-focus-action alt" data-action="disable">停用插件</button><button class="bloom-focus-action alt" data-action="uninstall">卸载插件</button></div></aside></div>
+        </div>
+      </section>
+
+      <section class="design-panel ribbon-panel" data-design-panel="ribbon">
+        <div class="design-caption"><h2>03 / Ribbon Flow</h2><p>把常用动作集中在底部，不打断主空间。插件详情从右侧滑出，动效就是操作反馈。</p><code>IMMERSIVE / COMMANDS / DRAWER</code></div>
+        <div class="app-window ribbon-app">
+          <header class="ribbon-top"><div class="ribbon-brand"><span class="ribbon-mark">TB</span><span>ToolBox</span></div><div class="ribbon-route">工作台 / <span data-active-plugin-name>Hello Plugin</span></div><div class="ribbon-top-actions"><button data-action="refresh">刷新</button><button data-action="settings">设置</button></div></header>
+          <main class="ribbon-body"><div class="ribbon-heading"><div><small>本地工具集合</small><h2>你的工作台，<br />只留下正在发生的事。</h2></div><p>插件状态、运行方式和动作都由通用外壳承载。插件只带来自己的能力。</p></div><div class="ribbon-workspace"><article class="ribbon-main-card"><div class="ribbon-main-card-head"><div><h3>插件总览</h3><p>选择一个插件查看它的当前状态和可用动作。</p></div><small>04 PLUGINS</small></div><div class="ribbon-plugin-row"><button class="ribbon-plugin-pill" data-plugin="audio"><span class="plugin-glyph">AR</span><span><strong>Audio Relay</strong><span data-plugin-status-text="audio">运行中</span></span></button><button class="ribbon-plugin-pill is-active" data-plugin="hello"><span class="plugin-glyph">HP</span><span><strong>Hello Plugin</strong><span data-plugin-status-text="hello">就绪</span></span></button><button class="ribbon-plugin-pill" data-plugin="keyboard"><span class="plugin-glyph">KM</span><span><strong>Keyboard</strong><span data-plugin-status-text="keyboard">已停用</span></span></button><button class="ribbon-plugin-pill" data-plugin="clipboard"><span class="plugin-glyph">CL</span><span><strong>Clipboard Tools</strong><span data-plugin-status-text="clipboard">需关注</span></span></button></div></article><article class="ribbon-status-card"><small>当前选择</small><div class="ribbon-status-number" data-active-status>就绪</div><p><span data-active-plugin-name>Hello Plugin</span> 正在等待你的下一步动作。</p><button data-action="open">打开插件工作区</button></article></div><div class="ribbon-events"><div class="ribbon-event"><small>系统状态</small><strong>稳定运行</strong><span>Worker 无残留</span></div><div class="ribbon-event"><small>当前版本</small><strong>ToolBox 0.2.2</strong><span>本地运行</span></div><div class="ribbon-event"><small>数据目录</small><strong>保留正常</strong><span>Config 和 State 可用</span></div></div><div class="ribbon-commands glass"><div class="ribbon-commands-label"><span>当前插件</span><b data-active-plugin-name>Hello Plugin</b></div><div class="ribbon-command-list"><button data-action="enable">启用</button><button data-action="disable">停用</button><button data-action="refresh">刷新状态</button><button class="primary" data-action="open">打开工作区</button></div></div></main><aside class="ribbon-drawer" data-focus-drawer><div class="ribbon-drawer-head"><div><h3 data-active-plugin-name>Hello Plugin</h3><p data-active-plugin-category>示例插件 / 独立 Worker</p></div><button class="ribbon-close" data-action="close">×</button></div><div class="ribbon-drawer-section"><div class="ribbon-row"><span>当前状态</span><b data-active-status>就绪</b></div><div class="ribbon-row"><span>版本</span><b data-active-plugin-version>0.1.0</b></div><div class="ribbon-row"><span>运行模式</span><b>OutOfProcess</b></div><div class="ribbon-row"><span>发布者</span><b data-active-plugin-publisher>ToolBox Samples</b></div></div><button class="ribbon-drawer-action" data-action="enable">启用插件</button><button class="ribbon-drawer-action secondary" data-action="disable">停用插件</button><button class="ribbon-drawer-action secondary" data-action="uninstall">卸载插件</button></aside>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <div class="toast" data-toast role="status"></div>
+  <script>
+    const state = {
+      design: "aero",
+      shellView: "overview",
+      activePlugin: "hello",
+      motion: true,
+      theme: "mint",
+      toastTimer: null,
+      pluginStates: { audio: "running", hello: "ready", keyboard: "disabled", clipboard: "attention" }
+    };
+
+    const plugins = {
+      audio: { name: "Phone Audio Relay", category: "设备连接", desc: "接收已配对手机的媒体音频，并由独立 Worker 负责连接生命周期。", version: "0.3.0", publisher: "ToolBox Plugins", glyph: "AR" },
+      hello: { name: "Hello Plugin", category: "示例插件", desc: "展示后台任务、资源 Lease 和独立 Worker 的生命周期。", version: "0.1.0", publisher: "ToolBox Samples", glyph: "HP" },
+      keyboard: { name: "Keyboard & Mouse", category: "设备工具", desc: "键盘和鼠标测试插件，可以独立迭代，不改变 ToolBox 的通用外壳。", version: "0.2.0", publisher: "ToolBox Plugins", glyph: "KM" },
+      clipboard: { name: "Clipboard Tools", category: "效率工具", desc: "一个普通的剪贴板效率插件示例，用来验证不同插件也能共享同一套外壳。", version: "0.1.1", publisher: "Community", glyph: "CL" }
+    };
+    const stateLabels = { running: "运行中", ready: "就绪", disabled: "已停用", attention: "需关注" };
+    const stateLights = { running: "running", ready: "", disabled: "disabled", attention: "attention" };
+
+    function render() {
+      const plugin = plugins[state.activePlugin];
+      const pluginState = state.pluginStates[state.activePlugin];
+      document.querySelectorAll("[data-design-panel]").forEach(panel => panel.classList.toggle("is-active", panel.dataset.designPanel === state.design));
+      document.querySelectorAll("[data-design-target]").forEach(button => button.classList.toggle("is-active", button.dataset.designTarget === state.design));
+      document.querySelectorAll("[data-shell-content]").forEach(view => view.classList.toggle("is-active", view.dataset.shellContent === state.shellView));
+      document.querySelectorAll("[data-shell-view]").forEach(button => button.classList.toggle("is-active", button.dataset.shellView === state.shellView));
+      document.querySelectorAll("[data-plugin]").forEach(button => button.classList.toggle("is-active", button.dataset.plugin === state.activePlugin));
+      document.querySelectorAll("[data-active-plugin-name]").forEach(node => node.textContent = plugin.name);
+      document.querySelectorAll("[data-active-plugin-desc]").forEach(node => node.textContent = plugin.desc);
+      document.querySelectorAll("[data-active-plugin-category]").forEach(node => node.textContent = plugin.category + " / 独立 Worker");
+      document.querySelectorAll("[data-active-plugin-version]").forEach(node => node.textContent = plugin.version);
+      document.querySelectorAll("[data-active-plugin-publisher]").forEach(node => node.textContent = plugin.publisher);
+      document.querySelectorAll("[data-active-plugin-glyph]").forEach(node => node.textContent = plugin.glyph);
+      document.querySelectorAll("[data-active-status]").forEach(node => node.textContent = stateLabels[pluginState]);
+      document.querySelectorAll("[data-active-status-light]").forEach(node => node.className = "status-light " + stateLights[pluginState]);
+      document.querySelectorAll("[data-plugin-status-text]").forEach(node => node.textContent = stateLabels[state.pluginStates[node.dataset.pluginStatusText]]);
+      document.querySelectorAll("[data-focus-drawer]").forEach(drawer => drawer.classList.toggle("is-open", state.design === "bloom" ? state.drawerOpen === true : state.design === "ribbon" && state.drawerOpen === true));
+      document.querySelectorAll(".app-window").forEach(windowNode => windowNode.classList.toggle("motion-off", !state.motion));
+      document.querySelector("[data-motion-toggle]").textContent = "动态效果：" + (state.motion ? "开启" : "关闭");
+      document.querySelector("[data-theme-toggle]").textContent = "外观：" + ({ mint: "薄荷蓝", coral: "珊瑚粉", ice: "冰川青" }[state.theme]);
+      document.documentElement.dataset.theme = state.theme;
+    }
+
+    function showToast(message) {
+      const node = document.querySelector("[data-toast]");
+      node.textContent = message;
+      node.classList.add("is-visible");
+      window.clearTimeout(state.toastTimer);
+      state.toastTimer = window.setTimeout(() => node.classList.remove("is-visible"), 2100);
+    }
+
+    function runAction(action) {
+      const plugin = plugins[state.activePlugin];
+      if (action === "enable") { state.pluginStates[state.activePlugin] = "running"; render(); showToast(plugin.name + " 已启用"); return; }
+      if (action === "disable") { state.pluginStates[state.activePlugin] = "disabled"; render(); showToast(plugin.name + " 已停用"); return; }
+      if (action === "refresh") { render(); showToast("已刷新所有插件状态"); return; }
+      if (action === "open") { state.drawerOpen = true; render(); showToast("已打开 " + plugin.name + " 的通用工作区"); return; }
+      if (action === "close") { state.drawerOpen = false; render(); return; }
+      if (action === "settings" || action === "install" || action === "uninstall") { showToast(action === "settings" ? "设置面板由 ToolBox 统一提供" : action === "install" ? "这里可以进入本地 .tpk 安装流程" : "预览模式：卸载动作已触发"); return; }
+    }
+
+    document.addEventListener("click", event => {
+      const button = event.target.closest("button");
+      if (!button) return;
+      if (button.dataset.designTarget) { state.design = button.dataset.designTarget; state.shellView = "overview"; state.drawerOpen = false; render(); return; }
+      if (button.dataset.shellView) { state.shellView = button.dataset.shellView; render(); return; }
+      if (button.dataset.plugin) { state.activePlugin = button.dataset.plugin; state.drawerOpen = true; render(); showToast("已选择 " + plugins[state.activePlugin].name); return; }
+      if (button.dataset.motionToggle !== undefined) { state.motion = !state.motion; render(); return; }
+      if (button.dataset.themeToggle !== undefined) { state.theme = state.theme === "mint" ? "coral" : state.theme === "coral" ? "ice" : "mint"; render(); return; }
+      if (button.dataset.action) { runAction(button.dataset.action); return; }
+    });
+
+    render();
+  </script>
+</body>
+</html>

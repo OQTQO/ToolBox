@@ -1,0 +1,215 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>ToolBox 视觉方向选择</title>
+  <style>
+    :root {
+      --review-bg: #f1f3f7;
+      --ink: #182238;
+      --sub: #6f7c91;
+      --faint: #9ba6b8;
+      --rule: #dfe4ed;
+      --white: #fff;
+      --shadow: 0 18px 45px rgba(21, 33, 58, .09);
+      --display: "Bahnschrift", "Segoe UI Variable Display", "Segoe UI", sans-serif;
+      --body: "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
+      --mono: "Cascadia Code", Consolas, monospace;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--review-bg); color: var(--ink); font-family: var(--body); }
+    button { font: inherit; }
+    .review { max-width: 1480px; margin: 0 auto; padding: 34px 42px 50px; }
+    .review-header { display: flex; justify-content: space-between; align-items: end; gap: 30px; padding-bottom: 27px; border-bottom: 1px solid var(--rule); }
+    .kicker { color: #5574aa; font-family: var(--mono); font-size: 10px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; }
+    h1 { margin: 9px 0 0; font-family: var(--display); font-size: clamp(32px, 4vw, 52px); line-height: .98; letter-spacing: -.06em; }
+    .intro { max-width: 610px; margin-top: 13px; color: var(--sub); font-size: 13px; line-height: 1.65; }
+    .brief { max-width: 325px; padding: 15px 17px; border-left: 3px solid #5574aa; background: rgba(255,255,255,.58); color: var(--sub); font-size: 11px; line-height: 1.6; }
+    .brief strong { display: block; margin-bottom: 4px; color: var(--ink); font-size: 12px; }
+    .selection { display: flex; align-items: center; justify-content: space-between; gap: 20px; min-height: 66px; margin: 20px 0 22px; padding: 14px 17px; border: 1px solid var(--rule); background: rgba(255,255,255,.62); }
+    .selection strong { display: block; font-size: 12px; }
+    .selection span { display: block; margin-top: 4px; color: var(--sub); font-size: 11px; }
+    .selection-mark { display: flex; align-items: center; gap: 9px; color: var(--faint); font-family: var(--mono); font-size: 10px; }
+    .selection-mark i { width: 9px; height: 9px; border: 1px solid currentColor; border-radius: 50%; }
+    .selection-mark.ready { color: #247d62; }
+    .direction-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 19px; }
+    .direction-card { position: relative; min-width: 0; padding: 20px; border: 1px solid var(--rule); background: var(--white); box-shadow: var(--shadow); cursor: pointer; transition: transform .2s ease, box-shadow .2s ease, border-color .2s ease; }
+    .direction-card:hover { transform: translateY(-3px); box-shadow: 0 25px 55px rgba(21,33,58,.14); }
+    .direction-card.selected { border-color: var(--card-accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--card-accent) 18%, transparent), var(--shadow); }
+    .direction-card.selected::before { content: "已选择"; position: absolute; top: 14px; right: 15px; padding: 5px 8px; border-radius: 99px; background: var(--card-accent); color: var(--card-contrast); font-family: var(--mono); font-size: 9px; font-weight: 700; }
+    .direction-head { display: flex; align-items: start; gap: 13px; margin-bottom: 16px; }
+    .direction-number { color: var(--card-accent); font-family: var(--mono); font-size: 11px; font-weight: 700; }
+    .direction-title { min-width: 0; }
+    .direction-title h2 { margin: -3px 0 0; font-family: var(--display); font-size: 23px; letter-spacing: -.04em; }
+    .direction-title p { margin-top: 5px; color: var(--sub); font-size: 11px; line-height: 1.45; }
+    .tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+    .tag { padding: 4px 7px; border: 1px solid var(--rule); color: var(--sub); font-family: var(--mono); font-size: 8px; letter-spacing: .01em; }
+    .mini-window { position: relative; display: grid; overflow: hidden; min-height: 304px; border: 1px solid var(--mini-line); background: var(--mini-bg); color: var(--mini-text); }
+    .mini-window button { border: 0; cursor: default; }
+    .mini-rail { display: flex; flex-direction: column; gap: 7px; padding: 17px 10px; background: var(--mini-rail); border-right: 1px solid var(--mini-line); }
+    .mini-brand { display: flex; align-items: center; gap: 7px; margin-bottom: 17px; color: var(--mini-text); font-family: var(--display); font-size: 12px; font-weight: 700; }
+    .mini-brand-mark { display: grid; place-items: center; width: 21px; height: 21px; border-radius: 6px; background: var(--card-accent); color: var(--card-contrast); font-size: 11px; }
+    .mini-rail-link { display: flex; align-items: center; gap: 7px; min-height: 27px; padding: 0 7px; color: var(--mini-muted); font-size: 9px; }
+    .mini-rail-link.active { background: color-mix(in srgb, var(--card-accent) 17%, transparent); color: var(--mini-text); }
+    .mini-rail-link b { display: grid; place-items: center; width: 15px; color: currentColor; font-family: var(--mono); font-size: 9px; }
+    .mini-main { min-width: 0; padding: 19px 22px 22px; }
+    .mini-top { display: flex; justify-content: space-between; align-items: center; gap: 14px; margin-bottom: 17px; }
+    .mini-breadcrumb { color: var(--mini-muted); font-family: var(--mono); font-size: 8px; }
+    .mini-user { width: 23px; height: 23px; border: 1px solid var(--mini-line); border-radius: 50%; background: var(--mini-surface); }
+    .mini-eyebrow { color: var(--card-accent); font-family: var(--mono); font-size: 8px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; }
+    .mini-main h3 { margin: 7px 0 0; color: var(--mini-text); font-family: var(--display); font-size: 22px; letter-spacing: -.045em; }
+    .mini-description { max-width: 380px; margin-top: 6px; color: var(--mini-muted); font-size: 9px; line-height: 1.55; }
+    .mini-grid { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(120px, .65fr); gap: 10px; margin-top: 16px; }
+    .mini-panel { min-width: 0; padding: 13px; border: 1px solid var(--mini-line); background: var(--mini-surface); }
+    .mini-panel-title { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 11px; color: var(--mini-text); font-size: 9px; font-weight: 700; }
+    .mini-panel-title small { color: var(--mini-muted); font-family: var(--mono); font-size: 7px; font-weight: 400; }
+    .mini-status { display: flex; align-items: center; gap: 7px; color: var(--card-accent); font-size: 10px; font-weight: 700; }
+    .mini-status::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: currentColor; box-shadow: 0 0 14px currentColor; }
+    .mini-status.warning { color: #e4b45c; }
+    .mini-row { display: flex; align-items: center; gap: 9px; min-height: 34px; border-top: 1px solid var(--mini-line); }
+    .mini-row:first-of-type { border-top: 0; }
+    .mini-device { display: grid; place-items: center; width: 23px; height: 23px; background: color-mix(in srgb, var(--card-accent) 15%, transparent); color: var(--card-accent); font-size: 12px; }
+    .mini-row-copy { min-width: 0; flex: 1; }
+    .mini-row-copy strong { display: block; overflow: hidden; color: var(--mini-text); font-size: 9px; font-weight: 650; text-overflow: ellipsis; white-space: nowrap; }
+    .mini-row-copy span { display: block; margin-top: 3px; overflow: hidden; color: var(--mini-muted); font-size: 7px; text-overflow: ellipsis; white-space: nowrap; }
+    .mini-action { padding: 5px 7px; background: var(--card-accent); color: var(--card-contrast); font-size: 8px; font-weight: 700; }
+    .mini-action.quiet { background: transparent; color: var(--mini-muted); }
+    .mini-stat { padding: 9px 0; border-top: 1px solid var(--mini-line); }
+    .mini-stat:first-of-type { border-top: 0; }
+    .mini-stat span { display: block; color: var(--mini-muted); font-family: var(--mono); font-size: 7px; }
+    .mini-stat strong { display: block; margin-top: 5px; color: var(--mini-text); font-family: var(--display); font-size: 16px; }
+    .direction-foot { display: flex; align-items: center; justify-content: space-between; gap: 15px; margin-top: 14px; }
+    .font-note { color: var(--sub); font-size: 10px; }
+    .font-note b { color: var(--ink); font-family: var(--display); font-weight: 700; }
+    .palette { display: flex; align-items: center; gap: 7px; }
+    .palette-label { margin-right: 2px; color: var(--faint); font-family: var(--mono); font-size: 8px; }
+    .palette-dot { width: 16px; height: 16px; padding: 0; border: 2px solid transparent; border-radius: 50%; cursor: pointer; }
+    .palette-dot.active { outline: 2px solid var(--card-accent); outline-offset: 2px; }
+    .orbit { --card-accent: #6da5ff; --card-contrast: #07101f; --mini-bg: #0b1020; --mini-rail: #10182a; --mini-surface: #151f34; --mini-text: #eef4ff; --mini-muted: #8492ad; --mini-line: rgba(170,197,242,.14); }
+    .orbit[data-palette="violet"] { --card-accent: #a794ff; }
+    .orbit[data-palette="mint"] { --card-accent: #72e0bb; }
+    .orbit .mini-window { grid-template-columns: 106px minmax(0,1fr); border-radius: 14px; box-shadow: inset 0 0 80px rgba(55,110,202,.11); }
+    .orbit .mini-main h3 { font-size: 25px; }
+
+    .quiet { --card-accent: #bc6d48; --card-contrast: #fffaf5; --mini-bg: #f7f2eb; --mini-rail: #f0e8dd; --mini-surface: #fffdf9; --mini-text: #2e2927; --mini-muted: #8b8178; --mini-line: #e4d9cc; }
+    .quiet[data-palette="blue"] { --card-accent: #3b73c9; }
+    .quiet[data-palette="olive"] { --card-accent: #718052; }
+    .quiet .mini-window { grid-template-columns: 112px minmax(0,1fr); border-radius: 3px; box-shadow: 8px 8px 0 #e7ded3; }
+    .quiet .mini-rail { padding-top: 21px; }
+    .quiet .mini-rail-link.active { background: transparent; color: var(--card-accent); font-weight: 700; }
+    .quiet .mini-rail-link.active b { border-bottom: 1px solid var(--card-accent); }
+    .quiet .mini-main { padding: 22px 25px; }
+    .quiet .mini-main h3 { font-family: var(--body); font-size: 19px; font-weight: 700; letter-spacing: -.035em; }
+    .quiet .mini-panel { border-width: 0 0 1px; padding: 13px 0; background: transparent; }
+    .quiet .mini-row { min-height: 39px; }
+    .quiet .mini-action { border-radius: 2px; }
+
+    .signal { --card-accent: #d4f36b; --card-contrast: #10150e; --mini-bg: #0b0f0e; --mini-rail: #111816; --mini-surface: #151d1b; --mini-text: #e6f0e8; --mini-muted: #7d958a; --mini-line: rgba(190,224,201,.15); }
+    .signal[data-palette="cyan"] { --card-accent: #61dfd0; }
+    .signal[data-palette="orange"] { --card-accent: #ff9c66; }
+    .signal .mini-window { grid-template-columns: 74px minmax(0,1fr); border-radius: 5px; background-image: linear-gradient(var(--mini-line) 1px, transparent 1px), linear-gradient(90deg, var(--mini-line) 1px, transparent 1px); background-size: 22px 22px; }
+    .signal .mini-rail { padding: 14px 8px; background: rgba(17,24,22,.86); }
+    .signal .mini-brand { display: block; margin-bottom: 25px; text-align: center; }
+    .signal .mini-brand-mark { margin: 0 auto 7px; border-radius: 3px; }
+    .signal .mini-brand span { display: block; font-family: var(--mono); font-size: 8px; }
+    .signal .mini-rail-link { display: grid; place-items: center; padding: 0; font-family: var(--mono); font-size: 8px; }
+    .signal .mini-rail-link b { width: auto; font-size: 12px; }
+    .signal .mini-rail-link span { display: none; }
+    .signal .mini-main { padding: 15px 18px 18px; }
+    .signal .mini-main h3 { font-family: var(--mono); font-size: 17px; letter-spacing: -.06em; }
+    .signal .mini-description, .signal .mini-panel-title, .signal .mini-stat span { font-family: var(--mono); }
+    .signal .mini-panel { border-radius: 4px; }
+    .signal .mini-action { border-radius: 3px; font-family: var(--mono); }
+
+    .soft { --card-accent: #527bd7; --card-contrast: #f6f9ff; --mini-bg: #f0f4fb; --mini-rail: #e8eef9; --mini-surface: #ffffff; --mini-text: #1c2944; --mini-muted: #78869e; --mini-line: #dce4f1; }
+    .soft[data-palette="teal"] { --card-accent: #278f8a; }
+    .soft[data-palette="plum"] { --card-accent: #8a66bd; }
+    .soft .mini-window { grid-template-columns: 124px minmax(0,1fr); border-radius: 18px; box-shadow: 0 13px 25px rgba(54,79,125,.14); }
+    .soft .mini-rail { padding: 16px 11px; background: linear-gradient(180deg, var(--mini-rail), color-mix(in srgb, var(--card-accent) 9%, var(--mini-rail))); }
+    .soft .mini-rail-link { border-radius: 7px; }
+    .soft .mini-rail-link.active { border: 1px solid color-mix(in srgb, var(--card-accent) 20%, transparent); background: var(--mini-surface); color: var(--card-accent); }
+    .soft .mini-main { padding: 17px 20px 21px; }
+    .soft .mini-main h3 { font-family: var(--body); font-size: 21px; font-weight: 750; }
+    .soft .mini-panel { border-radius: 11px; box-shadow: 0 7px 16px rgba(52,76,120,.06); }
+    .soft .mini-action { border-radius: 7px; }
+
+    .legend { display: flex; flex-wrap: wrap; gap: 17px; margin-top: 23px; color: var(--sub); font-size: 10px; }
+    .legend span { display: inline-flex; align-items: center; gap: 7px; }
+    .legend i { width: 8px; height: 8px; border-radius: 50%; background: var(--ink); }
+    .legend .accent { background: #5574aa; }
+    .legend .structure { border: 1px solid var(--ink); background: transparent; }
+    @media (max-width: 900px) { body { min-width: 0; } .review { padding: 25px 18px 40px; } .review-header { display: block; } .brief { margin-top: 20px; max-width: none; } .direction-grid { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+  <main class="review">
+    <header class="review-header">
+      <div>
+        <div class="kicker">ToolBox / Visual Direction Review</div>
+        <h1>先选骨架，再做细节。</h1>
+        <p class="intro">下面四版不是同一页面换颜色，而是四种不同的产品气质：导航密度、字体、卡片结构、信息层级和按钮位置都不同。每版都使用同一个“Phone Audio Relay”示例，方便比较。</p>
+      </div>
+      <div class="brief"><strong>当前设计目标</strong>年轻人常用的个人工具箱：有辨识度、有秩序、有状态感；插件共享 ToolBox 的设计系统，主题配色可以内置切换。</div>
+    </header>
+
+    <div class="selection"><div><strong id="selectedTitle">尚未选择视觉方向</strong><span id="selectedCopy">点击下面任意一版，先确定整体气质；每张卡片下方的圆点代表该方向可内置的配色。</span></div><div class="selection-mark" id="selectionMark"><i></i>等待选择</div></div>
+
+    <section class="direction-grid">
+      <article class="direction-card orbit" data-direction="orbit" data-palette="blue">
+        <div class="direction-head"><div class="direction-number">01 / 04</div><div class="direction-title"><h2>Orbit 轨道工作台</h2><p>沉浸、深色、带一点产品仪表盘的精密感。</p><div class="tags"><span class="tag">深色默认</span><span class="tag">状态聚焦</span><span class="tag">大标题</span></div></div></div>
+        <div class="mini-window"><aside class="mini-rail"><div class="mini-brand"><span class="mini-brand-mark">T</span><span>ToolBox</span></div><div class="mini-rail-link active"><b>◈</b><span>概览</span></div><div class="mini-rail-link"><b>▦</b><span>插件</span></div><div class="mini-rail-link"><b>⚙</b><span>设置</span></div></aside><div class="mini-main"><div class="mini-top"><span class="mini-breadcrumb">PLUGIN / AUDIO RELAY</span><span class="mini-user"></span></div><div class="mini-eyebrow">Phone Audio Relay</div><h3>手机媒体音频</h3><p class="mini-description">选择一台已配对设备，将手机正在播放的媒体音频接收到电脑。</p><div class="mini-grid"><div class="mini-panel"><div class="mini-panel-title"><span>设备</span><small>3 available</small></div><div class="mini-row"><span class="mini-device">◉</span><span class="mini-row-copy"><strong>我的手机</strong><span>Android · A2DP</span></span><button class="mini-action">连接</button></div><div class="mini-row"><span class="mini-device">◉</span><span class="mini-row-copy"><strong>Pixel 9</strong><span>Android · A2DP</span></span><button class="mini-action quiet">详情</button></div></div><div class="mini-panel"><div class="mini-panel-title"><span>状态</span></div><div class="mini-status">就绪</div><div class="mini-stat"><span>LAST ACTION</span><strong>搜索完成</strong></div><div class="mini-stat"><span>MODE</span><strong>Out of process</strong></div></div></div></div></div>
+        <div class="direction-foot"><div class="font-note">字体：<b>Bahnschrift Display</b> + Segoe UI</div><div class="palette"><span class="palette-label">内置配色</span><button class="palette-dot active" data-palette-choice="blue" style="background:#6da5ff" aria-label="蓝色"></button><button class="palette-dot" data-palette-choice="violet" style="background:#a794ff" aria-label="紫色"></button><button class="palette-dot" data-palette-choice="mint" style="background:#72e0bb" aria-label="薄荷色"></button></div></div>
+      </article>
+
+      <article class="direction-card quiet" data-direction="quiet" data-palette="orange">
+        <div class="direction-head"><div class="direction-number">02 / 04</div><div class="direction-title"><h2>Quiet Room 安静工作台</h2><p>浅色、编辑感、留白更多，像一个精心整理的工作桌。</p><div class="tags"><span class="tag">浅色默认</span><span class="tag">低噪音</span><span class="tag">列表详情</span></div></div></div>
+        <div class="mini-window"><aside class="mini-rail"><div class="mini-brand"><span class="mini-brand-mark">T</span><span>ToolBox</span></div><div class="mini-rail-link active"><b>01</b><span>概览</span></div><div class="mini-rail-link"><b>02</b><span>插件</span></div><div class="mini-rail-link"><b>03</b><span>设置</span></div></aside><div class="mini-main"><div class="mini-top"><span class="mini-breadcrumb">WORKSPACE / PLUGINS</span><span class="mini-user"></span></div><div class="mini-eyebrow">AUDIO RELAY / 0.3.0</div><h3>Phone Audio Relay</h3><p class="mini-description">一个页面只保留当前最需要的事情：状态、设备和下一步操作。</p><div class="mini-grid"><div class="mini-panel"><div class="mini-panel-title"><span>可用设备</span><small>已配对</small></div><div class="mini-row"><span class="mini-device">◉</span><span class="mini-row-copy"><strong>我的手机</strong><span>手机媒体音频</span></span><button class="mini-action">连接</button></div><div class="mini-row"><span class="mini-device">◉</span><span class="mini-row-copy"><strong>Pixel 9</strong><span>手机媒体音频</span></span><button class="mini-action quiet">详情</button></div></div><div class="mini-panel"><div class="mini-panel-title"><span>当前状态</span></div><div class="mini-status warning">等待连接</div><div class="mini-stat"><span>发现设备</span><strong>03</strong></div><div class="mini-stat"><span>最近操作</span><strong>刷新</strong></div></div></div></div></div>
+        <div class="direction-foot"><div class="font-note">字体：<b>Aptos Display</b> + Segoe UI</div><div class="palette"><span class="palette-label">内置配色</span><button class="palette-dot active" data-palette-choice="orange" style="background:#bc6d48" aria-label="陶土色"></button><button class="palette-dot" data-palette-choice="blue" style="background:#3b73c9" aria-label="蓝色"></button><button class="palette-dot" data-palette-choice="olive" style="background:#718052" aria-label="橄榄色"></button></div></div>
+      </article>
+
+      <article class="direction-card signal" data-direction="signal" data-palette="lime">
+        <div class="direction-head"><div class="direction-number">03 / 04</div><div class="direction-title"><h2>Signal 信号控制台</h2><p>紧凑、锋利、设备感强，适合频繁操作和状态监控。</p><div class="tags"><span class="tag">高信息密度</span><span class="tag">网格感</span><span class="tag">快捷操作</span></div></div></div>
+        <div class="mini-window"><aside class="mini-rail"><div class="mini-brand"><span class="mini-brand-mark">T</span><span>TBX</span></div><div class="mini-rail-link active"><b>⌂</b><span>概览</span></div><div class="mini-rail-link"><b>◉</b><span>插件</span></div><div class="mini-rail-link"><b>+</b><span>设置</span></div></aside><div class="mini-main"><div class="mini-top"><span class="mini-breadcrumb">SYS / PLUGIN_01</span><span class="mini-user"></span></div><div class="mini-eyebrow">AUDIO_RELAY::ONLINE</div><h3>Phone_Audio_Relay</h3><p class="mini-description">A2DP MEDIA ROUTE // SELECT SOURCE AND OPEN CONNECTION.</p><div class="mini-grid"><div class="mini-panel"><div class="mini-panel-title"><span>DEVICE SOURCES</span><small>[03]</small></div><div class="mini-row"><span class="mini-device">◉</span><span class="mini-row-copy"><strong>MY_PHONE</strong><span>CONNECTED / A2DP</span></span><button class="mini-action">OPEN</button></div><div class="mini-row"><span class="mini-device">◉</span><span class="mini-row-copy"><strong>PIXEL_9</strong><span>READY / A2DP</span></span><button class="mini-action quiet">INFO</button></div></div><div class="mini-panel"><div class="mini-panel-title"><span>TELEMETRY</span></div><div class="mini-status">READY</div><div class="mini-stat"><span>LAST_OP</span><strong>REFRESH</strong></div><div class="mini-stat"><span>UPTIME</span><strong>02:14:08</strong></div></div></div></div></div>
+        <div class="direction-foot"><div class="font-note">字体：<b>Cascadia Code</b> + Segoe UI</div><div class="palette"><span class="palette-label">内置配色</span><button class="palette-dot active" data-palette-choice="lime" style="background:#d4f36b" aria-label="荧光黄绿"></button><button class="palette-dot" data-palette-choice="cyan" style="background:#61dfd0" aria-label="青色"></button><button class="palette-dot" data-palette-choice="orange" style="background:#ff9c66" aria-label="橙色"></button></div></div>
+      </article>
+
+      <article class="direction-card soft" data-direction="soft" data-palette="blue">
+        <div class="direction-head"><div class="direction-number">04 / 04</div><div class="direction-title"><h2>Sculpted Fluent 雕刻工作台</h2><p>清透、圆润但不幼稚，最接近 Windows 原生应用的精致版本。</p><div class="tags"><span class="tag">Windows 原生感</span><span class="tag">柔和层次</span><span class="tag">易上手</span></div></div></div>
+        <div class="mini-window"><aside class="mini-rail"><div class="mini-brand"><span class="mini-brand-mark">T</span><span>ToolBox</span></div><div class="mini-rail-link active"><b>◈</b><span>概览</span></div><div class="mini-rail-link"><b>▦</b><span>插件</span></div><div class="mini-rail-link"><b>⚙</b><span>设置</span></div></aside><div class="mini-main"><div class="mini-top"><span class="mini-breadcrumb">ToolBox  /  插件工作区</span><span class="mini-user"></span></div><div class="mini-eyebrow">已安装插件 · 正在运行</div><h3>Phone Audio Relay</h3><p class="mini-description">用一套稳定的 Windows 风格组件，承载所有插件自己的状态和操作。</p><div class="mini-grid"><div class="mini-panel"><div class="mini-panel-title"><span>设备列表</span><small>3 台</small></div><div class="mini-row"><span class="mini-device">◉</span><span class="mini-row-copy"><strong>我的手机</strong><span>已配对 · 可用</span></span><button class="mini-action">连接</button></div><div class="mini-row"><span class="mini-device">◉</span><span class="mini-row-copy"><strong>Pixel 9</strong><span>已配对 · 可用</span></span><button class="mini-action quiet">详情</button></div></div><div class="mini-panel"><div class="mini-panel-title"><span>概览</span></div><div class="mini-status">就绪</div><div class="mini-stat"><span>当前连接</span><strong>无</strong></div><div class="mini-stat"><span>运行模式</span><strong>Worker</strong></div></div></div></div></div>
+        <div class="direction-foot"><div class="font-note">字体：<b>Segoe UI Variable Display</b> + Segoe UI</div><div class="palette"><span class="palette-label">内置配色</span><button class="palette-dot active" data-palette-choice="blue" style="background:#527bd7" aria-label="蓝色"></button><button class="palette-dot" data-palette-choice="teal" style="background:#278f8a" aria-label="青绿色"></button><button class="palette-dot" data-palette-choice="plum" style="background:#8a66bd" aria-label="梅紫色"></button></div></div>
+      </article>
+    </section>
+
+    <div class="legend"><span><i class="accent"></i>每个方向可以内置多套配色</span><span><i class="structure"></i>布局、字体、密度和组件形态才是方向差异</span><span>本页先选整体气质，详细交互原型按选定方向展开</span></div>
+  </main>
+  <script>
+    const names = {
+      orbit: ['Orbit 轨道工作台', '深色、沉浸、状态聚焦；适合把 ToolBox 做成有仪表感的个人控制中心。'],
+      quiet: ['Quiet Room 安静工作台', '浅色、留白、编辑感；适合强调内容秩序和长期使用的舒适度。'],
+      signal: ['Signal 信号控制台', '紧凑、锐利、信息密度高；适合高频操作和设备状态监控。'],
+      soft: ['Sculpted Fluent 雕刻工作台', '清透、圆润、接近 Windows 原生应用；最稳妥、最容易上手。']
+    };
+    let selected = null;
+    document.querySelectorAll('.direction-card').forEach(card => {
+      card.addEventListener('click', () => {
+        selected = card.dataset.direction;
+        document.querySelectorAll('.direction-card').forEach(item => item.classList.toggle('selected', item === card));
+        document.querySelector('#selectedTitle').textContent = `已选择：${names[selected][0]}`;
+        document.querySelector('#selectedCopy').textContent = names[selected][1] + ' 你可以继续点击本卡片的配色圆点，查看内置主题的效果。';
+        document.querySelector('#selectionMark').classList.add('ready');
+        document.querySelector('#selectionMark').innerHTML = '<i></i>已选择';
+      });
+    });
+    document.querySelectorAll('.palette-dot').forEach(dot => {
+      dot.addEventListener('click', event => {
+        event.stopPropagation();
+        const card = dot.closest('.direction-card');
+        card.dataset.palette = dot.dataset.paletteChoice;
+        card.querySelectorAll('.palette-dot').forEach(item => item.classList.toggle('active', item === dot));
+        card.click();
+      });
+    });
+  </script>
+</body>
+</html>

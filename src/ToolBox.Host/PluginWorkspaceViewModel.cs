@@ -107,6 +107,8 @@ public sealed class PluginWorkspaceViewModel : INotifyPropertyChanged, IDisposab
 
     public bool HasPluginUiUnavailable => IsRuntimeEnabled && _uiSnapshot is null;
 
+    public bool IsPluginUiDisabled => !IsRuntimeEnabled;
+
     public bool HasUiActions => HasPluginUi && UiActions.Count > 0;
 
     public bool HasUiValues => HasPluginUi && UiValues.Count > 0;
@@ -136,6 +138,31 @@ public sealed class PluginWorkspaceViewModel : INotifyPropertyChanged, IDisposab
     public string RuntimeDescription => Manifest.Runtime.Background
         ? $"{RuntimeMode} · background metadata"
         : RuntimeMode;
+
+    public string CardSize => _settings.GetPluginCardSize(PluginId);
+
+    public bool HasCardSizeOverride => _settings.HasPluginCardSizeOverride(PluginId);
+
+    public bool IsCompactCard => string.Equals(CardSize, "compact", StringComparison.Ordinal);
+
+    public bool IsStandardCard => string.Equals(CardSize, "standard", StringComparison.Ordinal);
+
+    public bool IsFeaturedCard => string.Equals(CardSize, "featured", StringComparison.Ordinal);
+
+    public bool IsStandardOrFeaturedCard => !IsCompactCard;
+
+    public bool IsRunning => LifecycleState == PluginLifecycleState.Running;
+
+    public bool IsAttention => LifecycleState is PluginLifecycleState.Faulted or PluginLifecycleState.DisableFailed or PluginLifecycleState.RestartRequired or PluginLifecycleState.Quarantined;
+
+    public bool IsBusy => _operationInProgress || _uiOperationInProgress;
+
+    public string CardSizeLabel => _localization[$"CardSize{CardSize switch
+    {
+        "compact" => "Compact",
+        "featured" => "Featured",
+        _ => "Standard"
+    }}"];
 
     public PluginLifecycleState LifecycleState => _state.LifecycleState;
 
@@ -173,11 +200,11 @@ public sealed class PluginWorkspaceViewModel : INotifyPropertyChanged, IDisposab
 
     public Brush StatusAccentBrush => LifecycleState switch
     {
-        PluginLifecycleState.Running => HealthyBrush,
+        PluginLifecycleState.Running => ThemeBrush("HealthyBrush", HealthyBrush),
         PluginLifecycleState.Faulted or PluginLifecycleState.DisableFailed or PluginLifecycleState.RestartRequired
-            => ErrorBrush,
-        PluginLifecycleState.Disabled => MutedBrush,
-        _ => WarningBrush
+            => ThemeBrush("ErrorBrush", ErrorBrush),
+        PluginLifecycleState.Disabled => ThemeBrush("MutedTextBrush", MutedBrush),
+        _ => ThemeBrush("WarningBrush", WarningBrush)
     };
 
     public bool HasError => !string.IsNullOrWhiteSpace(ErrorMessage);
@@ -601,6 +628,22 @@ public sealed class PluginWorkspaceViewModel : INotifyPropertyChanged, IDisposab
         {
             OnPropertyChanged(nameof(IsOpened));
             OnPropertyChanged(nameof(OpenedStateLabel));
+            RefreshPresentationSettings();
+        });
+    }
+
+    internal void RefreshPresentationSettings()
+    {
+        _uiDispatcher.Dispatch(() =>
+        {
+            OnPropertyChanged(nameof(CardSize));
+            OnPropertyChanged(nameof(HasCardSizeOverride));
+            OnPropertyChanged(nameof(IsCompactCard));
+            OnPropertyChanged(nameof(IsStandardCard));
+            OnPropertyChanged(nameof(IsFeaturedCard));
+            OnPropertyChanged(nameof(IsStandardOrFeaturedCard));
+            OnPropertyChanged(nameof(CardSizeLabel));
+            OnPropertyChanged(nameof(StatusAccentBrush));
         });
     }
 
@@ -625,6 +668,7 @@ public sealed class PluginWorkspaceViewModel : INotifyPropertyChanged, IDisposab
             OnPropertyChanged(nameof(OpenedStateLabel));
             OnPropertyChanged(nameof(HasPluginUi));
             OnPropertyChanged(nameof(HasPluginUiUnavailable));
+            OnPropertyChanged(nameof(IsPluginUiDisabled));
             OnPropertyChanged(nameof(HasUiActions));
             OnPropertyChanged(nameof(HasUiValues));
             OnPropertyChanged(nameof(HasInputSurface));
@@ -707,6 +751,11 @@ public sealed class PluginWorkspaceViewModel : INotifyPropertyChanged, IDisposab
         var brush = new SolidColorBrush((Color)ColorConverter.ConvertFromString(hex)!);
         brush.Freeze();
         return brush;
+    }
+
+    private static Brush ThemeBrush(string key, Brush fallback)
+    {
+        return System.Windows.Application.Current?.Resources[key] as Brush ?? fallback;
     }
 }
 

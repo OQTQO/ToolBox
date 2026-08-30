@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Globalization;
+using System.IO;
 using System.Runtime.CompilerServices;
 using System.Windows.Media;
 using ToolBox.Core.Diagnostics;
@@ -17,7 +18,16 @@ public enum ShellPage
 {
     Overview,
     Plugin,
+    Activity,
     Settings
+}
+
+public enum SettingsSection
+{
+    Appearance,
+    Plugins,
+    Runtime,
+    About
 }
 
 public sealed class MainWindowViewModel : INotifyPropertyChanged, IDisposable
@@ -38,10 +48,15 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged, IDisposable
     private readonly ObservableCollection<PluginWorkspaceViewModel> _pluginWorkspaces = [];
     private readonly ObservableCollection<PluginWorkspaceViewModel> _installedPluginWorkspaces = [];
     private readonly ObservableCollection<PluginWorkspaceViewModel> _openedPluginWorkspaces = [];
+    private readonly ObservableCollection<PluginWorkspaceViewModel> _visiblePluginWorkspaces = [];
     private HostDiagnosticsSnapshot _snapshot;
     private ShellPage _selectedPage = ShellPage.Overview;
     private PluginWorkspaceViewModel? _selectedPluginWorkspace;
     private string? _pluginManagerError;
+    private string _pluginSearchText = string.Empty;
+    private string _pluginFilter = "all";
+    private string _pluginSort = "name";
+    private SettingsSection _settingsSection = SettingsSection.Appearance;
     private bool _disposed;
 
     internal MainWindowViewModel(
@@ -74,6 +89,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged, IDisposable
         PluginWorkspaces = new ReadOnlyObservableCollection<PluginWorkspaceViewModel>(_pluginWorkspaces);
         InstalledPluginWorkspaces = new ReadOnlyObservableCollection<PluginWorkspaceViewModel>(_installedPluginWorkspaces);
         OpenedPluginWorkspaces = new ReadOnlyObservableCollection<PluginWorkspaceViewModel>(_openedPluginWorkspaces);
+        VisiblePluginWorkspaces = new ReadOnlyObservableCollection<PluginWorkspaceViewModel>(_visiblePluginWorkspaces);
         RefreshPluginWorkspaces();
     }
 
@@ -87,6 +103,8 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged, IDisposable
 
     public ReadOnlyObservableCollection<PluginWorkspaceViewModel> OpenedPluginWorkspaces { get; }
 
+    public ReadOnlyObservableCollection<PluginWorkspaceViewModel> VisiblePluginWorkspaces { get; }
+
     public string WindowTitle => T("AppTitle");
 
     public bool IsOverviewPage => _selectedPage == ShellPage.Overview;
@@ -95,11 +113,72 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged, IDisposable
 
     public bool IsSettingsPage => _selectedPage == ShellPage.Settings;
 
+    public bool IsActivityPage => _selectedPage == ShellPage.Activity;
+
     public PluginWorkspaceViewModel? SelectedPluginWorkspace => _selectedPluginWorkspace;
+
+    public bool HasSelectedPlugin => _selectedPluginWorkspace is not null;
 
     public bool HasOpenedPlugins => OpenedPluginCount > 0;
 
     public int OpenedPluginCount => OpenedPluginWorkspaces.Count;
+
+    public int RunningPluginCount => InstalledPluginWorkspaces.Count(workspace => workspace.LifecycleState == PluginLifecycleState.Running);
+
+    public int AttentionPluginCount => InstalledPluginWorkspaces.Count(workspace => workspace.LifecycleState is
+        PluginLifecycleState.Faulted or PluginLifecycleState.DisableFailed or PluginLifecycleState.RestartRequired or PluginLifecycleState.Quarantined);
+
+    public string DataRetentionLabel => "100%";
+
+    public string OverviewTitle => _settings.OverviewTitle ?? T("OverviewDefaultTitle");
+
+    public bool HasCustomOverviewTitle => !string.IsNullOrWhiteSpace(_settings.OverviewTitle);
+
+    public string Theme => _settings.Theme;
+
+    public string DefaultPluginCardSize => _settings.DefaultPluginCardSize;
+
+    public bool DynamicGlow => _settings.DynamicGlow;
+
+    public bool ReduceMotion => _settings.ReduceMotion;
+
+    public bool Transparency => _settings.Transparency;
+
+    public int CornerRadius => _settings.CornerRadius;
+
+    public int BackgroundBrightness => _settings.BackgroundBrightness;
+
+    public bool ConfirmEnable => _settings.ConfirmEnable;
+
+    public bool ConfirmUninstall => _settings.ConfirmUninstall;
+
+    public bool ShowDiagnostics => _settings.ShowDiagnostics;
+
+    public SettingsSection SettingsSection => _settingsSection;
+
+    public bool IsAppearanceSettings => _settingsSection == SettingsSection.Appearance;
+
+    public bool IsPluginSettings => _settingsSection == SettingsSection.Plugins;
+
+    public bool IsRuntimeSettings => _settingsSection == SettingsSection.Runtime;
+
+    public bool IsAboutSettings => _settingsSection == SettingsSection.About;
+
+    public string PluginSearchText => _pluginSearchText;
+
+    public string PluginFilter => _pluginFilter;
+
+    public string PluginSort => _pluginSort;
+
+    public string ConfigDirectory => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "ToolBox");
+
+    public string StateDirectory => Path.Combine(ConfigDirectory, "Plugins");
+
+    public string LogsDirectory => Path.Combine(ConfigDirectory, "Logs");
+
+    public bool HasVisiblePlugins => VisiblePluginWorkspaces.Count > 0;
+
+    public bool HasNoVisiblePlugins => !HasVisiblePlugins;
 
     public bool CloseToTray => _settings.CloseBehavior == CloseBehavior.MinimizeToTray;
 
@@ -192,11 +271,6 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged, IDisposable
 
     public void SelectPage(ShellPage page)
     {
-        if (page == ShellPage.Plugin && _selectedPluginWorkspace?.IsOpened != true)
-        {
-            page = ShellPage.Overview;
-        }
-
         if (_selectedPage == page)
         {
             return;
@@ -214,7 +288,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged, IDisposable
     public void SelectPluginWorkspace(PluginWorkspaceViewModel workspace)
     {
         ArgumentNullException.ThrowIfNull(workspace);
-        if (!_pluginWorkspaces.Contains(workspace) || !workspace.IsOpened)
+        if (!_pluginWorkspaces.Contains(workspace) || !workspace.IsInstalled)
         {
             SelectPage(ShellPage.Overview);
             return;
@@ -225,6 +299,18 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged, IDisposable
         NotifyPageProperties();
     }
 
+    public void ClearSelectedPlugin()
+    {
+        SetSelectedPluginWorkspace(null);
+    }
+
+    public void ClearEvents()
+    {
+        RecentEvents.Clear();
+        OnPropertyChanged(nameof(EventCount));
+        OnPropertyChanged(nameof(EventCountLabel));
+    }
+
     public void SetLanguage(AppLanguage language)
     {
         _localization.SetLanguage(language);
@@ -233,6 +319,86 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged, IDisposable
     internal void SetCloseBehavior(CloseBehavior behavior)
     {
         _settings.SetCloseBehavior(behavior);
+    }
+
+    public void SelectSettingsSection(SettingsSection section)
+    {
+        if (_settingsSection == section)
+        {
+            return;
+        }
+
+        _settingsSection = section;
+        OnPropertyChanged(nameof(SettingsSection));
+        OnPropertyChanged(nameof(IsAppearanceSettings));
+        OnPropertyChanged(nameof(IsPluginSettings));
+        OnPropertyChanged(nameof(IsRuntimeSettings));
+        OnPropertyChanged(nameof(IsAboutSettings));
+    }
+
+    public void SetOverviewTitle(string? title) => _settings.SetOverviewTitle(title);
+
+    public void ResetOverviewTitle() => _settings.SetOverviewTitle(null);
+
+    public void SetTheme(string theme)
+    {
+        _settings.SetTheme(theme);
+        ThemeService.Apply(_settings.Theme, _settings.Transparency, _settings.DynamicGlow, _settings.BackgroundBrightness, _settings.CornerRadius);
+    }
+
+    public void SetDefaultPluginCardSize(string size) => _settings.SetDefaultPluginCardSize(size);
+
+    public void SetPluginCardSize(PluginWorkspaceViewModel workspace, string size)
+    {
+        ArgumentNullException.ThrowIfNull(workspace);
+        EnsureWorkspace(workspace);
+        _settings.SetPluginCardSize(workspace.PluginId, size);
+    }
+
+    public void ClearPluginCardSize(PluginWorkspaceViewModel workspace)
+    {
+        ArgumentNullException.ThrowIfNull(workspace);
+        EnsureWorkspace(workspace);
+        _settings.ClearPluginCardSize(workspace.PluginId);
+    }
+
+    public void SetAppearanceOption(bool? dynamicGlow = null, bool? reduceMotion = null, bool? transparency = null, int? cornerRadius = null, int? backgroundBrightness = null)
+        => _settings.SetAppearanceOption(dynamicGlow, reduceMotion, transparency, cornerRadius, backgroundBrightness);
+
+    public void SetPluginManagementOption(bool? confirmEnable = null, bool? confirmUninstall = null, bool? showDiagnostics = null)
+        => _settings.SetPluginManagementOption(confirmEnable, confirmUninstall, showDiagnostics);
+
+    public void ResetAppearance()
+    {
+        _settings.ResetAppearance();
+        ThemeService.Apply(_settings.Theme, _settings.Transparency, _settings.DynamicGlow, _settings.BackgroundBrightness, _settings.CornerRadius);
+    }
+
+    public void SetPluginSearchText(string? value)
+    {
+        var normalized = value?.Trim() ?? string.Empty;
+        if (string.Equals(_pluginSearchText, normalized, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        _pluginSearchText = normalized;
+        RefreshVisiblePluginWorkspaces();
+        OnPropertyChanged(nameof(PluginSearchText));
+    }
+
+    public void SetPluginFilter(string filter)
+    {
+        _pluginFilter = filter is "running" or "disabled" or "attention" ? filter : "all";
+        RefreshVisiblePluginWorkspaces();
+        OnPropertyChanged(nameof(PluginFilter));
+    }
+
+    public void SetPluginSort(string sort)
+    {
+        _pluginSort = sort is "status" or "version" ? sort : "name";
+        RefreshVisiblePluginWorkspaces();
+        OnPropertyChanged(nameof(PluginSort));
     }
 
     public async Task ToggleWorkspaceOpenedAsync(PluginWorkspaceViewModel workspace)
@@ -281,7 +447,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged, IDisposable
             }
 
             await workspace.InstallPackageAsync(packagePath).ConfigureAwait(false);
-            _settings.SetPluginOpened(manifest.Id, opened: true);
+            _settings.SetPluginOpened(manifest.Id, opened: false);
             RefreshPluginWorkspaces();
         }
         catch (Exception exception)
@@ -312,7 +478,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged, IDisposable
             }
 
             var result = await _packageInstaller.InstallAsync(packagePath).ConfigureAwait(false);
-            _settings.SetPluginOpened(result.PluginId, opened: true);
+            _settings.SetPluginOpened(result.PluginId, opened: false);
             _logger.Log(
                 LogLevel.Information,
                 "Package",
@@ -377,6 +543,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged, IDisposable
         _pluginWorkspaces.Clear();
         _installedPluginWorkspaces.Clear();
         _openedPluginWorkspaces.Clear();
+        _visiblePluginWorkspaces.Clear();
     }
 
     private void RefreshPluginWorkspaces()
@@ -433,6 +600,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged, IDisposable
                 && workspace.IsOpened);
         SetSelectedPluginWorkspace(selected);
         RefreshWorkspaceCollections();
+        RefreshVisiblePluginWorkspaces();
     }
 
     private void OnDiagnosticsChanged(HostDiagnosticsSnapshot snapshot)
@@ -458,7 +626,9 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged, IDisposable
             RefreshWorkspaceCollections();
         }
 
-        if (ReferenceEquals(_selectedPluginWorkspace, workspace) && !workspace.IsOpened)
+        RefreshVisiblePluginWorkspaces();
+
+        if (ReferenceEquals(_selectedPluginWorkspace, workspace) && !workspace.IsInstalled)
         {
             _selectedPage = ShellPage.Settings;
             SetSelectedPluginWorkspace(null);
@@ -510,6 +680,8 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged, IDisposable
             OnPropertyChanged(nameof(StatusDescription));
             OnPropertyChanged(nameof(StageLabel));
             OnPropertyChanged(nameof(EventCountLabel));
+            OnPropertyChanged(nameof(OverviewTitle));
+            OnPropertyChanged(nameof(HasCustomOverviewTitle));
         });
     }
 
@@ -517,6 +689,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged, IDisposable
     {
         OnPropertyChanged(nameof(IsOverviewPage));
         OnPropertyChanged(nameof(IsPluginPage));
+        OnPropertyChanged(nameof(IsActivityPage));
         OnPropertyChanged(nameof(IsSettingsPage));
     }
 
@@ -539,14 +712,33 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged, IDisposable
         }
 
         OnPropertyChanged(nameof(SelectedPluginWorkspace));
+        OnPropertyChanged(nameof(HasSelectedPlugin));
     }
 
     private void OnSettingsChanged(object? sender, EventArgs e)
     {
         _uiDispatcher.Dispatch(() =>
         {
+            ThemeService.Apply(_settings.Theme, _settings.Transparency, _settings.DynamicGlow, _settings.BackgroundBrightness, _settings.CornerRadius);
             OnPropertyChanged(nameof(CloseToTray));
             OnPropertyChanged(nameof(CloseDirectly));
+            OnPropertyChanged(nameof(OverviewTitle));
+            OnPropertyChanged(nameof(HasCustomOverviewTitle));
+            OnPropertyChanged(nameof(Theme));
+            OnPropertyChanged(nameof(DefaultPluginCardSize));
+            OnPropertyChanged(nameof(DynamicGlow));
+            OnPropertyChanged(nameof(ReduceMotion));
+            OnPropertyChanged(nameof(Transparency));
+            OnPropertyChanged(nameof(CornerRadius));
+            OnPropertyChanged(nameof(BackgroundBrightness));
+            OnPropertyChanged(nameof(ConfirmEnable));
+            OnPropertyChanged(nameof(ConfirmUninstall));
+            OnPropertyChanged(nameof(ShowDiagnostics));
+            foreach (var workspace in _pluginWorkspaces)
+            {
+                workspace.RefreshPresentationSettings();
+            }
+            RefreshVisiblePluginWorkspacesCore();
         });
     }
 
@@ -567,6 +759,51 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged, IDisposable
         OnPropertyChanged(nameof(OpenedPluginCount));
         OnPropertyChanged(nameof(InstalledPluginCountLabel));
         OnPropertyChanged(nameof(PluginCountSummaryLabel));
+        OnPropertyChanged(nameof(RunningPluginCount));
+        OnPropertyChanged(nameof(AttentionPluginCount));
+        OnPropertyChanged(nameof(HasVisiblePlugins));
+        OnPropertyChanged(nameof(HasNoVisiblePlugins));
+        RefreshVisiblePluginWorkspacesCore();
+    }
+
+    private void RefreshVisiblePluginWorkspaces()
+    {
+        _uiDispatcher.Dispatch(RefreshVisiblePluginWorkspacesCore);
+    }
+
+    private void RefreshVisiblePluginWorkspacesCore()
+    {
+        if (_disposed)
+        {
+            return;
+        }
+
+        IEnumerable<PluginWorkspaceViewModel> items = InstalledPluginWorkspaces;
+        items = _pluginFilter switch
+        {
+            "running" => items.Where(workspace => workspace.LifecycleState == PluginLifecycleState.Running),
+            "disabled" => items.Where(workspace => workspace.LifecycleState == PluginLifecycleState.Disabled),
+            "attention" => items.Where(workspace => workspace.LifecycleState is PluginLifecycleState.Faulted or PluginLifecycleState.DisableFailed or PluginLifecycleState.RestartRequired or PluginLifecycleState.Quarantined),
+            _ => items
+        };
+
+        if (!string.IsNullOrWhiteSpace(_pluginSearchText))
+        {
+            items = items.Where(workspace => workspace.DisplayName.Contains(_pluginSearchText, StringComparison.CurrentCultureIgnoreCase)
+                || workspace.Publisher.Contains(_pluginSearchText, StringComparison.CurrentCultureIgnoreCase)
+                || workspace.PluginId.Contains(_pluginSearchText, StringComparison.OrdinalIgnoreCase));
+        }
+
+        items = _pluginSort switch
+        {
+            "status" => items.OrderBy(workspace => workspace.LifecycleState).ThenBy(workspace => workspace.DisplayName, StringComparer.CurrentCultureIgnoreCase),
+            "version" => items.OrderByDescending(workspace => workspace.InstalledVersion, StringComparer.Ordinal).ThenBy(workspace => workspace.DisplayName, StringComparer.CurrentCultureIgnoreCase),
+            _ => items.OrderBy(workspace => workspace.DisplayName, StringComparer.CurrentCultureIgnoreCase)
+        };
+
+        ReplaceCollection(_visiblePluginWorkspaces, items);
+        OnPropertyChanged(nameof(HasVisiblePlugins));
+        OnPropertyChanged(nameof(HasNoVisiblePlugins));
     }
 
     private void CapturePluginError(PluginWorkspaceViewModel workspace)

@@ -73,6 +73,7 @@ public partial class App : Application, IHostApplicationCommands
     {
         _settings = new HostSettingsService();
         _localization = new LocalizationService(_settings);
+        ThemeService.Apply(_settings.Theme, _settings.Transparency, _settings.DynamicGlow, _settings.BackgroundBrightness, _settings.CornerRadius);
         var sessionId = Guid.NewGuid().ToString("N");
         var launchAttemptId = Guid.NewGuid().ToString("N");
 

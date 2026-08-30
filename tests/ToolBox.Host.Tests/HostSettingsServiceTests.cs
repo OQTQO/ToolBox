@@ -20,7 +20,7 @@ public sealed class HostSettingsServiceTests
         settings.SetCloseBehavior(CloseBehavior.Exit);
 
         using var document = JsonDocument.Parse(File.ReadAllText(fixture.SettingsPath));
-        Assert.Equal(1, document.RootElement.GetProperty("SchemaVersion").GetInt32());
+        Assert.Equal(2, document.RootElement.GetProperty("SchemaVersion").GetInt32());
         Assert.Equal("Chinese", document.RootElement.GetProperty("Language").GetString());
         Assert.Equal("Exit", document.RootElement.GetProperty("CloseBehavior").GetString());
     }
@@ -67,6 +67,35 @@ public sealed class HostSettingsServiceTests
 
         Assert.Equal(CloseBehavior.MinimizeToTray, settings.CloseBehavior);
         Assert.True(settings.IsPluginOpened("com.toolbox.audio-relay"));
+    }
+
+    [Fact]
+    public void AppearanceAndCardPreferencesRoundTrip()
+    {
+        using var fixture = new SettingsFixture();
+        var settings = new HostSettingsService(fixture.SettingsPath);
+
+        settings.SetTheme("ember");
+        settings.SetOverviewTitle("我的工具空间");
+        settings.SetDefaultPluginCardSize("featured");
+        settings.SetPluginCardSize("com.example.plugin", "compact");
+        settings.SetAppearanceOption(dynamicGlow: false, reduceMotion: true, transparency: false, cornerRadius: 22, backgroundBrightness: 115);
+        settings.SetPluginManagementOption(confirmEnable: true, confirmUninstall: false, showDiagnostics: true);
+
+        var reloaded = new HostSettingsService(fixture.SettingsPath);
+
+        Assert.Equal("ember", reloaded.Theme);
+        Assert.Equal("我的工具空间", reloaded.OverviewTitle);
+        Assert.Equal("featured", reloaded.DefaultPluginCardSize);
+        Assert.Equal("compact", reloaded.GetPluginCardSize("com.example.plugin"));
+        Assert.False(reloaded.DynamicGlow);
+        Assert.True(reloaded.ReduceMotion);
+        Assert.False(reloaded.Transparency);
+        Assert.Equal(22, reloaded.CornerRadius);
+        Assert.Equal(115, reloaded.BackgroundBrightness);
+        Assert.True(reloaded.ConfirmEnable);
+        Assert.False(reloaded.ConfirmUninstall);
+        Assert.True(reloaded.ShowDiagnostics);
     }
 
     private sealed class SettingsFixture : IDisposable

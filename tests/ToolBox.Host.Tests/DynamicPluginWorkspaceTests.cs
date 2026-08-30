@@ -54,7 +54,7 @@ public sealed class DynamicPluginWorkspaceTests
         Assert.Equal("com.example.installed", workspace.PluginId);
         Assert.Equal("Installed Sample", workspace.DisplayName);
         Assert.Equal("1.0.0", workspace.InstalledVersion);
-        Assert.True(workspace.IsOpened);
+        Assert.False(workspace.IsOpened);
         Assert.Equal(PluginLifecycleState.Disabled, workspace.LifecycleState);
         Assert.False(workspace.IsRuntimeEnabled);
     }

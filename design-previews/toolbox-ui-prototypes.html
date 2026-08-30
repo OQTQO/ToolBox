@@ -1,0 +1,392 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>ToolBox UI Prototypes</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #0b1020;
+      --rail: #10182a;
+      --surface: #151f34;
+      --surface-2: #1c2945;
+      --surface-3: #223354;
+      --line: rgba(173, 196, 235, .13);
+      --text: #f1f5ff;
+      --muted: #8f9db8;
+      --faint: #63718d;
+      --accent: #72a8ff;
+      --accent-2: #9b8cff;
+      --good: #69e0b0;
+      --warning: #f4c56e;
+      --danger: #ff8594;
+      --shadow: 0 24px 80px rgba(0, 0, 0, .28);
+      --radius: 16px;
+      --radius-sm: 11px;
+      --font: "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
+      --mono: "Cascadia Code", Consolas, monospace;
+    }
+
+    [data-theme="mist"] {
+      color-scheme: light;
+      --bg: #eef2f8;
+      --rail: #f7f9fc;
+      --surface: #ffffff;
+      --surface-2: #f5f7fb;
+      --surface-3: #e9effa;
+      --line: #dce3ef;
+      --text: #15223a;
+      --muted: #65728a;
+      --faint: #9aa6b9;
+      --accent: #3474df;
+      --accent-2: #705ed7;
+      --good: #1b9c6d;
+      --warning: #b47718;
+      --danger: #ca4e61;
+      --shadow: 0 24px 70px rgba(36, 61, 101, .12);
+    }
+
+    [data-theme="signal"] {
+      --bg: #080b0e;
+      --rail: #0e1317;
+      --surface: #131a1f;
+      --surface-2: #192329;
+      --surface-3: #213039;
+      --line: rgba(190, 225, 224, .14);
+      --text: #e7f4f0;
+      --muted: #91a9a9;
+      --faint: #5f7778;
+      --accent: #5dd8c4;
+      --accent-2: #d1f36b;
+      --good: #a7e86d;
+      --warning: #f1ca69;
+      --danger: #ff8c83;
+      --shadow: 0 24px 80px rgba(0, 0, 0, .42);
+      --radius: 8px;
+      --radius-sm: 6px;
+    }
+
+    * { box-sizing: border-box; }
+    body { margin: 0; min-width: 1040px; background: var(--bg); color: var(--text); font-family: var(--font); }
+    button { font: inherit; color: inherit; }
+    button:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+    .app { min-height: 100vh; display: grid; grid-template-columns: 246px minmax(0, 1fr); }
+    .sidebar { display: flex; flex-direction: column; padding: 25px 15px 18px; background: var(--rail); border-right: 1px solid var(--line); }
+    .brand { display: flex; align-items: center; gap: 11px; padding: 0 12px 27px; }
+    .brand-mark { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 11px; background: linear-gradient(135deg, var(--accent), var(--accent-2)); color: white; font-weight: 800; box-shadow: 0 10px 28px color-mix(in srgb, var(--accent) 25%, transparent); }
+    .brand-title { font-size: 15px; font-weight: 700; letter-spacing: -.02em; }
+    .brand-subtitle { margin-top: 2px; color: var(--muted); font-size: 10px; }
+    .eyebrow { color: var(--faint); font-size: 10px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; }
+    .nav-label { margin: 6px 12px 8px; }
+    .nav-list { display: grid; gap: 4px; }
+    .nav-button, .plugin-button { display: grid; grid-template-columns: 26px 1fr auto; align-items: center; gap: 8px; width: 100%; min-height: 42px; padding: 0 12px; border: 0; border-radius: 11px; background: transparent; color: var(--muted); text-align: left; cursor: pointer; transition: .18s ease; }
+    .nav-button:hover, .plugin-button:hover { background: var(--surface-2); color: var(--text); }
+    .nav-button.active, .plugin-button.active { background: color-mix(in srgb, var(--accent) 15%, transparent); color: var(--text); box-shadow: inset 3px 0 0 var(--accent); }
+    .nav-icon { color: currentColor; font-size: 15px; text-align: center; }
+    .plugin-group { margin-top: 29px; }
+    .plugin-status-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--faint); box-shadow: 0 0 0 3px color-mix(in srgb, var(--faint) 12%, transparent); }
+    .plugin-status-dot.good { background: var(--good); box-shadow: 0 0 0 3px color-mix(in srgb, var(--good) 12%, transparent); }
+    .plugin-status-dot.warn { background: var(--warning); }
+    .sidebar-bottom { margin-top: auto; padding: 15px 12px 0; border-top: 1px solid var(--line); }
+    .workspace-health { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 11px; }
+    .health-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--good); }
+    .main { min-width: 0; }
+    .topbar { display: flex; justify-content: space-between; align-items: center; min-height: 74px; padding: 0 40px; border-bottom: 1px solid var(--line); }
+    .crumbs { display: flex; align-items: center; gap: 9px; color: var(--muted); font-size: 12px; }
+    .crumbs strong { color: var(--text); font-weight: 600; }
+    .scheme-picker { display: flex; gap: 6px; padding: 4px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); }
+    .scheme-picker button { padding: 7px 10px; border: 0; border-radius: 7px; background: transparent; color: var(--muted); font-size: 10px; cursor: pointer; }
+    .scheme-picker button.active { background: var(--surface-3); color: var(--text); }
+    .content { max-width: 1260px; margin: 0 auto; padding: 39px 42px 70px; }
+    .view { display: none; }
+    .view.active { display: block; }
+    .page-intro { display: flex; justify-content: space-between; align-items: end; gap: 25px; margin-bottom: 27px; }
+    h1, h2, h3, p { margin: 0; }
+    h1 { margin-top: 8px; font-size: 34px; line-height: 1.08; letter-spacing: -.045em; }
+    h2 { font-size: 20px; letter-spacing: -.025em; }
+    h3 { font-size: 13px; }
+    .lead { max-width: 610px; margin-top: 10px; color: var(--muted); font-size: 13px; line-height: 1.65; }
+    .theme-note { max-width: 230px; padding: 12px 14px; border: 1px solid var(--line); border-radius: var(--radius-sm); background: color-mix(in srgb, var(--surface) 70%, transparent); color: var(--muted); font-size: 11px; line-height: 1.5; }
+    .grid { display: grid; gap: 14px; }
+    .grid.three { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .grid.two { grid-template-columns: minmax(0, 1.2fr) minmax(300px, .8fr); }
+    .card { border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); box-shadow: var(--shadow); }
+    .stat-card { padding: 20px; }
+    .stat-value { margin-top: 9px; font-size: 27px; font-weight: 700; letter-spacing: -.05em; }
+    .stat-meta { margin-top: 5px; color: var(--muted); font-size: 11px; }
+    .overview-hero { position: relative; overflow: hidden; min-height: 220px; padding: 28px; background: linear-gradient(135deg, color-mix(in srgb, var(--accent) 18%, var(--surface)), var(--surface)); }
+    .overview-hero::after { content: ""; position: absolute; width: 330px; height: 330px; right: -100px; top: -160px; border: 1px solid color-mix(in srgb, var(--accent) 28%, transparent); border-radius: 50%; box-shadow: 0 0 0 28px color-mix(in srgb, var(--accent) 4%, transparent), 0 0 0 57px color-mix(in srgb, var(--accent) 3%, transparent); }
+    .hero-kicker { color: var(--accent); font-size: 11px; font-weight: 700; letter-spacing: .13em; text-transform: uppercase; }
+    .overview-hero h2 { max-width: 490px; margin-top: 11px; font-size: 29px; line-height: 1.12; }
+    .overview-hero p { max-width: 520px; margin-top: 12px; color: var(--muted); font-size: 12px; line-height: 1.65; }
+    .button { display: inline-flex; align-items: center; justify-content: center; gap: 7px; min-height: 35px; padding: 0 14px; border: 1px solid transparent; border-radius: 9px; cursor: pointer; font-size: 11px; font-weight: 650; transition: .18s ease; }
+    .button:hover { transform: translateY(-1px); filter: brightness(1.08); }
+    .button.primary { background: var(--accent); color: #07101f; box-shadow: 0 8px 20px color-mix(in srgb, var(--accent) 20%, transparent); }
+    .button.secondary { border-color: var(--line); background: var(--surface-2); color: var(--text); }
+    .button.ghost { border-color: transparent; background: transparent; color: var(--muted); }
+    .button.danger { border-color: color-mix(in srgb, var(--danger) 34%, transparent); background: color-mix(in srgb, var(--danger) 12%, transparent); color: var(--danger); }
+    .button:disabled { opacity: .45; cursor: not-allowed; transform: none; }
+    .hero-action { position: relative; z-index: 1; margin-top: 22px; }
+    .section-card { padding: 22px; }
+    .section-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 16px; }
+    .section-heading p { margin-top: 5px; color: var(--muted); font-size: 11px; }
+    .mini-plugin { display: flex; align-items: center; gap: 13px; padding: 14px 0; border-top: 1px solid var(--line); }
+    .mini-plugin:first-of-type { border-top: 0; padding-top: 0; }
+    .mini-icon, .plugin-icon { display: grid; place-items: center; flex: 0 0 auto; border-radius: 12px; background: linear-gradient(135deg, color-mix(in srgb, var(--accent) 28%, var(--surface-3)), var(--surface-3)); color: var(--accent); }
+    .mini-icon { width: 35px; height: 35px; font-size: 16px; }
+    .mini-copy { min-width: 0; flex: 1; }
+    .mini-copy strong { display: block; font-size: 12px; }
+    .mini-copy span { display: block; margin-top: 4px; color: var(--muted); font-size: 10px; }
+    .status-text { color: var(--good); font-size: 10px; font-weight: 650; }
+    .plugin-layout { display: grid; grid-template-columns: 225px minmax(0, 1fr); gap: 14px; align-items: start; }
+    .plugin-list { padding: 10px; }
+    .plugin-list .eyebrow { padding: 10px 10px 8px; }
+    .plugin-button { min-height: 54px; grid-template-columns: 34px 1fr auto; }
+    .plugin-button .mini-icon { width: 28px; height: 28px; border-radius: 8px; font-size: 13px; }
+    .plugin-button strong { display: block; color: currentColor; font-size: 11px; font-weight: 650; }
+    .plugin-button small { display: block; margin-top: 3px; color: var(--faint); font-size: 9px; }
+    .plugin-detail { min-width: 0; }
+    .plugin-header { display: flex; justify-content: space-between; gap: 22px; padding: 25px 27px; background: linear-gradient(135deg, color-mix(in srgb, var(--accent) 12%, var(--surface)), var(--surface)); }
+    .plugin-heading { display: flex; gap: 15px; align-items: center; }
+    .plugin-icon { width: 54px; height: 54px; font-size: 25px; border-radius: 16px; }
+    .plugin-title h2 { font-size: 24px; }
+    .plugin-title p { margin-top: 5px; color: var(--muted); font-size: 11px; }
+    .plugin-actions { display: flex; align-items: center; gap: 8px; }
+    .status-pill { display: inline-flex; align-items: center; gap: 7px; min-height: 26px; padding: 0 10px; border: 1px solid color-mix(in srgb, var(--good) 28%, transparent); border-radius: 99px; background: color-mix(in srgb, var(--good) 10%, transparent); color: var(--good); font-size: 10px; font-weight: 700; }
+    .status-pill.warn { border-color: color-mix(in srgb, var(--warning) 28%, transparent); background: color-mix(in srgb, var(--warning) 10%, transparent); color: var(--warning); }
+    .status-pill.off { border-color: var(--line); background: var(--surface-2); color: var(--muted); }
+    .status-orb { width: 7px; height: 7px; border-radius: 50%; background: currentColor; box-shadow: 0 0 14px currentColor; }
+    .plugin-tabs { display: flex; gap: 4px; padding: 9px 18px 0; border-bottom: 1px solid var(--line); background: var(--surface); }
+    .plugin-tabs button { padding: 11px 12px 12px; border: 0; border-bottom: 2px solid transparent; background: transparent; color: var(--muted); cursor: pointer; font-size: 11px; }
+    .plugin-tabs button.active { border-bottom-color: var(--accent); color: var(--text); font-weight: 700; }
+    .plugin-body { padding: 20px; }
+    .callout { padding: 12px 14px; border: 1px solid color-mix(in srgb, var(--accent) 22%, transparent); border-radius: var(--radius-sm); background: color-mix(in srgb, var(--accent) 8%, transparent); color: var(--muted); font-size: 11px; line-height: 1.55; }
+    .callout strong { color: var(--text); }
+    .metric-row { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 9px; margin-top: 14px; }
+    .metric { padding: 13px; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--surface-2); }
+    .metric span { display: block; color: var(--muted); font-size: 10px; }
+    .metric strong { display: block; margin-top: 6px; font-size: 16px; }
+    .section-block { margin-top: 18px; padding: 17px; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--surface); }
+    .section-block:first-child { margin-top: 0; }
+    .section-block.collapsed .section-content { display: none; }
+    .section-toggle { display: flex; align-items: center; justify-content: space-between; width: 100%; padding: 0; border: 0; background: transparent; cursor: pointer; text-align: left; }
+    .section-toggle span { color: var(--muted); font-size: 13px; transition: .18s ease; }
+    .section-block.collapsed .section-toggle span { transform: rotate(-90deg); }
+    .section-content { margin-top: 14px; }
+    .toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 13px; }
+    .toolbar-copy { color: var(--muted); font-size: 11px; }
+    .toolbar-actions { display: flex; gap: 7px; }
+    .device-row { display: grid; grid-template-columns: 35px minmax(0, 1fr) auto auto; align-items: center; gap: 12px; padding: 13px 0; border-top: 1px solid var(--line); }
+    .device-row:first-child { border-top: 0; }
+    .device-avatar { display: grid; place-items: center; width: 35px; height: 35px; border-radius: 11px; background: var(--surface-3); color: var(--accent); font-size: 17px; }
+    .device-name { font-size: 12px; font-weight: 700; }
+    .device-sub { margin-top: 4px; color: var(--muted); font-size: 10px; }
+    .device-state { color: var(--good); font-size: 10px; }
+    .event-row { display: grid; grid-template-columns: 75px 80px minmax(0, 1fr); gap: 12px; padding: 12px 0; border-top: 1px solid var(--line); font-size: 10px; }
+    .event-row:first-child { border-top: 0; }
+    .event-time { color: var(--faint); font-family: var(--mono); }
+    .event-kind { color: var(--accent); font-weight: 700; }
+    .event-copy { color: var(--muted); }
+    .empty { padding: 30px 15px; border: 1px dashed var(--line); border-radius: var(--radius-sm); text-align: center; }
+    .empty strong { display: block; font-size: 13px; }
+    .empty p { max-width: 380px; margin: 7px auto 0; color: var(--muted); font-size: 11px; line-height: 1.55; }
+    .settings-row { display: flex; align-items: center; justify-content: space-between; gap: 18px; padding: 16px 0; border-top: 1px solid var(--line); }
+    .settings-row:first-child { border-top: 0; padding-top: 0; }
+    .settings-row p { margin-top: 4px; color: var(--muted); font-size: 11px; line-height: 1.5; }
+    .switch { width: 39px; height: 23px; padding: 3px; border: 0; border-radius: 99px; background: var(--surface-3); cursor: pointer; }
+    .switch::after { content: ""; display: block; width: 17px; height: 17px; border-radius: 50%; background: var(--muted); transition: .18s ease; }
+    .switch.on { background: var(--accent); }
+    .switch.on::after { margin-left: 16px; background: #fff; }
+    .modal-backdrop { position: fixed; inset: 0; display: none; place-items: center; padding: 24px; background: rgba(2, 6, 16, .62); backdrop-filter: blur(8px); z-index: 10; }
+    .modal-backdrop.show { display: grid; }
+    .modal { width: min(500px, 100%); padding: 24px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); box-shadow: 0 30px 90px rgba(0, 0, 0, .42); }
+    .modal p { margin-top: 9px; color: var(--muted); font-size: 12px; line-height: 1.6; }
+    .modal-actions { display: flex; justify-content: end; gap: 8px; margin-top: 21px; }
+    .toast { position: fixed; right: 24px; bottom: 22px; max-width: 360px; padding: 12px 15px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface-2); box-shadow: var(--shadow); color: var(--text); font-size: 11px; opacity: 0; transform: translateY(10px); pointer-events: none; transition: .22s ease; z-index: 20; }
+    .toast.show { opacity: 1; transform: translateY(0); }
+    code { color: var(--accent-2); font-family: var(--mono); font-size: .92em; }
+    @media (max-width: 1100px) { body { min-width: 900px; } .app { grid-template-columns: 210px minmax(0, 1fr); } .topbar { padding: 0 26px; } .content { padding: 30px 26px 55px; } }
+  </style>
+</head>
+<body data-theme="midnight">
+  <div class="app">
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="brand-mark">T</div>
+        <div><div class="brand-title">ToolBox</div><div class="brand-subtitle">个人工具控制中心</div></div>
+      </div>
+
+      <div class="nav-label eyebrow">工作区</div>
+      <nav class="nav-list">
+        <button class="nav-button" data-route="overview"><span class="nav-icon">◈</span><span>概览</span><span></span></button>
+        <button class="nav-button active" data-route="plugins"><span class="nav-icon">▦</span><span>插件</span><span></span></button>
+        <button class="nav-button" data-route="settings"><span class="nav-icon">◌</span><span>设置</span><span></span></button>
+      </nav>
+
+      <div class="plugin-group">
+        <div class="nav-label eyebrow">已安装插件</div>
+        <div id="sidebarPlugins" class="nav-list"></div>
+      </div>
+
+      <div class="sidebar-bottom">
+        <div class="workspace-health"><span class="health-dot"></span><span>ToolBox 正常运行</span><span style="margin-left:auto;color:var(--faint)">v0.2.2</span></div>
+      </div>
+    </aside>
+
+    <main class="main">
+      <header class="topbar">
+        <div class="crumbs"><span>ToolBox</span><span>/</span><strong id="breadcrumb">插件</strong></div>
+        <div class="scheme-picker" aria-label="切换视觉方案">
+          <button class="active" data-theme-choice="midnight">A · Midnight</button>
+          <button data-theme-choice="mist">B · Mist</button>
+          <button data-theme-choice="signal">C · Signal</button>
+        </div>
+      </header>
+
+      <div class="content">
+        <section class="view" data-view="overview">
+          <div class="page-intro"><div><div class="eyebrow">ToolBox Workspace</div><h1>把工具放在手边。</h1><p class="lead">这是一个面向朋友之间分享的桌面工具箱：平台保持安静，插件负责能力，重要状态始终在眼前。</p></div><div class="theme-note"><strong>当前方案</strong><br><span id="themeDescription">深色工作台：蓝色操作光，绿色状态灯。</span></div></div>
+          <div class="grid two">
+            <div class="card overview-hero"><div class="hero-kicker">Personal control center</div><h2>你的工具，不需要被复杂的设置挡住。</h2><p>从一个清晰的状态开始，进入插件，再在插件内部完成设备、任务和活动的操作。</p><button class="button primary hero-action" data-route="plugins">打开插件工作区 <span>→</span></button></div>
+            <div class="card section-card"><div class="section-heading"><div><h3>运行概况</h3><p>所有插件共用同一套状态语言。</p></div></div><div class="grid three"><div class="stat-card" style="padding:14px 0 0"><div class="eyebrow">插件</div><div class="stat-value">3</div><div class="stat-meta">已安装</div></div><div class="stat-card" style="padding:14px 0 0"><div class="eyebrow">运行中</div><div class="stat-value" style="color:var(--good)">1</div><div class="stat-meta">手动启用</div></div><div class="stat-card" style="padding:14px 0 0"><div class="eyebrow">事件</div><div class="stat-value">12</div><div class="stat-meta">最近记录</div></div></div></div>
+          </div>
+          <div class="card section-card" style="margin-top:14px"><div class="section-heading"><div><h3>最近使用</h3><p>快速回到上次使用的插件。</p></div><button class="button secondary" data-route="plugins">查看全部</button></div><div id="overviewPlugins"></div></div>
+        </section>
+
+        <section class="view active" data-view="plugins">
+          <div class="page-intro"><div><div class="eyebrow">Plugin Workspace</div><h1>插件工作区</h1><p class="lead">左侧选择插件，右侧只展示它当前需要的内容。子界面留在插件内部，不污染主导航。</p></div><div class="theme-note"><strong>交互原型</strong><br>点击设备、操作按钮、插件页签和折叠区域，观察完整流程。</div></div>
+          <div class="plugin-layout">
+            <div class="card plugin-list"><div class="eyebrow">我的插件</div><div id="pluginList"></div><button class="button secondary" style="width:100%;margin:10px 0 3px" data-action="install">＋ 添加插件</button></div>
+            <div class="card plugin-detail" id="pluginDetail"></div>
+          </div>
+        </section>
+
+        <section class="view" data-view="settings">
+          <div class="page-intro"><div><div class="eyebrow">Host Settings</div><h1>设置</h1><p class="lead">这里是 ToolBox 自己的设置，不与任何具体插件绑定。</p></div></div>
+          <div class="grid two"><div class="card section-card"><div class="section-heading"><div><h3>外壳行为</h3><p>影响所有插件页面。</p></div></div><div class="settings-row"><div><strong>启动时恢复上次页面</strong><p>打开 ToolBox 后回到最近使用的工作区。</p></div><button class="switch on" data-switch="restore"></button></div><div class="settings-row"><div><strong>启用状态变化动画</strong><p>只使用轻量的淡入和位移动画。</p></div><button class="switch on" data-switch="motion"></button></div><div class="settings-row"><div><strong>显示详细事件</strong><p>在插件页面显示安装、生命周期和错误事件。</p></div><button class="switch on" data-switch="events"></button></div></div><div class="card section-card"><div class="section-heading"><div><h3>关于这个原型</h3><p>三种视觉方案共享同一套交互。</p></div></div><div class="callout"><strong>重要：</strong>这里展示的是“宿主统一渲染 + 插件逻辑子界面”的产品体验。它不代表当前 ToolBox SDK 已经支持任意自定义 WPF 页面。</div><div class="section-block" style="margin-top:14px"><div class="eyebrow">Design direction</div><h3 style="margin-top:8px">控制中心，而不是管理后台</h3><p style="margin-top:7px;color:var(--muted);font-size:11px;line-height:1.6">稳定的左侧导航、明确的状态灯、少量高价值操作，以及插件内部的二级视图。</p></div></div></div>
+        </section>
+      </div>
+    </main>
+  </div>
+
+  <div class="modal-backdrop" id="modalBackdrop"><div class="modal" id="modal"></div></div>
+  <div class="toast" id="toast"></div>
+
+  <script>
+    const plugins = {
+      audio: { id: 'audio', icon: '◉', name: 'Phone Audio Relay', short: '手机音频接收', version: '0.3.0', enabled: true, status: 'Ready', connected: null },
+      keyboard: { id: 'keyboard', icon: '⌨', name: 'Keyboard & Mouse', short: '输入设备测试', version: '0.2.0', enabled: false, status: 'Disabled', connected: null },
+      studio: { id: 'studio', icon: '✦', name: 'Clipboard Studio', short: '剪贴板工作流', version: '0.1.0', enabled: false, status: 'Disabled', connected: null }
+    };
+    const devices = [
+      { id: 'phone-a', icon: '📱', name: '我的手机', sub: 'Android · 已配对 · A2DP', state: '可用', signal: '强' },
+      { id: 'phone-b', icon: '📱', name: 'Pixel 9', sub: 'Android · 已配对 · A2DP', state: '可用', signal: '中' },
+      { id: 'phone-c', icon: '🎧', name: 'Living Room Speaker', sub: 'Bluetooth · 已配对 · A2DP', state: '可用', signal: '强' }
+    ];
+    const state = { route: 'plugins', selected: 'audio', tab: 'overview', device: null, theme: 'midnight', collapsed: { details: true, advanced: true }, events: [
+      ['10:42:18', '状态', '插件已启用，等待用户操作'], ['10:42:19', '搜索', '发现 3 台已配对音频设备'], ['昨天', '连接', '上次连接：我的手机']
+    ] };
+    const themeDescriptions = {
+      midnight: '深色工作台：蓝色操作光，绿色状态灯。',
+      mist: '轻雾白昼：更接近 Windows 11 的清透桌面感。',
+      signal: '信号控制台：更紧凑、更有设备感，适合高频操作。'
+    };
+
+    function statusClass(plugin) { return plugin.status === 'Disabled' ? 'off' : plugin.status === 'Ready' ? 'warn' : ''; }
+    function statusDotClass(plugin) { return plugin.status === 'Disabled' ? '' : plugin.status === 'Ready' ? 'warn' : 'good'; }
+    function statusLabel(plugin) { return plugin.status === 'Streaming' ? '传输中' : plugin.status === 'Connecting' ? '连接中' : plugin.status === 'Ready' ? '就绪' : '已停用'; }
+    function addEvent(kind, copy) { const now = new Date(); state.events.unshift([now.toTimeString().slice(0, 8), kind, copy]); state.events = state.events.slice(0, 8); }
+    function toast(message) { const node = document.querySelector('#toast'); node.textContent = message; node.classList.add('show'); clearTimeout(toast.timer); toast.timer = setTimeout(() => node.classList.remove('show'), 2300); }
+
+    function renderSidebar() {
+      document.querySelector('#sidebarPlugins').innerHTML = Object.values(plugins).map(p => `<button class="plugin-button ${state.selected === p.id && state.route === 'plugins' ? 'active' : ''}" data-plugin="${p.id}"><span class="mini-icon">${p.icon}</span><span><strong>${p.name}</strong><small>${p.short}</small></span><span class="plugin-status-dot ${statusDotClass(p)}"></span></button>`).join('');
+      document.querySelector('#pluginList').innerHTML = Object.values(plugins).map(p => `<button class="plugin-button ${state.selected === p.id ? 'active' : ''}" data-plugin="${p.id}"><span class="mini-icon">${p.icon}</span><span><strong>${p.name}</strong><small>v${p.version} · ${statusLabel(p)}</small></span><span class="plugin-status-dot ${statusDotClass(p)}"></span></button>`).join('');
+      document.querySelector('#overviewPlugins').innerHTML = Object.values(plugins).map(p => `<div class="mini-plugin"><div class="mini-icon">${p.icon}</div><div class="mini-copy"><strong>${p.name}</strong><span>${p.short} · v${p.version}</span></div><span class="status-text" style="color:${p.enabled ? 'var(--good)' : 'var(--muted)'}">${statusLabel(p)}</span><button class="button ghost" data-plugin="${p.id}">打开 →</button></div>`).join('');
+    }
+
+    function renderPluginHeader(p) {
+      const enabledText = p.enabled ? (p.status === 'Streaming' ? '正在接收' : p.status === 'Connecting' ? '正在连接' : '已启用') : '已停用';
+      return `<div class="plugin-header"><div class="plugin-heading"><div class="plugin-icon">${p.icon}</div><div class="plugin-title"><h2>${p.name}</h2><p>${p.short} · v${p.version} · OutOfProcess</p><div class="status-pill ${statusClass(p)}" style="margin-top:10px"><span class="status-orb"></span>${enabledText}</div></div></div><div class="plugin-actions"><button class="button ${p.enabled ? 'danger' : 'primary'}" data-action="toggle">${p.enabled ? '停用插件' : '启用插件'}</button><button class="button ghost" data-action="uninstall">卸载</button></div></div>`;
+    }
+
+    function renderAudioOverview(p) {
+      const connected = p.connected ? devices.find(d => d.id === p.connected) : null;
+      return `<div class="callout"><strong>${p.status === 'Streaming' ? '正在接收手机媒体音频。' : '插件已准备好。'}</strong> ${connected ? `当前设备是 ${connected.name}，手机播放媒体音频后会传到电脑。` : '选择设备并连接；启用插件不会自动连接手机。'}</div><div class="metric-row"><div class="metric"><span>当前状态</span><strong style="color:${p.status === 'Streaming' ? 'var(--good)' : 'var(--text)'}">${statusLabel(p)}</strong></div><div class="metric"><span>已发现设备</span><strong>${devices.length}</strong></div><div class="metric"><span>最近操作</span><strong>${state.events[0]?.[1] ?? '无'}</strong></div></div><div class="section-block"><button class="section-toggle" data-collapse="details"><div><h3>当前连接</h3><p style="margin-top:4px;color:var(--muted);font-size:10px">连接状态和快速操作</p></div><span>⌄</span></button><div class="section-content">${connected ? `<div class="device-row"><div class="device-avatar">${connected.icon}</div><div><div class="device-name">${connected.name}</div><div class="device-sub">${connected.sub}</div></div><div class="device-state">${statusLabel(p)}</div><button class="button danger" data-action="disconnect">断开</button></div>` : `<div class="empty"><strong>当前没有连接设备</strong><p>进入“设备”子界面查看已配对的手机和音频设备。</p><button class="button secondary" style="margin-top:13px" data-tab="devices">查看设备</button></div>`}</div></div><div class="section-block ${state.collapsed.advanced ? 'collapsed' : ''}"><button class="section-toggle" data-collapse="advanced"><div><h3>插件说明</h3><p style="margin-top:4px;color:var(--muted);font-size:10px">由插件提供的业务信息</p></div><span>⌄</span></button><div class="section-content"><div class="callout">支持已配对的 Windows 蓝牙 A2DP 媒体音频设备。不处理通话、手机麦克风、混音器和音量控制。</div></div></div>`;
+    }
+
+    function renderDevices(p) {
+      const connecting = p.status === 'Connecting';
+      return `<div class="toolbar"><div class="toolbar-copy">已发现 ${devices.length} 台设备 · 只显示已配对且支持 A2DP 的设备</div><div class="toolbar-actions"><button class="button secondary" data-action="search" ${connecting ? 'disabled' : ''}>⌕ 搜索</button><button class="button secondary" data-action="refresh" ${connecting ? 'disabled' : ''}>↻ 刷新</button></div></div><div class="section-block" style="margin-top:0"><div class="section-heading"><div><h3>可用设备</h3><p>点击“详情”查看设备信息，点击“连接”开始接收。</p></div></div>${devices.map(d => `<div class="device-row"><div class="device-avatar">${d.icon}</div><div><div class="device-name">${d.name}</div><div class="device-sub">${d.sub} · 信号${d.signal}</div></div><div class="device-state">${p.connected === d.id ? statusLabel(p) : d.state}</div>${p.connected === d.id ? `<button class="button danger" data-action="disconnect">断开</button>` : `<div style="display:flex;gap:7px"><button class="button ghost" data-action="device" data-device="${d.id}">详情</button><button class="button primary" data-action="connect" data-device="${d.id}" ${!p.enabled || connecting ? 'disabled' : ''}>${connecting ? '连接中…' : '连接'}</button></div>`}</div>`).join('')}</div>`;
+    }
+
+    function renderActivity() {
+      return `<div class="section-block" style="margin-top:0"><div class="section-heading"><div><h3>活动记录</h3><p>插件向 ToolBox 报告的安装、生命周期和业务事件。</p></div><button class="button ghost" data-action="clear-events">清空</button></div>${state.events.length ? state.events.map(e => `<div class="event-row"><span class="event-time">${e[0]}</span><span class="event-kind">${e[1]}</span><span class="event-copy">${e[2]}</span></div>`).join('') : `<div class="empty"><strong>还没有活动记录</strong><p>搜索、连接和断开设备后，事件会显示在这里。</p></div>`}</div>`;
+    }
+
+    function renderDeviceDetail(p) {
+      const d = devices.find(x => x.id === state.device) || devices[0];
+      return `<div class="section-block" style="margin-top:0"><div class="toolbar"><button class="button ghost" data-tab="devices">← 返回设备</button><span class="eyebrow">Device detail</span></div><div class="device-row" style="border-top:0;padding-top:4px"><div class="device-avatar" style="width:52px;height:52px;font-size:25px">${d.icon}</div><div><div class="device-name" style="font-size:18px">${d.name}</div><div class="device-sub">${d.sub}</div></div><div class="device-state">${p.connected === d.id ? statusLabel(p) : '未连接'}</div><button class="button ${p.connected === d.id ? 'danger' : 'primary'}" data-action="${p.connected === d.id ? 'disconnect' : 'connect'}" data-device="${d.id}">${p.connected === d.id ? '断开' : '连接'}</button></div><div class="metric-row"><div class="metric"><span>连接协议</span><strong>A2DP</strong></div><div class="metric"><span>配对状态</span><strong>已配对</strong></div><div class="metric"><span>信号强度</span><strong>${d.signal}</strong></div></div></div>`;
+    }
+
+    function renderGeneric(p) {
+      return `<div class="callout"><strong>${p.enabled ? '插件正在运行。' : '插件尚未启用。'}</strong> 这是一个用于验证 ToolBox 通用状态卡片、生命周期和二级界面的示例插件。</div><div class="section-block"><div class="section-heading"><div><h3>插件控制</h3><p>插件可以提供自己的业务状态和操作，但不能修改宿主布局。</p></div><button class="button ${p.enabled ? 'danger' : 'primary'}" data-action="toggle">${p.enabled ? '停用' : '启用'}</button></div><div class="metric-row"><div class="metric"><span>状态</span><strong>${statusLabel(p)}</strong></div><div class="metric"><span>运行模式</span><strong>OutOfProcess</strong></div><div class="metric"><span>版本</span><strong>${p.version}</strong></div></div></div>`;
+    }
+
+    function renderPlugin() {
+      const p = plugins[state.selected];
+      let body = '';
+      if (p.id === 'audio') {
+        body = state.tab === 'overview' ? renderAudioOverview(p) : state.tab === 'devices' ? renderDevices(p) : state.tab === 'activity' ? renderActivity() : renderDeviceDetail(p);
+      } else body = renderGeneric(p);
+      const tabs = p.id === 'audio' ? `<div class="plugin-tabs"><button class="${state.tab === 'overview' ? 'active' : ''}" data-tab="overview">控制台</button><button class="${state.tab === 'devices' || state.tab === 'device' ? 'active' : ''}" data-tab="devices">设备</button><button class="${state.tab === 'activity' ? 'active' : ''}" data-tab="activity">活动</button></div>` : `<div class="plugin-tabs"><button class="active">控制台</button><button>活动</button></div>`;
+      document.querySelector('#pluginDetail').innerHTML = renderPluginHeader(p) + tabs + `<div class="plugin-body">${body}</div>`;
+    }
+
+    function render() {
+      document.body.dataset.theme = state.theme;
+      document.querySelectorAll('[data-view]').forEach(v => v.classList.toggle('active', v.dataset.view === state.route));
+      document.querySelectorAll('[data-route]').forEach(b => b.classList.toggle('active', b.dataset.route === state.route));
+      document.querySelectorAll('[data-theme-choice]').forEach(b => b.classList.toggle('active', b.dataset.themeChoice === state.theme));
+      document.querySelector('#breadcrumb').textContent = state.route === 'overview' ? '概览' : state.route === 'settings' ? '设置' : '插件';
+      document.querySelector('#themeDescription').textContent = themeDescriptions[state.theme];
+      renderSidebar(); renderPlugin();
+    }
+
+    function openModal(title, copy, actions) { document.querySelector('#modal').innerHTML = `<h2>${title}</h2><p>${copy}</p><div class="modal-actions">${actions}</div>`; document.querySelector('#modalBackdrop').classList.add('show'); }
+    function closeModal() { document.querySelector('#modalBackdrop').classList.remove('show'); }
+
+    document.addEventListener('click', event => {
+      const target = event.target.closest('button'); if (!target) return;
+      if (target.dataset.themeChoice) { state.theme = target.dataset.themeChoice; render(); return; }
+      if (target.dataset.route) { state.route = target.dataset.route; render(); return; }
+      if (target.dataset.plugin) { state.selected = target.dataset.plugin; state.route = 'plugins'; state.tab = 'overview'; state.device = null; render(); return; }
+      if (target.dataset.tab) { state.tab = target.dataset.tab; state.device = null; render(); return; }
+      if (target.dataset.collapse) { state.collapsed[target.dataset.collapse] = !state.collapsed[target.dataset.collapse]; render(); return; }
+      const action = target.dataset.action; if (!action) return;
+      const p = plugins[state.selected];
+      if (action === 'toggle') {
+        p.enabled = !p.enabled; p.status = p.enabled ? 'Ready' : 'Disabled'; p.connected = null; addEvent(p.enabled ? '启用' : '停用', p.enabled ? '插件已启用，等待用户操作' : '插件已停用'); toast(p.enabled ? '插件已启用' : '插件已停用'); render();
+      } else if (action === 'connect') {
+        if (!p.enabled) return; const id = target.dataset.device; p.status = 'Connecting'; state.tab = 'devices'; addEvent('连接', `正在连接 ${devices.find(d => d.id === id)?.name ?? '设备'}`); render(); setTimeout(() => { p.connected = id; p.status = 'Streaming'; addEvent('连接', `已连接 ${devices.find(d => d.id === id)?.name ?? '设备'}，正在接收媒体音频`); toast('连接成功，开始接收媒体音频'); render(); }, 700);
+      } else if (action === 'disconnect') {
+        const d = devices.find(x => x.id === p.connected); p.connected = null; p.status = 'Ready'; addEvent('断开', `${d?.name ?? '设备'} 已断开`); toast('已断开设备'); render();
+      } else if (action === 'search' || action === 'refresh') {
+        addEvent(action === 'search' ? '搜索' : '刷新', action === 'search' ? '开始完整搜索已配对设备' : '设备列表已刷新'); toast(action === 'search' ? '搜索完成，发现 3 台设备' : '设备列表已刷新'); render();
+      } else if (action === 'device') { state.device = target.dataset.device; state.tab = 'device'; render();
+      } else if (action === 'clear-events') { state.events = []; render(); toast('活动记录已清空');
+      } else if (action === 'install') { openModal('添加插件', '选择一个本地 .tpk 包即可安装。安装完成后，插件会出现在通用插件工作区，但不会自动运行。', '<button class="button ghost" data-modal-close>取消</button><button class="button primary" data-modal-install>选择 .tpk</button>');
+      } else if (action === 'uninstall') { openModal('卸载插件？', `将移除“${p.name}”的安装版本和工作区入口。此操作不会影响其他插件。`, '<button class="button ghost" data-modal-close>取消</button><button class="button danger" data-modal-uninstall>确认卸载</button>'); }
+    });
+    document.addEventListener('click', event => {
+      if (event.target.matches('[data-modal-close]')) closeModal();
+      if (event.target.matches('[data-modal-install]')) { closeModal(); toast('原型演示：已打开本地 .tpk 选择流程'); }
+      if (event.target.matches('[data-modal-uninstall]')) { const p = plugins[state.selected]; p.enabled = false; p.status = 'Disabled'; p.connected = null; closeModal(); addEvent('卸载', `${p.name} 已从工作区移除`); toast('原型演示：插件已卸载'); render(); }
+      if (event.target.matches('[data-switch]')) event.target.classList.toggle('on');
+      if (event.target.id === 'modalBackdrop') closeModal();
+    });
+
+    render();
+  </script>
+</body>
+</html>
