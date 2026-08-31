@@ -5,7 +5,11 @@ param(
     [ValidateSet('Release')]
     [string]$Configuration = 'Release',
 
-    [string]$OutputDirectory
+    [string]$OutputDirectory,
+
+    [string]$SigningCertificatePath,
+
+    [string]$SigningPrivateKeyPath
 )
 
 Set-StrictMode -Version Latest
@@ -21,7 +25,8 @@ $helloProjectPath = Join-Path $repositoryRoot 'samples\HelloPlugin\HelloPlugin.c
 $helloManifestPath = Join-Path $repositoryRoot 'samples\HelloPlugin\manifest.json'
 $packageScript = Join-Path $PSScriptRoot 'New-PluginPackage.ps1'
 $packageToolsModule = Join-Path $PSScriptRoot 'ToolBox.PackageTools.psm1'
-$OutputDirectory = if ([string]::IsNullOrWhiteSpace($OutputDirectory)) {
+$usesDefaultOutputDirectory = [string]::IsNullOrWhiteSpace($OutputDirectory)
+$OutputDirectory = if ($usesDefaultOutputDirectory) {
     Join-Path $PSScriptRoot '..\artifacts\release-validation'
 } else {
     $OutputDirectory
@@ -36,6 +41,21 @@ $devKitDirectory = Join-Path $stagingRoot 'devkit'
 $sampleFeedDirectory = Join-Path $stagingRoot 'sdk-feed'
 $samplePackageCache = Join-Path $stagingRoot 'nuget-cache'
 $sampleNuGetConfigPath = Join-Path $stagingRoot 'NuGet.config'
+$buildArtifacts = Join-Path $stagingRoot 'build-artifacts'
+$ephemeralSigning = [string]::IsNullOrWhiteSpace($SigningCertificatePath) -and [string]::IsNullOrWhiteSpace($SigningPrivateKeyPath)
+if ([string]::IsNullOrWhiteSpace($SigningCertificatePath) -ne [string]::IsNullOrWhiteSpace($SigningPrivateKeyPath)) {
+    throw 'SigningCertificatePath and SigningPrivateKeyPath must be provided together.'
+}
+$effectiveSigningCertificatePath = if ($ephemeralSigning) {
+    Join-Path $stagingRoot 'validation-signing.cer'
+} else {
+    [System.IO.Path]::GetFullPath($SigningCertificatePath)
+}
+$effectiveSigningPrivateKeyPath = if ($ephemeralSigning) {
+    Join-Path $stagingRoot 'validation-signing.pk8'
+} else {
+    [System.IO.Path]::GetFullPath($SigningPrivateKeyPath)
+}
 
 Import-Module $packageToolsModule -Force
 
@@ -133,7 +153,7 @@ function Get-ExpectedPackageEntries {
 
     $runtimeRoot = [System.IO.Path]::GetFullPath($RuntimeDirectory).TrimEnd('\', '/')
     $runtimeManifestPath = Join-Path $runtimeRoot 'manifest.json'
-    @('manifest.json', 'package.json') + @(
+    @('manifest.json', 'package.json', 'signature.json') + @(
         Get-ChildItem -LiteralPath $runtimeRoot -File -Recurse | Where-Object {
             $_.FullName -ine $runtimeManifestPath -and $_.Name -notlike 'ToolBox.PluginSdk.*'
         } | ForEach-Object {
@@ -168,7 +188,7 @@ function Assert-PluginPackage {
         }
 
         $hashedEntries = @($metadata.files | ForEach-Object { [string]$_.path })
-        $payloadEntries = @($entryNames | Where-Object { $_ -cne 'package.json' })
+        $payloadEntries = @($entryNames | Where-Object { $_ -cne 'package.json' -and $_ -cne 'signature.json' })
         Assert-ExactSet -Actual $hashedEntries -Expected $payloadEntries -Label "Hash inventory in '$PackagePath'"
         foreach ($fileHash in @($metadata.files)) {
             $entry = $archive.GetEntry([string]$fileHash.path)
@@ -209,6 +229,74 @@ function Write-AndValidateChecksums {
     Assert-ExactSet -Actual $validatedNames -Expected @($ArtifactPaths | ForEach-Object { Split-Path -Leaf $_ }) -Label 'Checksum manifest file names'
 }
 
+function ConvertTo-ProcessArgument {
+    param([Parameter(Mandatory)][AllowEmptyString()][string]$Value)
+
+    if ($Value -notmatch '[\s"]') { return $Value }
+
+    $escaped = [regex]::Replace($Value, '(\\*)"', '$1$1\"')
+    $escaped = [regex]::Replace($escaped, '(\\+)$', '$1$1')
+    return '"' + $escaped + '"'
+}
+
+function Invoke-HostPackageSmokeTest {
+    param(
+        [Parameter(Mandatory)][string]$HostPath,
+        [Parameter(Mandatory)][string]$WorkerPath,
+        [Parameter(Mandatory)][string]$PackagePath,
+        [Parameter(Mandatory)][string]$WorkingRoot
+    )
+
+    $resultPath = Join-Path $WorkingRoot 'result.json'
+    $pluginRoot = Join-Path $WorkingRoot 'plugin-data'
+    New-Item -ItemType Directory -Path $WorkingRoot, $pluginRoot -Force | Out-Null
+    $arguments = @(
+        '--smoke-test-package', $PackagePath,
+        '--smoke-test-worker', $WorkerPath,
+        '--smoke-test-root', $pluginRoot,
+        '--smoke-test-result', $resultPath)
+
+    $startInfo = [System.Diagnostics.ProcessStartInfo]::new()
+    $startInfo.FileName = $HostPath
+    $startInfo.UseShellExecute = $false
+    $startInfo.CreateNoWindow = $true
+    $startInfo.WindowStyle = [System.Diagnostics.ProcessWindowStyle]::Hidden
+    if ($null -ne $startInfo.PSObject.Properties['ArgumentList']) {
+        foreach ($argument in $arguments) { [void]$startInfo.ArgumentList.Add($argument) }
+    }
+    else {
+        $startInfo.Arguments = ($arguments | ForEach-Object { ConvertTo-ProcessArgument -Value $_ }) -join ' '
+    }
+
+    $process = [System.Diagnostics.Process]::Start($startInfo)
+    try {
+        if (-not $process.WaitForExit(60000)) {
+            try { $process.Kill() } catch { }
+            throw 'Self-contained Host package smoke test timed out.'
+        }
+        if ($process.ExitCode -ne 0) {
+            $details = if (Test-Path -LiteralPath $resultPath -PathType Leaf) {
+                Get-Content -LiteralPath $resultPath -Raw
+            } else {
+                'The Host did not write a smoke-test result.'
+            }
+            throw "Self-contained Host package smoke test failed with exit code $($process.ExitCode): $details"
+        }
+    }
+    finally { $process.Dispose() }
+
+    if (-not (Test-Path -LiteralPath $resultPath -PathType Leaf)) {
+        throw 'The self-contained Host did not write a smoke-test result.'
+    }
+    $result = Get-Content -LiteralPath $resultPath -Raw | ConvertFrom-Json
+    $packageResult = @($result.packages)
+    if (-not $result.success -or $packageResult.Count -ne 1 `
+        -or -not $packageResult[0].installed -or -not $packageResult[0].enabled `
+        -or -not $packageResult[0].disabled -or -not $packageResult[0].uninstalled) {
+        throw "Self-contained Host package smoke test did not complete its lifecycle: $($result | ConvertTo-Json -Depth 8 -Compress)"
+    }
+}
+
 if ([string]::IsNullOrWhiteSpace($Version)) { $Version = Get-ProjectVersion -ProjectPath $hostProjectPath }
 
 $releaseTag = "v$Version"
@@ -225,6 +313,33 @@ if ([string]$helloManifest.version -cne $Version) { throw "HelloPlugin manifest 
 
 try {
     New-Item -ItemType Directory -Path $publishDirectory, $workerPublishDirectory, $assetDirectory, $bundleDirectory, $sampleFeedDirectory, $samplePackageCache -Force | Out-Null
+    if ($ephemeralSigning) {
+        $rsa = [System.Security.Cryptography.RSA]::Create(2048)
+        try {
+            $request = [System.Security.Cryptography.X509Certificates.CertificateRequest]::new(
+                'CN=ToolBox Release Validation',
+                $rsa,
+                [System.Security.Cryptography.HashAlgorithmName]::SHA256,
+                [System.Security.Cryptography.RSASignaturePadding]::Pkcs1)
+            $certificate = $request.CreateSelfSigned(
+                [DateTimeOffset]::UtcNow.AddDays(-1),
+                [DateTimeOffset]::UtcNow.AddDays(7))
+            try {
+                [System.IO.File]::WriteAllBytes(
+                    $effectiveSigningCertificatePath,
+                    $certificate.Export([System.Security.Cryptography.X509Certificates.X509ContentType]::Cert))
+                [System.IO.File]::WriteAllBytes(
+                    $effectiveSigningPrivateKeyPath,
+                    $rsa.ExportPkcs8PrivateKey())
+            }
+            finally { $certificate.Dispose() }
+        }
+        finally { $rsa.Dispose() }
+    }
+    elseif (-not (Test-Path -LiteralPath $effectiveSigningCertificatePath -PathType Leaf) `
+        -or -not (Test-Path -LiteralPath $effectiveSigningPrivateKeyPath -PathType Leaf)) {
+        throw 'Release signing certificate or PKCS#8 private key is missing.'
+    }
     @"
 <?xml version="1.0" encoding="utf-8"?>
 <configuration>
@@ -238,27 +353,33 @@ try {
 
     Push-Location $repositoryRoot
     try {
-        Invoke-CheckedCommand dotnet @('clean', $solutionPath, '--configuration', $Configuration, '--verbosity', 'minimal')
-        Invoke-CheckedCommand dotnet @('restore', $solutionPath)
-        Invoke-CheckedCommand dotnet @('build', $solutionPath, '--configuration', $Configuration, '--no-restore', '-warnaserror', "-p:Version=$Version", '-p:ContinuousIntegrationBuild=true')
-        Invoke-CheckedCommand dotnet @('test', $solutionPath, '--configuration', $Configuration, '--no-build', '--no-restore', '--verbosity', 'minimal')
-        Invoke-CheckedCommand dotnet @('pack', $pluginSdkProjectPath, '--configuration', $Configuration, '--no-restore', '--output', $sampleFeedDirectory, "-p:Version=$Version", "-p:PackageVersion=$Version")
-        Invoke-CheckedCommand dotnet @('restore', $helloProjectPath, '--configfile', $sampleNuGetConfigPath, "-p:RestorePackagesPath=$samplePackageCache")
-        Invoke-CheckedCommand dotnet @('build', $helloProjectPath, '--configuration', $Configuration, '--no-restore', "-p:RestorePackagesPath=$samplePackageCache")
-        Invoke-CheckedCommand dotnet @('restore', $hostProjectPath, '--runtime', 'win-x64', "-p:Version=$Version")
-        Invoke-CheckedCommand dotnet @('restore', $pluginWorkerProjectPath, '--runtime', 'win-x64', "-p:Version=$Version")
-        Invoke-CheckedCommand dotnet @('publish', $hostProjectPath, '--configuration', $Configuration, '--runtime', 'win-x64', '--self-contained', 'true', '--no-restore', '-p:PublishSingleFile=true', '-p:IncludeNativeLibrariesForSelfExtract=true', '-p:DebugType=None', "-p:Version=$Version", '-p:ContinuousIntegrationBuild=true', '-o', $publishDirectory)
-        Invoke-CheckedCommand dotnet @('publish', $pluginWorkerProjectPath, '--configuration', $Configuration, '--runtime', 'win-x64', '--self-contained', 'true', '--no-restore', '-p:PublishSingleFile=true', '-p:IncludeNativeLibrariesForSelfExtract=true', '-p:DebugType=None', "-p:Version=$Version", '-p:ContinuousIntegrationBuild=true', '-o', $workerPublishDirectory)
+        Invoke-CheckedCommand dotnet @('restore', $solutionPath, '--artifacts-path', $buildArtifacts, '-p:NuGetAudit=false')
+        Invoke-CheckedCommand dotnet @('build', $solutionPath, '--configuration', $Configuration, '--artifacts-path', $buildArtifacts, '--no-restore', '--no-incremental', '-warnaserror', '--disable-build-servers', "-p:Version=$Version", '-p:ContinuousIntegrationBuild=true')
+        Invoke-CheckedCommand dotnet @('test', $solutionPath, '--configuration', $Configuration, '--artifacts-path', $buildArtifacts, '--no-build', '--no-restore', '--disable-build-servers', '--verbosity', 'minimal')
+        Invoke-CheckedCommand dotnet @('pack', $pluginSdkProjectPath, '--configuration', $Configuration, '--artifacts-path', $buildArtifacts, '--no-restore', '--output', $sampleFeedDirectory, "-p:Version=$Version", "-p:PackageVersion=$Version")
+        Invoke-CheckedCommand dotnet @('restore', $helloProjectPath, '--configfile', $sampleNuGetConfigPath, '--artifacts-path', $buildArtifacts, "-p:RestorePackagesPath=$samplePackageCache", '-p:NuGetAudit=false')
+        Invoke-CheckedCommand dotnet @('build', $helloProjectPath, '--configuration', $Configuration, '--artifacts-path', $buildArtifacts, '--no-restore', '--no-incremental', '-warnaserror', "-p:RestorePackagesPath=$samplePackageCache")
+        Invoke-CheckedCommand dotnet @('restore', $hostProjectPath, '--runtime', 'win-x64', '--artifacts-path', $buildArtifacts, "-p:Version=$Version", '-p:NuGetAudit=false')
+        Invoke-CheckedCommand dotnet @('restore', $pluginWorkerProjectPath, '--runtime', 'win-x64', '--artifacts-path', $buildArtifacts, "-p:Version=$Version", '-p:NuGetAudit=false')
+        Invoke-CheckedCommand dotnet @('publish', $hostProjectPath, '--configuration', $Configuration, '--runtime', 'win-x64', '--artifacts-path', $buildArtifacts, '--self-contained', 'true', '--no-restore', '-p:PublishSingleFile=true', '-p:IncludeNativeLibrariesForSelfExtract=true', '-p:DebugType=None', "-p:Version=$Version", '-p:ContinuousIntegrationBuild=true', '-o', $publishDirectory)
+        Invoke-CheckedCommand dotnet @('publish', $pluginWorkerProjectPath, '--configuration', $Configuration, '--runtime', 'win-x64', '--artifacts-path', $buildArtifacts, '--self-contained', 'true', '--no-restore', '-p:PublishSingleFile=true', '-p:IncludeNativeLibrariesForSelfExtract=true', '-p:DebugType=None', "-p:Version=$Version", '-p:ContinuousIntegrationBuild=true', '-o', $workerPublishDirectory)
     }
     finally { Pop-Location }
 
-    & $packageScript -RuntimeDirectory (Join-Path $repositoryRoot "samples\HelloPlugin\bin\$Configuration\net8.0") -ManifestPath $helloManifestPath -Version $Version -PackageName $helloAssetName -OutputDirectory $assetDirectory
+    $helloRuntimeDirectory = Join-Path $buildArtifacts "bin\HelloPlugin\$($Configuration.ToLowerInvariant())"
+    & $packageScript -RuntimeDirectory $helloRuntimeDirectory -ManifestPath $helloManifestPath -Version $Version -PackageName $helloAssetName -OutputDirectory $assetDirectory -SigningCertificatePath $effectiveSigningCertificatePath -SigningPrivateKeyPath $effectiveSigningPrivateKeyPath
     if ($LASTEXITCODE -ne 0) { throw "HelloPlugin package generation failed with exit code $LASTEXITCODE." }
 
     $publishedHostPath = Join-Path $publishDirectory 'ToolBox.Host.exe'
     if (-not (Test-Path -LiteralPath $publishedHostPath -PathType Leaf)) { throw "Published Host executable is missing." }
     $publishedWorkerPath = Join-Path $workerPublishDirectory 'ToolBox.PluginWorker.exe'
     if (-not (Test-Path -LiteralPath $publishedWorkerPath -PathType Leaf)) { throw "Published PluginWorker executable is missing." }
+
+    Invoke-HostPackageSmokeTest `
+        -HostPath $publishedHostPath `
+        -WorkerPath $publishedWorkerPath `
+        -PackagePath (Join-Path $assetDirectory $helloAssetName) `
+        -WorkingRoot (Join-Path $stagingRoot 'host-smoke')
 
     Copy-Item -LiteralPath $publishedHostPath -Destination (Join-Path $bundleDirectory 'ToolBox.Host.exe')
     Copy-Item -LiteralPath $publishedWorkerPath -Destination (Join-Path $bundleDirectory 'ToolBox.PluginWorker.exe')
@@ -286,17 +407,29 @@ try {
     $helloAssetPath = Join-Path $assetDirectory $helloAssetName
     $checksumAssetPath = Join-Path $assetDirectory $checksumAssetName
     New-DeterministicZipArchive -SourceDirectory $bundleDirectory -DestinationPath $toolBoxAssetPath
-    Assert-PluginPackage -PackagePath $helloAssetPath -ExpectedPluginId 'com.toolbox.hello' -ExpectedVersion $Version -ExpectedEntries (Get-ExpectedPackageEntries -RuntimeDirectory (Join-Path $repositoryRoot "samples\HelloPlugin\bin\$Configuration\net8.0"))
+    Assert-PluginPackage -PackagePath $helloAssetPath -ExpectedPluginId 'com.toolbox.hello' -ExpectedVersion $Version -ExpectedEntries (Get-ExpectedPackageEntries -RuntimeDirectory $helloRuntimeDirectory)
 
     $releaseArtifactPaths = @($toolBoxAssetPath, $helloAssetPath, $devKitPath)
     Write-AndValidateChecksums -ArtifactPaths $releaseArtifactPaths -ChecksumPath $checksumAssetPath
     Assert-ExactSet -Actual @(Get-ChildItem -LiteralPath $assetDirectory -File | ForEach-Object { $_.Name }) -Expected @($toolBoxAssetName, $helloAssetName, $devKitAssetName, $checksumAssetName) -Label 'Release artifact files'
 
+    if ($usesDefaultOutputDirectory -and (Test-Path -LiteralPath $outputRoot)) {
+        Remove-DirectoryWithRetry -Path $outputRoot
+    }
     New-Item -ItemType Directory -Path $outputRoot -Force | Out-Null
     foreach ($assetPath in @($releaseArtifactPaths + $checksumAssetPath)) { Copy-Item -LiteralPath $assetPath -Destination (Join-Path $outputRoot (Split-Path -Leaf $assetPath)) -Force }
 
+    if ($usesDefaultOutputDirectory) {
+        Assert-ExactSet `
+            -Actual @(Get-ChildItem -LiteralPath $outputRoot -File | ForEach-Object { $_.Name }) `
+            -Expected @($toolBoxAssetName, $helloAssetName, $devKitAssetName, $checksumAssetName) `
+            -Label 'Default release-validation output files'
+    }
+
     Write-Host "Release validation passed for ToolBox $releaseTag." -ForegroundColor Green
-    Get-ChildItem -LiteralPath $outputRoot -File | Sort-Object Name | Select-Object Name, Length, FullName
+    @($releaseArtifactPaths + $checksumAssetPath) | ForEach-Object {
+        Get-Item -LiteralPath (Join-Path $outputRoot (Split-Path -Leaf $_))
+    } | Sort-Object Name | Select-Object Name, Length, FullName
 }
 finally {
     if (Test-Path -LiteralPath $stagingRoot) { Remove-DirectoryWithRetry -Path $stagingRoot }

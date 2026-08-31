@@ -13,6 +13,12 @@ param(
 
     [string]$PackageName,
 
+    [Parameter(Mandatory)]
+    [string]$SigningCertificatePath,
+
+    [Parameter(Mandatory)]
+    [string]$SigningPrivateKeyPath,
+
     [switch]$Overwrite
 )
 
@@ -42,6 +48,20 @@ try {
     $manifest = Get-Content -LiteralPath $manifestSource -Raw | ConvertFrom-Json
     if ([string]::IsNullOrWhiteSpace($manifest.id) -or [string]::IsNullOrWhiteSpace($manifest.version)) {
         throw 'The manifest must contain non-empty id and version fields.'
+    }
+    if ([int]$manifest.formatVersion -ne 2) {
+        throw "Manifest format '$($manifest.formatVersion)' is not supported; expected 2."
+    }
+    if (@($manifest.capabilities).Count -eq 0) {
+        throw 'Manifest format 2 requires at least one capability declaration.'
+    }
+    $certificatePath = [System.IO.Path]::GetFullPath($SigningCertificatePath)
+    if (-not (Test-Path -LiteralPath $certificatePath -PathType Leaf)) {
+        throw "The signing certificate is missing: '$certificatePath'."
+    }
+    $privateKeyPath = [System.IO.Path]::GetFullPath($SigningPrivateKeyPath)
+    if (-not (Test-Path -LiteralPath $privateKeyPath -PathType Leaf)) {
+        throw "The PKCS#8 signing private key is missing: '$privateKeyPath'."
     }
 
     if (-not [string]::IsNullOrWhiteSpace($Version)) {
@@ -94,13 +114,59 @@ try {
     )
 
     $packageMetadata = [PSCustomObject]@{
-        packageFormatVersion = 1
+        packageFormatVersion = 2
         pluginId = [string]$manifest.id
         pluginVersion = $packageVersion
         automaticRollbackSupported = $true
         files = $hashes
     }
-    $packageMetadata | ConvertTo-Json -Depth 20 -Compress | Set-Content -LiteralPath (Join-Path $stagingRoot 'package.json') -Encoding utf8
+    $packageMetadataPath = Join-Path $stagingRoot 'package.json'
+    $packageMetadata | ConvertTo-Json -Depth 20 -Compress | Set-Content -LiteralPath $packageMetadataPath -Encoding utf8
+
+    $certificate = [System.Security.Cryptography.X509Certificates.X509Certificate2]::new(
+        [System.IO.File]::ReadAllBytes($certificatePath))
+    $rsa = [System.Security.Cryptography.RSA]::Create()
+    $certificateRsa = $null
+    try {
+        $now = [DateTime]::UtcNow
+        if ($now -lt $certificate.NotBefore.ToUniversalTime() -or $now -gt $certificate.NotAfter.ToUniversalTime()) {
+            throw 'The signing certificate is outside its validity period.'
+        }
+        $bytesRead = 0
+        $rsa.ImportPkcs8PrivateKey(
+            [System.IO.File]::ReadAllBytes($privateKeyPath),
+            [ref]$bytesRead)
+        $metadataBytes = [System.IO.File]::ReadAllBytes($packageMetadataPath)
+        $signatureBytes = $rsa.SignData(
+            $metadataBytes,
+            [System.Security.Cryptography.HashAlgorithmName]::SHA256,
+            [System.Security.Cryptography.RSASignaturePadding]::Pkcs1)
+        $certificateRsa = [System.Security.Cryptography.X509Certificates.RSACertificateExtensions]::GetRSAPublicKey($certificate)
+        if ($null -eq $certificateRsa -or -not $certificateRsa.VerifyData(
+            $metadataBytes,
+            $signatureBytes,
+            [System.Security.Cryptography.HashAlgorithmName]::SHA256,
+            [System.Security.Cryptography.RSASignaturePadding]::Pkcs1)) {
+            throw 'The signing certificate does not match the PKCS#8 private key.'
+        }
+        $signatureMetadata = [PSCustomObject]@{
+            schemaVersion = 1
+            publisherId = [string]$manifest.publisher
+            algorithm = 'rsa-sha256'
+            payload = 'package.json'
+            certificate = [Convert]::ToBase64String($certificate.Export(
+                [System.Security.Cryptography.X509Certificates.X509ContentType]::Cert))
+            signature = [Convert]::ToBase64String($signatureBytes)
+        }
+        $signatureMetadata | ConvertTo-Json -Depth 10 -Compress | Set-Content -LiteralPath (Join-Path $stagingRoot 'signature.json') -Encoding utf8
+    }
+    finally {
+        if ($null -ne $certificateRsa) {
+            $certificateRsa.Dispose()
+        }
+        $rsa.Dispose()
+        $certificate.Dispose()
+    }
 
     if (Test-Path -LiteralPath $outputPath) {
         Remove-Item -LiteralPath $outputPath -Force

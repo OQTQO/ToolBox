@@ -2,7 +2,7 @@
 
 ## 职责
 
-提供第三方插件唯一依赖：`IPlugin`、`IPluginContext`、Manifest v1、生命周期、资源 Lease、服务 Lease 和通用 UI 契约。
+提供第三方插件唯一依赖：`IPlugin`、`IPluginContext`、Manifest v2、生命周期、资源 Lease、服务 Lease 和通用 UI 契约。当前 SDK 面向 .NET 10。
 
 ## 主要入口
 
@@ -15,7 +15,7 @@
 
 ## 不变量
 
-- `PluginApiMajor = 1` 的公共契约保持兼容。
+- 当前发布使用 `PluginApiMajor = 1`；跨平台版本升级时插件必须按目标 SDK 重建，不维护旧 SDK 二进制加载夹具。
 - SDK 不引用 Host、WPF、Core 或具体插件。
 - 插件通过 LifetimeScope 管理资源和服务 Lease。
 - 通用 UI 只传输协议数据，不允许插件注入 WPF 页面。

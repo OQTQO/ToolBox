@@ -11,20 +11,32 @@ namespace ToolBox.Core.Plugins;
 public sealed class OutOfProcessPluginRuntime
 {
     public const int DefaultConnectionTimeoutMilliseconds = 5_000;
+    public static TimeSpan DefaultUiRequestTimeout { get; } = TimeSpan.FromSeconds(15);
 
     private readonly PluginDiscovery _discovery;
     private readonly WorkerProcessLauncher _processLauncher;
+    private readonly TimeSpan _uiRequestTimeout;
 
     public OutOfProcessPluginRuntime(
         string workerExecutablePath,
         PluginDiscovery? discovery = null,
-        WorkerProcessLauncher? processLauncher = null)
+        WorkerProcessLauncher? processLauncher = null,
+        TimeSpan? uiRequestTimeout = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(workerExecutablePath);
 
         WorkerExecutablePath = Path.GetFullPath(workerExecutablePath);
         _discovery = discovery ?? new PluginDiscovery();
         _processLauncher = processLauncher ?? new WorkerProcessLauncher();
+        _uiRequestTimeout = uiRequestTimeout ?? DefaultUiRequestTimeout;
+        if (_uiRequestTimeout <= TimeSpan.Zero
+            || _uiRequestTimeout == Timeout.InfiniteTimeSpan
+            || _uiRequestTimeout > TimeSpan.FromMilliseconds(int.MaxValue))
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(uiRequestTimeout),
+                "The plugin UI request timeout must be positive and fit within the .NET cancellation timer range.");
+        }
     }
 
     public string WorkerExecutablePath { get; }
@@ -67,7 +79,7 @@ public sealed class OutOfProcessPluginRuntime
             PipeDirection.InOut,
             1,
             PipeTransmissionMode.Byte,
-            PipeOptions.Asynchronous);
+            PipeOptions.Asynchronous | PipeOptions.CurrentUserOnly);
         WorkerProcessHandle? worker = null;
         StreamReader? reader = null;
         StreamWriter? writer = null;
@@ -143,7 +155,8 @@ public sealed class OutOfProcessPluginRuntime
                 worker,
                 pipe,
                 reader,
-                writer);
+                writer,
+                _uiRequestTimeout);
         }
         catch
         {

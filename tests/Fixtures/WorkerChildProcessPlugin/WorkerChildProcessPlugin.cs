@@ -58,7 +58,10 @@ public sealed class WorkerChildProcessPlugin : IPlugin, IPluginUiProvider
         return new PluginUiSnapshot(
             "Worker child test plugin is running.",
             [new PluginUiValue("Actions", _actionCount.ToString(CultureInfo.InvariantCulture))],
-            [new PluginUiAction("touch", "Touch plugin")],
+            [
+                new PluginUiAction("touch", "Touch plugin"),
+                new PluginUiAction("hang", "Hang plugin")
+            ],
             null);
     }
 
@@ -68,6 +71,11 @@ public sealed class WorkerChildProcessPlugin : IPlugin, IPluginUiProvider
         CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
+        if (string.Equals(actionId, "hang", StringComparison.Ordinal))
+        {
+            return new ValueTask<PluginUiSnapshot>(HangAsync(cancellationToken));
+        }
+
         if (!string.Equals(actionId, "touch", StringComparison.Ordinal))
         {
             throw new InvalidOperationException($"Unknown action '{actionId}'.");
@@ -75,6 +83,12 @@ public sealed class WorkerChildProcessPlugin : IPlugin, IPluginUiProvider
 
         _actionCount++;
         return ValueTask.FromResult(GetSnapshot());
+    }
+
+    private static async Task<PluginUiSnapshot> HangAsync(CancellationToken cancellationToken)
+    {
+        await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken).ConfigureAwait(false);
+        throw new InvalidOperationException("The hanging test action unexpectedly completed.");
     }
 
     public ValueTask<PluginUiSnapshot> HandleInputAsync(

@@ -8,6 +8,8 @@
 
 - `Packaging/PluginPackageInspector.cs`
 - `Packaging/PluginPackageInstaller.cs`
+- `Packaging/PluginPackageValidator.cs`：Manifest、package.json、哈希清单和运行时结构校验。
+- `Packaging/PluginPublisherTrustStore.cs`：发布者 ID 与证书 SHA-256 的 TOFU 绑定及 blocked 策略。
 - `Plugins/InstalledPluginCatalog.cs`
 - `Plugins/PluginDiscovery.cs`
 - `Plugins/OutOfProcessPluginRuntime.cs`
@@ -21,6 +23,8 @@
 - 动态插件统一优先走 OutOfProcess runtime。
 - 关闭、终止、等待退出和释放共享同一个 `ShutdownDeadline`。
 - 插件数据目录不随运行版本目录删除。
+- `PluginPackageInstaller` 只编排 staging、状态提交、回退和数据快照；包内容真实性与结构校验集中在 `PluginPackageValidator`。
+- 只接受 Manifest v2、package format 2 和有效 RSA-SHA256 分离签名；同一发布者换钥不得静默通过。
 
 ## 修改时检查
 

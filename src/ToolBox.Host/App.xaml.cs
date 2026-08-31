@@ -13,7 +13,7 @@ namespace ToolBox.Host;
 [SuppressMessage("Design", "CA1001:TypesThatOwnDisposableFieldsShouldBeDisposable", Justification = "WPF Application owns and closes runtime resources in OnExit.")]
 public partial class App : Application, IHostApplicationCommands
 {
-    private readonly string _hostVersion = typeof(App).Assembly.GetName().Version?.ToString(3) ?? "0.2.2";
+    private readonly string _hostVersion = typeof(App).Assembly.GetName().Version?.ToString(3) ?? "0.4.0";
     private readonly HostLifetimeState _lifetime = new();
     private readonly HostRestartService _restartService = new();
     private StructuredLogger? _logger;
@@ -29,6 +29,13 @@ public partial class App : Application, IHostApplicationCommands
     protected override void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
+
+        if (HostSmokeCommandLine.IsRequested(e.Args))
+        {
+            var exitCode = HostSmokeCommandLine.Execute(e.Args);
+            Shutdown(exitCode);
+            return;
+        }
 
         DispatcherUnhandledException += OnDispatcherUnhandledException;
         AppDomain.CurrentDomain.UnhandledException += OnUnhandledException;

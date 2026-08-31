@@ -56,11 +56,39 @@ public sealed class PluginManifestTests
         Assert.Contains(exception.Errors, error => error.Code == "MANIFEST_PREFERRED_MODE_UNSUPPORTED");
     }
 
+    [Fact]
+    public void CapabilityDeclarationsAreRequired()
+    {
+        var json = ValidManifestJson().Replace(
+            "\"capabilities\"",
+            "\"undeclaredCapabilities\"",
+            StringComparison.Ordinal);
+
+        var exception = Assert.Throws<PluginManifestValidationException>(() =>
+            new PluginManifestParser().Parse(json));
+
+        Assert.Contains(exception.Errors, error => error.Code == "MANIFEST_CAPABILITIES_REQUIRED");
+    }
+
+    [Fact]
+    public void UnknownCapabilitiesAreRejectedByThePlatformContract()
+    {
+        var json = ValidManifestJson().Replace(
+            "host.ui.input-events",
+            "plugin.self-declared-privilege",
+            StringComparison.Ordinal);
+
+        var exception = Assert.Throws<PluginManifestValidationException>(() =>
+            new PluginManifestParser().Parse(json));
+
+        Assert.Contains(exception.Errors, error => error.Code == "MANIFEST_CAPABILITY_UNKNOWN");
+    }
+
     private static string ValidManifestJson()
     {
         return """
         {
-          "formatVersion": 1,
+          "formatVersion": 2,
           "id": "com.toolbox.keyboard-test",
           "name": "Keyboard Test",
           "version": "0.1.0",
@@ -75,6 +103,11 @@ public sealed class PluginManifestTests
             "preferredMode": "inProcess",
             "background": false
           },
+          "capabilities": [{
+            "id": "host.ui.input-events",
+            "required": true,
+            "reason": "Displays input events sent to the plugin UI."
+          }],
           "entryPoint": "ToolBox.KeyboardTest.KeyboardTestPlugin"
         }
         """;

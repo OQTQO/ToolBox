@@ -1,8 +1,8 @@
 {
-  "formatVersion": 1,
+  "formatVersion": 2,
   "id": "com.toolbox.hello",
   "name": "Hello Plugin",
-  "version": "0.2.2",
+  "version": "0.4.0",
   "pluginApiMajor": 1,
   "publisher": "toolbox.samples",
   "platform": {
@@ -16,5 +16,10 @@
     "preferredMode": "outOfProcess",
     "background": true
   },
+  "capabilities": [{
+    "id": "host.background.execution",
+    "required": true,
+    "reason": "Runs the sample plugin lifecycle in the background."
+  }],
   "entryPoint": "HelloPlugin.HelloPlugin, HelloPlugin"
 }

@@ -7,5 +7,5 @@ KeyboardMouse 和 AudioRelay 已迁移到独立的 [ToolBox-Plugins](https://git
 在仓库根目录运行以下命令，可以生成本地 SDK 包、构建 HelloPlugin 并生成 `.tpk`：
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\tools\Validate-PluginSamples.ps1
+pwsh -NoProfile -File .\tools\Validate-PluginSamples.ps1
 ```

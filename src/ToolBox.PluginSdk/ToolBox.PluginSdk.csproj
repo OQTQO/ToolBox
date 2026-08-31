@@ -1,11 +1,11 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <TargetFramework>net8.0</TargetFramework>
+    <TargetFramework>net10.0</TargetFramework>
     <RootNamespace>ToolBox.PluginSdk</RootNamespace>
     <AssemblyName>ToolBox.PluginSdk</AssemblyName>
     <PackageId>ToolBox.PluginSdk</PackageId>
-    <Version>0.2.2</Version>
-    <PackageVersion>0.2.2</PackageVersion>
+    <Version>0.4.0</Version>
+    <PackageVersion>0.4.0</PackageVersion>
     <Authors>ToolBox</Authors>
     <Description>Stable Plugin API v1 for ToolBox out-of-process plugins.</Description>
     <PackageTags>ToolBox;plugin;sdk</PackageTags>

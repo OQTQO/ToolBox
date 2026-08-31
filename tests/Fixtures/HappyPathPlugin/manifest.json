@@ -1,5 +1,5 @@
 {
-  "formatVersion": 1,
+  "formatVersion": 2,
   "id": "com.toolbox.happy-path",
   "name": "Happy Path Plugin",
   "version": "0.1.0",
@@ -14,5 +14,10 @@
     "preferredMode": "inProcess",
     "background": false
   },
+  "capabilities": [{
+    "id": "host.background.execution",
+    "required": true,
+    "reason": "Runs the happy-path lifecycle fixture."
+  }],
   "entryPoint": "HappyPathPlugin.HappyPathPlugin, HappyPathPlugin"
 }

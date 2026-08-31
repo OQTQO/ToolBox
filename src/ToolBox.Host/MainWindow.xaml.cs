@@ -12,6 +12,8 @@ using System.Windows.Media;
 using Microsoft.Win32;
 using ToolBox.PluginSdk;
 using Application = System.Windows.Application;
+using ContextMenu = System.Windows.Controls.ContextMenu;
+using MenuItem = System.Windows.Controls.MenuItem;
 using MessageBox = System.Windows.MessageBox;
 using OpenFileDialog = Microsoft.Win32.OpenFileDialog;
 using WpfKeyEventArgs = System.Windows.Input.KeyEventArgs;

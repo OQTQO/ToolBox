@@ -104,6 +104,64 @@ public sealed class OutOfProcessPluginRuntimeTests
     }
 
     [Fact]
+    public async Task HungPluginUiRequestTerminatesWorkerAndRequiresRestart()
+    {
+        var pluginDirectory = PrepareWorkerChildPlugin();
+
+        try
+        {
+            var runtime = new OutOfProcessPluginRuntime(
+                GetWorkerPath(),
+                uiRequestTimeout: TimeSpan.FromMilliseconds(500));
+            await using var session = await runtime.StartAsync(pluginDirectory);
+            await session.StartPluginAsync();
+            var childPid = await WaitForChildPidAsync(pluginDirectory);
+
+            var exception = await Assert.ThrowsAsync<WorkerProtocolException>(
+                () => session.ExecuteUiActionAsync("hang"));
+
+            Assert.Equal("PLUGIN_UI_TIMEOUT", exception.ErrorCode);
+            Assert.Equal(PluginLifecycleState.RestartRequired, session.State.LifecycleState);
+            Assert.True(await WaitForProcessExitAsync(childPid));
+            Assert.True(session.WorkerHasExited);
+        }
+        finally
+        {
+            DeleteDirectoryWithRetry(pluginDirectory);
+        }
+    }
+
+    [Fact]
+    public async Task CallerCancellationInterruptsPluginUiRequestAndKeepsWorkerUsable()
+    {
+        var pluginDirectory = PrepareWorkerChildPlugin();
+
+        try
+        {
+            var runtime = new OutOfProcessPluginRuntime(
+                GetWorkerPath(),
+                uiRequestTimeout: TimeSpan.FromSeconds(5));
+            await using var session = await runtime.StartAsync(pluginDirectory);
+            await session.StartPluginAsync();
+            using var cancellation = new CancellationTokenSource(TimeSpan.FromMilliseconds(250));
+
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(
+                () => session.ExecuteUiActionAsync("hang", cancellationToken: cancellation.Token));
+
+            var snapshot = await session.GetUiSnapshotAsync();
+            Assert.NotNull(snapshot);
+            Assert.Equal(PluginLifecycleState.Running, session.State.LifecycleState);
+            Assert.False(session.WorkerHasExited);
+
+            await session.StopAsync();
+        }
+        finally
+        {
+            DeleteDirectoryWithRetry(pluginDirectory);
+        }
+    }
+
+    [Fact]
     public async Task WorkerLaunchIdentityMismatchFailsHandshake()
     {
         var pluginDirectory = PrepareWorkerChildPlugin();

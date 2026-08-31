@@ -17,6 +17,7 @@ public sealed class OutOfProcessPluginSession : IAsyncDisposable
     private readonly StreamWriter _writer;
     private readonly SemaphoreSlim _writeGate = new(1, 1);
     private readonly SemaphoreSlim _requestGate = new(1, 1);
+    private readonly TimeSpan _uiRequestTimeout;
     private PluginState _state;
     private bool _channelClosed;
     private bool _workerDisposed;
@@ -28,7 +29,8 @@ public sealed class OutOfProcessPluginSession : IAsyncDisposable
         WorkerProcessHandle worker,
         NamedPipeServerStream pipe,
         StreamReader reader,
-        StreamWriter writer)
+        StreamWriter writer,
+        TimeSpan uiRequestTimeout)
     {
         Discovered = discoveredPlugin ?? throw new ArgumentNullException(nameof(discoveredPlugin));
         LaunchId = string.IsNullOrWhiteSpace(launchId)
@@ -38,6 +40,7 @@ public sealed class OutOfProcessPluginSession : IAsyncDisposable
         _pipe = pipe ?? throw new ArgumentNullException(nameof(pipe));
         _reader = reader ?? throw new ArgumentNullException(nameof(reader));
         _writer = writer ?? throw new ArgumentNullException(nameof(writer));
+        _uiRequestTimeout = uiRequestTimeout;
         _state = PluginState.CreateInstalled(Manifest).TransitionTo(PluginLifecycleState.Disabled);
     }
 
@@ -88,7 +91,7 @@ public sealed class OutOfProcessPluginSession : IAsyncDisposable
 
         try
         {
-            var response = await RequestAsync("ui.snapshot", cancellationToken: cancellationToken)
+            var response = await RequestUiAsync("ui.snapshot", cancellationToken: cancellationToken)
                 .ConfigureAwait(false);
             return DeserializeUiSnapshot(response.Payload);
         }
@@ -112,7 +115,7 @@ public sealed class OutOfProcessPluginSession : IAsyncDisposable
             actionId,
             argument
         });
-        var response = await RequestAsync("ui.action", payload, cancellationToken)
+        var response = await RequestUiAsync("ui.action", payload, cancellationToken)
             .ConfigureAwait(false);
         return DeserializeUiSnapshot(response.Payload)
             ?? throw new WorkerProtocolException(
@@ -127,7 +130,7 @@ public sealed class OutOfProcessPluginSession : IAsyncDisposable
         ObjectDisposedException.ThrowIf(_disposed, this);
         ArgumentNullException.ThrowIfNull(input);
 
-        var response = await RequestAsync(
+        var response = await RequestUiAsync(
                 "ui.input",
                 WorkerProtocol.SerializePayload(input),
                 cancellationToken)
@@ -142,33 +145,84 @@ public sealed class OutOfProcessPluginSession : IAsyncDisposable
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
         EnsureChannelOpen();
+        await _requestGate.WaitAsync(cancellationToken).ConfigureAwait(false);
 
-        var requestId = Guid.NewGuid().ToString("N");
-        await WriteAsync(
-                new WorkerMessage(
-                    WorkerMessageType.Heartbeat,
-                    WorkerProtocol.ProtocolMajor,
-                    LaunchId,
-                    RequestId: requestId,
-                    Payload: "ping"),
-                cancellationToken)
-            .ConfigureAwait(false);
-
-        while (true)
+        try
         {
-            var message = await WorkerProtocol.ReadAsync(_reader, cancellationToken).ConfigureAwait(false);
-            ValidateEnvelope(message);
+            var requestId = Guid.NewGuid().ToString("N");
+            await WriteAsync(
+                    new WorkerMessage(
+                        WorkerMessageType.Heartbeat,
+                        WorkerProtocol.ProtocolMajor,
+                        LaunchId,
+                        RequestId: requestId,
+                        Payload: "ping"),
+                    cancellationToken)
+                .ConfigureAwait(false);
 
-            if (message.Type == WorkerMessageType.Error)
+            while (true)
             {
-                throw CreateProtocolError(message);
-            }
+                var pendingRead = WorkerProtocol.ReadAsync(_reader, CancellationToken.None).AsTask();
+                WorkerMessage message;
 
-            if (message.Type == WorkerMessageType.Heartbeat
-                && string.Equals(message.RequestId, requestId, StringComparison.Ordinal))
-            {
-                return;
+                try
+                {
+                    message = await pendingRead.WaitAsync(cancellationToken).ConfigureAwait(false);
+                }
+                catch (OperationCanceledException)
+                {
+                    await DrainHeartbeatAsync(requestId, pendingRead).ConfigureAwait(false);
+                    throw;
+                }
+
+                ValidateEnvelope(message);
+
+                if (message.Type == WorkerMessageType.Error
+                    && string.Equals(message.RequestId, requestId, StringComparison.Ordinal))
+                {
+                    throw CreateProtocolError(message);
+                }
+
+                if (message.Type == WorkerMessageType.Heartbeat
+                    && string.Equals(message.RequestId, requestId, StringComparison.Ordinal))
+                {
+                    return;
+                }
             }
+        }
+        finally
+        {
+            _requestGate.Release();
+        }
+    }
+
+    private async Task DrainHeartbeatAsync(
+        string requestId,
+        Task<WorkerMessage> pendingRead)
+    {
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(1));
+
+        try
+        {
+            while (true)
+            {
+                var message = await pendingRead.WaitAsync(timeout.Token).ConfigureAwait(false);
+                ValidateEnvelope(message);
+
+                if (message.Type == WorkerMessageType.Heartbeat
+                    && string.Equals(message.RequestId, requestId, StringComparison.Ordinal))
+                {
+                    return;
+                }
+
+                pendingRead = WorkerProtocol.ReadAsync(_reader).AsTask();
+            }
+        }
+        catch (OperationCanceledException) when (timeout.IsCancellationRequested)
+        {
+            FailUnresponsiveWorker(
+                "WORKER_HEARTBEAT_CANCEL_TIMEOUT",
+                "The Worker did not finish the cancelled heartbeat within 1 second.");
         }
     }
 
@@ -391,10 +445,24 @@ public sealed class OutOfProcessPluginSession : IAsyncDisposable
 
             while (true)
             {
-                var message = await WorkerProtocol.ReadAsync(_reader, cancellationToken).ConfigureAwait(false);
+                var pendingRead = WorkerProtocol.ReadAsync(_reader, CancellationToken.None).AsTask();
+                WorkerMessage message;
+
+                try
+                {
+                    message = await pendingRead.WaitAsync(cancellationToken).ConfigureAwait(false);
+                }
+                catch (OperationCanceledException)
+                {
+                    await TryCancelRequestAsync(requestId).ConfigureAwait(false);
+                    await DrainCancelledRequestAsync(requestId, pendingRead).ConfigureAwait(false);
+                    throw;
+                }
+
                 ValidateEnvelope(message);
 
-                if (message.Type == WorkerMessageType.Error)
+                if (message.Type == WorkerMessageType.Error
+                    && string.Equals(message.RequestId, requestId, StringComparison.Ordinal))
                 {
                     throw CreateProtocolError(message);
                 }
@@ -409,6 +477,108 @@ public sealed class OutOfProcessPluginSession : IAsyncDisposable
         finally
         {
             _requestGate.Release();
+        }
+    }
+
+    private async Task DrainCancelledRequestAsync(
+        string requestId,
+        Task<WorkerMessage> pendingRead)
+    {
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(1));
+
+        try
+        {
+            while (true)
+            {
+                var message = await pendingRead.WaitAsync(timeout.Token).ConfigureAwait(false);
+                ValidateEnvelope(message);
+
+                if (message.Type is WorkerMessageType.Response or WorkerMessageType.Error
+                    && string.Equals(message.RequestId, requestId, StringComparison.Ordinal))
+                {
+                    return;
+                }
+
+                pendingRead = WorkerProtocol.ReadAsync(_reader).AsTask();
+            }
+        }
+        catch (OperationCanceledException) when (timeout.IsCancellationRequested)
+        {
+            FailUnresponsiveWorker(
+                "WORKER_CANCEL_TIMEOUT",
+                "The plugin request did not acknowledge cancellation within 1 second.");
+        }
+    }
+
+    private void FailUnresponsiveWorker(string errorCode, string errorMessage)
+    {
+        if (_state.LifecycleState == PluginLifecycleState.Running)
+        {
+            _state = _state.TransitionTo(
+                PluginLifecycleState.Faulted,
+                errorCode: errorCode,
+                errorMessage: errorMessage);
+            _state = _state.TransitionTo(
+                PluginLifecycleState.RestartRequired,
+                errorCode: errorCode,
+                errorMessage: errorMessage);
+        }
+
+        TerminateWorker();
+        CloseChannel();
+    }
+
+    private async Task TryCancelRequestAsync(string requestId)
+    {
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(1));
+
+        try
+        {
+            await CancelAsync(requestId, timeout.Token).ConfigureAwait(false);
+        }
+        catch (Exception exception) when (exception is OperationCanceledException
+            or IOException
+            or ObjectDisposedException
+            or WorkerProtocolException)
+        {
+            // Cancellation is best effort. UI request timeout handling still owns
+            // the deterministic fallback of terminating the Worker process.
+        }
+    }
+
+    private async Task<WorkerMessage> RequestUiAsync(
+        string operation,
+        string? payload = null,
+        CancellationToken cancellationToken = default)
+    {
+        using var timeoutCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        timeoutCancellation.CancelAfter(_uiRequestTimeout);
+
+        try
+        {
+            return await RequestAsync(operation, payload, timeoutCancellation.Token).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            var exception = new WorkerProtocolException(
+                "PLUGIN_UI_TIMEOUT",
+                $"The plugin UI request '{operation}' did not finish within {_uiRequestTimeout.TotalSeconds:0.###} seconds.");
+
+            if (_state.LifecycleState == PluginLifecycleState.Running)
+            {
+                _state = _state.TransitionTo(
+                    PluginLifecycleState.Faulted,
+                    errorCode: exception.ErrorCode,
+                    errorMessage: exception.Message);
+                _state = _state.TransitionTo(
+                    PluginLifecycleState.RestartRequired,
+                    errorCode: exception.ErrorCode,
+                    errorMessage: exception.Message);
+            }
+
+            TerminateWorker();
+            CloseChannel();
+            throw exception;
         }
     }
 

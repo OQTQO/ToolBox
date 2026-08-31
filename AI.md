@@ -15,9 +15,16 @@ ToolBox 是 Windows 上的通用插件外壳。平台负责安装、发现、生
 
 涉及界面、主题、排版或动画时，再读取 `docs/maintainer/ui-design.md`；它是 UI 长期基线，不是每个任务都要加载的上下文。
 
+## 平台权威性
+
+- 本仓库定义 ToolBox 平台契约，插件仓库负责消费和适配。
+- 软件与插件发生冲突时，插件服从软件；不得为了单个插件给 Host、Core 或 Worker 增加专用分支。
+- 已发布插件以其声明支持的软件 Release、SDK 和 DevKit 为准；联合开发必须在任务记录中绑定准确的软件 commit 或 tag。
+- 软件仓库内部的行为以兼容性测试和实际实现为最终依据，发现文档漂移时同步修正文档。
+
 ## 固定边界
 
-- `src/ToolBox.PluginSdk`：第三方唯一依赖，稳定 Plugin API v1。
+- `src/ToolBox.PluginSdk`：第三方唯一依赖；当前为 .NET 10 / Plugin API major 1，插件必须按目标软件 SDK 重建。
 - `src/ToolBox.Core`：Manifest、`.tpk` 校验与安装、动态目录、生命周期、数据保留和 Worker 会话。
 - `src/ToolBox.PluginWorker`：进程外插件 Worker 和控制协议。
 - `src/ToolBox.Host`：与具体插件无关的 WPF 外壳、通用 UI、设置、托盘和事件流；生产代码不引用具体插件类型。
@@ -33,7 +40,7 @@ ToolBox 是 Windows 上的通用插件外壳。平台负责安装、发现、生
 5. 插件的 Config/State 数据与运行版本分离，升级或回退不得无故丢失。
 6. SDK 公共 API v1 修改必须先检查兼容性测试和 Manifest 协议。
 7. 停止失败必须保留 Faulted、DisableFailed 或 RestartRequired 等真实状态。
-8. 不在本阶段假设存在签名、权限 enforcement、沙箱、商城或自动更新。
+8. `.tpk` 必须满足 Manifest v2、package format 2、能力声明、发布者签名和本地信任策略；能力声明不等于操作系统权限沙箱。
 
 ## 源码地图
 

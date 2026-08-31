@@ -1,5 +1,6 @@
 using System.IO.Compression;
 using System.Security.Cryptography;
+using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using System.Text.Json;
 using ToolBox.Core.Diagnostics;
@@ -187,7 +188,7 @@ public sealed class DynamicPluginWorkspaceTests
         {
             var manifest = $$"""
                 {
-                  "formatVersion": 1,
+                  "formatVersion": 2,
                   "id": "{{id}}",
                   "name": "{{name}}",
                   "version": "{{version}}",
@@ -199,6 +200,11 @@ public sealed class DynamicPluginWorkspaceTests
                     "preferredMode": "outOfProcess",
                     "background": true
                   },
+                  "capabilities": [{
+                    "id": "host.background.execution",
+                    "required": true,
+                    "reason": "Runs the dynamic Host test fixture."
+                  }],
                   "entryPoint": "Example.Plugin, Example"
                 }
                 """;
@@ -214,12 +220,15 @@ public sealed class DynamicPluginWorkspaceTests
             }).ToArray();
             payload["package.json"] = Encoding.UTF8.GetBytes(JsonSerializer.Serialize(new
             {
-                packageFormatVersion = 1,
+                packageFormatVersion = 2,
                 pluginId = id,
                 pluginVersion = version,
                 automaticRollbackSupported = true,
                 files
             }));
+            payload["signature.json"] = TestPackageSigner.CreateSignature(
+                payload["package.json"],
+                "example.test");
 
             var packagePath = Path.Combine(_root, $"{id}-{version}.tpk");
             using var archive = ZipFile.Open(packagePath, ZipArchiveMode.Create);
@@ -244,7 +253,7 @@ public sealed class DynamicPluginWorkspaceTests
             Directory.CreateDirectory(versionDirectory);
             File.WriteAllText(Path.Combine(versionDirectory, "manifest.json"), $$"""
                 {
-                  "formatVersion": 1,
+                  "formatVersion": 2,
                   "id": "{{id}}",
                   "name": "{{name}}",
                   "version": "{{version}}",
@@ -256,6 +265,11 @@ public sealed class DynamicPluginWorkspaceTests
                     "preferredMode": "{{(supportsOutOfProcess ? "outOfProcess" : "inProcess")}}",
                     "background": true
                   },
+                  "capabilities": [{
+                    "id": "host.background.execution",
+                    "required": true,
+                    "reason": "Runs the installed Host test fixture."
+                  }],
                   "entryPoint": "Example.Plugin, Example"
                 }
                 """);
@@ -287,6 +301,40 @@ public sealed class DynamicPluginWorkspaceTests
             {
                 Directory.Delete(_root, recursive: true);
             }
+        }
+    }
+
+    private static class TestPackageSigner
+    {
+        private static readonly RSA Rsa = RSA.Create(2048);
+        private static readonly X509Certificate2 Certificate = CreateCertificate();
+
+        public static byte[] CreateSignature(byte[] packageMetadata, string publisherId)
+        {
+            return Encoding.UTF8.GetBytes(JsonSerializer.Serialize(new
+            {
+                schemaVersion = 1,
+                publisherId,
+                algorithm = "rsa-sha256",
+                payload = "package.json",
+                certificate = Convert.ToBase64String(Certificate.Export(X509ContentType.Cert)),
+                signature = Convert.ToBase64String(Rsa.SignData(
+                    packageMetadata,
+                    HashAlgorithmName.SHA256,
+                    RSASignaturePadding.Pkcs1))
+            }));
+        }
+
+        private static X509Certificate2 CreateCertificate()
+        {
+            var request = new CertificateRequest(
+                "CN=ToolBox Host Test Publisher",
+                Rsa,
+                HashAlgorithmName.SHA256,
+                RSASignaturePadding.Pkcs1);
+            return request.CreateSelfSigned(
+                DateTimeOffset.UtcNow.AddDays(-1),
+                DateTimeOffset.UtcNow.AddDays(30));
         }
     }
 

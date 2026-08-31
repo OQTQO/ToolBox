@@ -1,13 +1,13 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
-    <TargetFramework>net8.0-windows</TargetFramework>
+    <TargetFramework>net10.0-windows</TargetFramework>
     <EnableWindowsTargeting>true</EnableWindowsTargeting>
     <UseWPF>true</UseWPF>
     <UseWindowsForms>true</UseWindowsForms>
     <RootNamespace>ToolBox.Host</RootNamespace>
     <AssemblyName>ToolBox.Host</AssemblyName>
-    <Version>0.2.2</Version>
+    <Version>0.4.0</Version>
     <ApplicationIcon>Assets\ToolBox.ico</ApplicationIcon>
   </PropertyGroup>
 
@@ -25,7 +25,7 @@
 
   <Target Name="CopyPluginWorkerRuntime" AfterTargets="Build">
     <PropertyGroup>
-      <PluginWorkerBuildDirectory>$(MSBuildProjectDirectory)\..\ToolBox.PluginWorker\bin\$(Configuration)\net8.0</PluginWorkerBuildDirectory>
+      <PluginWorkerBuildDirectory>$(MSBuildProjectDirectory)\..\ToolBox.PluginWorker\bin\$(Configuration)\net10.0</PluginWorkerBuildDirectory>
     </PropertyGroup>
 
     <ItemGroup>

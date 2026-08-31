@@ -5,6 +5,7 @@ using System.Text.Json;
 using HappyPathPlugin;
 using ToolBox.Core.Packaging;
 using ToolBox.Core.Plugins;
+using ToolBox.PluginSdk;
 using Xunit;
 
 namespace ToolBox.Core.Tests;
@@ -32,6 +33,7 @@ public sealed class PackageInstallerTests
             Assert.Equal("0.1.0", installedV1.Version);
             Assert.Null(installedV1.PreviousActiveVersion);
             Assert.True(installedV1.AutomaticRollbackSupported);
+            Assert.Matches("^[a-f0-9]{64}$", installedV1.PublisherCertificateSha256);
             Assert.Equal(Version01, installer.GetInstalledVersions(installedV1.PluginId));
             Assert.Equal(installedV1.VersionDirectory, installer.GetActiveVersionDirectory(installedV1.PluginId));
 
@@ -246,7 +248,7 @@ public sealed class PackageInstallerTests
             var unsupportedFormat = CreateHappyPathPackage(
                 root,
                 "0.5.0",
-                packageFormatVersion: 2);
+                packageFormatVersion: 1);
             var formatException = await Assert.ThrowsAsync<PluginPackageException>(
                 () => installer.InstallAsync(unsupportedFormat));
             Assert.Equal("BAD_MANIFEST_PACKAGE", formatException.ErrorCode);
@@ -375,24 +377,163 @@ public sealed class PackageInstallerTests
         }
     }
 
+    [Theory]
+    [InlineData(true, false, "PACKAGE_SIGNATURE_REQUIRED")]
+    [InlineData(false, true, "PACKAGE_SIGNATURE_INVALID")]
+    public async Task PackageRequiresAValidPublisherSignature(
+        bool omitSignature,
+        bool tamperSignature,
+        string expectedErrorCode)
+    {
+        var root = CreateTemporaryRoot();
+        var packagePath = CreateHappyPathPackage(
+            root,
+            "0.4.1",
+            omitSignature: omitSignature,
+            tamperSignature: tamperSignature);
+
+        try
+        {
+            using var installer = new PluginPackageInstaller(
+                Path.Combine(root, "Plugins"),
+                Path.Combine(root, "PluginData"));
+            var exception = await Assert.ThrowsAsync<PluginPackageException>(
+                () => installer.InstallAsync(packagePath));
+
+            Assert.Equal(expectedErrorCode, exception.ErrorCode);
+            AssertNoStagingChildren(Path.Combine(root, "Plugins"));
+        }
+        finally
+        {
+            DeleteTemporaryRoot(root);
+        }
+    }
+
+    [Fact]
+    public async Task TrustOnFirstUseRejectsPublisherKeyChanges()
+    {
+        var root = CreateTemporaryRoot();
+
+        try
+        {
+            using var installer = new PluginPackageInstaller(
+                Path.Combine(root, "Plugins"),
+                Path.Combine(root, "PluginData"));
+            await installer.InstallAsync(CreateHappyPathPackage(root, "0.4.2"));
+
+            using var replacementSigner = new TestPackageSigner();
+            var replacementPackage = CreateHappyPathPackage(
+                root,
+                "0.4.3",
+                signer: replacementSigner);
+            var exception = await Assert.ThrowsAsync<PluginPackageException>(
+                () => installer.InstallAsync(replacementPackage));
+
+            Assert.Equal("PACKAGE_PUBLISHER_KEY_CHANGED", exception.ErrorCode);
+            Assert.Equal(["0.4.2"], installer.GetInstalledVersions("com.toolbox.happy-path"));
+        }
+        finally
+        {
+            DeleteTemporaryRoot(root);
+        }
+    }
+
+    [Fact]
+    public async Task FailedInstallDoesNotPersistPublisherTrust()
+    {
+        var root = CreateTemporaryRoot();
+        var pluginsRoot = Path.Combine(root, "Plugins");
+        var dataRoot = Path.Combine(root, "PluginData");
+        Directory.CreateDirectory(pluginsRoot);
+        await File.WriteAllTextAsync(
+            Path.Combine(pluginsRoot, "com.toolbox.happy-path"),
+            "This file intentionally blocks creation of the plugin directory.");
+
+        try
+        {
+            using var installer = new PluginPackageInstaller(pluginsRoot, dataRoot);
+            var exception = await Assert.ThrowsAsync<PluginPackageException>(
+                () => installer.InstallAsync(CreateHappyPathPackage(root, "0.4.4")));
+
+            Assert.Equal("PACKAGE_PATH_INVALID", exception.ErrorCode);
+            Assert.False(File.Exists(Path.Combine(
+                dataRoot,
+                ".platform",
+                "trusted-publishers.json")));
+        }
+        finally
+        {
+            DeleteTemporaryRoot(root);
+        }
+    }
+
+    [Theory]
+    [InlineData(true, false, "PACKAGE_DUPLICATE_PLUGIN_SDK")]
+    [InlineData(false, true, "PACKAGE_ENTRY_ASSEMBLY_MISSING")]
+    public async Task StructuralValidationRejectsUnsafeRuntimeLayouts(
+        bool includePrivateSdk,
+        bool omitRuntimeAssembly,
+        string expectedErrorCode)
+    {
+        var root = CreateTemporaryRoot();
+        var packagePath = CreateHappyPathPackage(
+            root,
+            "0.6.0",
+            includePrivateSdk: includePrivateSdk,
+            omitRuntimeAssembly: omitRuntimeAssembly);
+
+        try
+        {
+            using var installer = new PluginPackageInstaller(
+                Path.Combine(root, "Plugins"),
+                Path.Combine(root, "PluginData"));
+
+            var exception = await Assert.ThrowsAsync<PluginPackageException>(
+                () => installer.InstallAsync(packagePath));
+
+            Assert.Equal(expectedErrorCode, exception.ErrorCode);
+            AssertNoStagingChildren(Path.Combine(root, "Plugins"));
+        }
+        finally
+        {
+            DeleteTemporaryRoot(root);
+        }
+    }
+
     private static string CreateHappyPathPackage(
         string root,
         string version,
         int pluginApiMajor = 1,
         bool automaticRollbackSupported = true,
         bool tamperHash = false,
-        int packageFormatVersion = 1,
+        int packageFormatVersion = 2,
         string? metadataPluginId = null,
-        string? metadataPluginVersion = null)
+        string? metadataPluginVersion = null,
+        bool includePrivateSdk = false,
+        bool omitRuntimeAssembly = false,
+        bool omitSignature = false,
+        bool tamperSignature = false,
+        TestPackageSigner? signer = null)
     {
         var manifest = File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "HappyPathPlugin.manifest.json"))
             .Replace("\"version\": \"0.1.0\"", $"\"version\": \"{version}\"", StringComparison.Ordinal)
             .Replace("\"pluginApiMajor\": 1", $"\"pluginApiMajor\": {pluginApiMajor}", StringComparison.Ordinal);
         var payload = new Dictionary<string, byte[]>(StringComparer.Ordinal)
         {
-            ["manifest.json"] = Encoding.UTF8.GetBytes(manifest),
-            ["runtime/HappyPathPlugin.dll"] = File.ReadAllBytes(typeof(HappyPathPlugin.HappyPathPlugin).Assembly.Location)
+            ["manifest.json"] = Encoding.UTF8.GetBytes(manifest)
         };
+
+        if (!omitRuntimeAssembly)
+        {
+            payload["runtime/HappyPathPlugin.dll"] = File.ReadAllBytes(
+                typeof(HappyPathPlugin.HappyPathPlugin).Assembly.Location);
+        }
+
+        if (includePrivateSdk)
+        {
+            payload["runtime/ToolBox.PluginSdk.dll"] = File.ReadAllBytes(typeof(IPlugin).Assembly.Location);
+        }
+
         var files = payload
             .Select(entry => new
             {
@@ -419,6 +560,16 @@ public sealed class PackageInstallerTests
                 automaticRollbackSupported,
                 files
             }));
+        if (!omitSignature)
+        {
+            payload["signature.json"] = (signer ?? TestPackageSigner.Shared).CreateSignature(
+                payload["package.json"],
+                "toolbox.tests");
+            if (tamperSignature)
+            {
+                payload["package.json"] = [.. payload["package.json"], (byte)' '];
+            }
+        }
 
         return CreateArchive(root, $"HappyPath-{version}-{Guid.NewGuid():N}.tpk", payload);
     }

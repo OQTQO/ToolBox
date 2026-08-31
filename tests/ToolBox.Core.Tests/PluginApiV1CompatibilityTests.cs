@@ -17,6 +17,8 @@ public sealed class PluginApiV1CompatibilityTests
         "ToolBox.PluginSdk.IResourceManager",
         "ToolBox.PluginSdk.IServiceBroker",
         "ToolBox.PluginSdk.IServiceLease`1",
+        "ToolBox.PluginSdk.PluginCapability",
+        "ToolBox.PluginSdk.PluginCapabilityContract",
         "ToolBox.PluginSdk.PluginContract",
         "ToolBox.PluginSdk.PluginExecutionMode",
         "ToolBox.PluginSdk.PluginInputEvent",
@@ -71,7 +73,7 @@ public sealed class PluginApiV1CompatibilityTests
     public void V1ConstantsAndEnumNumbersAreFrozen()
     {
         Assert.Equal(1, PluginContract.PluginApiMajor);
-        Assert.Equal(1, PluginContract.ManifestFormatVersion);
+        Assert.Equal(2, PluginContract.ManifestFormatVersion);
         Assert.Equal("windows", PluginContract.SupportedOs);
         Assert.Equal("x64", PluginContract.SupportedArchitecture);
 
@@ -231,12 +233,13 @@ public sealed class PluginApiV1CompatibilityTests
         AssertJsonName(typeof(PluginManifest), nameof(PluginManifest.Publisher), "publisher");
         AssertJsonName(typeof(PluginManifest), nameof(PluginManifest.Platform), "platform");
         AssertJsonName(typeof(PluginManifest), nameof(PluginManifest.Runtime), "runtime");
+        AssertJsonName(typeof(PluginManifest), nameof(PluginManifest.Capabilities), "capabilities");
         AssertJsonName(typeof(PluginManifest), nameof(PluginManifest.EntryPoint), "entryPoint");
 
         var exception = Assert.Throws<PluginManifestValidationException>(() =>
             new PluginManifestParser().Parse("""
             {
-              "formatVersion": 1,
+              "formatVersion": 2,
               "id": "com.toolbox.compatibility",
               "name": "Compatibility",
               "version": "1.0.0",
@@ -248,6 +251,11 @@ public sealed class PluginApiV1CompatibilityTests
                 "preferredMode": "inProcess",
                 "background": false
               },
+              "capabilities": [{
+                "id": "host.background.execution",
+                "required": true,
+                "reason": "Runs compatibility checks."
+              }],
               "entryPoint": "Compatibility.Plugin, Compatibility"
             }
             """));

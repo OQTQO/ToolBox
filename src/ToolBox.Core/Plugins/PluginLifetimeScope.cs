@@ -141,6 +141,15 @@ public sealed class PluginLifetimeScope : IPluginLifetimeScope, IDisposable, IAs
                     .WaitAsync(cancellationToken)
                     .ConfigureAwait(false);
             }
+            catch (OperationCanceledException) when (
+                !cancellationToken.IsCancellationRequested
+                && _lifetimeCancellation.IsCancellationRequested
+                && backgroundTasks.All(task => task.IsCompleted && !task.IsFaulted))
+            {
+                // Tasks that observe the plugin lifetime token normally finish as
+                // Canceled during shutdown. Only deadline/external cancellation or
+                // an actual task fault should make cleanup fail.
+            }
             catch (Exception exception)
             {
                 failures.Add(exception);

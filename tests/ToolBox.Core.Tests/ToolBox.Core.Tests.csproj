@@ -1,6 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <TargetFramework>net8.0</TargetFramework>
+    <TargetFramework>net10.0</TargetFramework>
     <IsPackable>false</IsPackable>
     <IsTestProject>true</IsTestProject>
     <AssemblyName>ToolBox.Core.Tests</AssemblyName>
@@ -20,9 +20,6 @@
     <ProjectReference Include="..\..\src\ToolBox.Core\ToolBox.Core.csproj" />
     <ProjectReference Include="..\..\src\ToolBox.PluginSdk\ToolBox.PluginSdk.csproj" />
     <ProjectReference Include="..\Fixtures\HappyPathPlugin\HappyPathPlugin.csproj" />
-    <ProjectReference Include="..\Fixtures\PluginSdkCompatibility\LegacyPlugin.csproj"
-                      ReferenceOutputAssembly="false"
-                      AdditionalProperties="Configuration=$(Configuration)" />
     <ProjectReference Include="..\Fixtures\CrashPlugin\CrashPlugin.csproj" />
     <ProjectReference Include="..\Fixtures\HangPlugin\HangPlugin.csproj" />
     <ProjectReference Include="..\Fixtures\UnloadLeakPlugin\UnloadLeakPlugin.csproj" />
@@ -53,7 +50,9 @@
 
   <Target Name="CopyPluginWorkerRuntime" AfterTargets="Build">
     <PropertyGroup>
-      <PluginWorkerBuildDirectory>$(MSBuildProjectDirectory)\..\..\src\ToolBox.PluginWorker\bin\$(Configuration)\net8.0</PluginWorkerBuildDirectory>
+      <LowercaseConfiguration>$([System.String]::Copy('$(Configuration)').ToLowerInvariant())</LowercaseConfiguration>
+      <PluginWorkerBuildDirectory Condition="'$(UseArtifactsOutput)' != 'true'">$(MSBuildProjectDirectory)\..\..\src\ToolBox.PluginWorker\bin\$(Configuration)\net10.0</PluginWorkerBuildDirectory>
+      <PluginWorkerBuildDirectory Condition="'$(UseArtifactsOutput)' == 'true'">$(ArtifactsPath)\$(ArtifactsBinOutputName)\ToolBox.PluginWorker\$(LowercaseConfiguration)</PluginWorkerBuildDirectory>
     </PropertyGroup>
 
     <ItemGroup>
@@ -67,11 +66,19 @@
 
   <Target Name="CopyPhase5Fixtures" AfterTargets="Build">
     <PropertyGroup>
-      <WorkerChildFixtureBuildDirectory>$(MSBuildProjectDirectory)\..\Fixtures\WorkerChildProcessPlugin\bin\$(Configuration)\net8.0</WorkerChildFixtureBuildDirectory>
-      <ProtocolMismatchWorkerBuildDirectory>$(MSBuildProjectDirectory)\..\Fixtures\ProtocolMismatchWorker\bin\$(Configuration)\net8.0</ProtocolMismatchWorkerBuildDirectory>
-      <CrashFixtureBuildDirectory>$(MSBuildProjectDirectory)\..\Fixtures\CrashPlugin\bin\$(Configuration)\net8.0</CrashFixtureBuildDirectory>
-      <HangFixtureBuildDirectory>$(MSBuildProjectDirectory)\..\Fixtures\HangPlugin\bin\$(Configuration)\net8.0</HangFixtureBuildDirectory>
-      <UnloadLeakFixtureBuildDirectory>$(MSBuildProjectDirectory)\..\Fixtures\UnloadLeakPlugin\bin\$(Configuration)\net8.0</UnloadLeakFixtureBuildDirectory>
+      <LowercaseConfiguration>$([System.String]::Copy('$(Configuration)').ToLowerInvariant())</LowercaseConfiguration>
+      <FixtureBinRoot Condition="'$(UseArtifactsOutput)' != 'true'">$(MSBuildProjectDirectory)\..\Fixtures</FixtureBinRoot>
+      <FixtureBinRoot Condition="'$(UseArtifactsOutput)' == 'true'">$(ArtifactsPath)\$(ArtifactsBinOutputName)</FixtureBinRoot>
+      <WorkerChildFixtureBuildDirectory Condition="'$(UseArtifactsOutput)' != 'true'">$(FixtureBinRoot)\WorkerChildProcessPlugin\bin\$(Configuration)\net10.0</WorkerChildFixtureBuildDirectory>
+      <WorkerChildFixtureBuildDirectory Condition="'$(UseArtifactsOutput)' == 'true'">$(FixtureBinRoot)\WorkerChildProcessPlugin\$(LowercaseConfiguration)</WorkerChildFixtureBuildDirectory>
+      <ProtocolMismatchWorkerBuildDirectory Condition="'$(UseArtifactsOutput)' != 'true'">$(FixtureBinRoot)\ProtocolMismatchWorker\bin\$(Configuration)\net10.0</ProtocolMismatchWorkerBuildDirectory>
+      <ProtocolMismatchWorkerBuildDirectory Condition="'$(UseArtifactsOutput)' == 'true'">$(FixtureBinRoot)\ProtocolMismatchWorker\$(LowercaseConfiguration)</ProtocolMismatchWorkerBuildDirectory>
+      <CrashFixtureBuildDirectory Condition="'$(UseArtifactsOutput)' != 'true'">$(FixtureBinRoot)\CrashPlugin\bin\$(Configuration)\net10.0</CrashFixtureBuildDirectory>
+      <CrashFixtureBuildDirectory Condition="'$(UseArtifactsOutput)' == 'true'">$(FixtureBinRoot)\CrashPlugin\$(LowercaseConfiguration)</CrashFixtureBuildDirectory>
+      <HangFixtureBuildDirectory Condition="'$(UseArtifactsOutput)' != 'true'">$(FixtureBinRoot)\HangPlugin\bin\$(Configuration)\net10.0</HangFixtureBuildDirectory>
+      <HangFixtureBuildDirectory Condition="'$(UseArtifactsOutput)' == 'true'">$(FixtureBinRoot)\HangPlugin\$(LowercaseConfiguration)</HangFixtureBuildDirectory>
+      <UnloadLeakFixtureBuildDirectory Condition="'$(UseArtifactsOutput)' != 'true'">$(FixtureBinRoot)\UnloadLeakPlugin\bin\$(Configuration)\net10.0</UnloadLeakFixtureBuildDirectory>
+      <UnloadLeakFixtureBuildDirectory Condition="'$(UseArtifactsOutput)' == 'true'">$(FixtureBinRoot)\UnloadLeakPlugin\$(LowercaseConfiguration)</UnloadLeakFixtureBuildDirectory>
     </PropertyGroup>
 
     <ItemGroup>
@@ -99,22 +106,4 @@
           SkipUnchangedFiles="true" />
   </Target>
 
-  <Target Name="CopyPluginSdkCompatibilityFixture" AfterTargets="Build">
-    <PropertyGroup>
-      <LegacyPluginBuildDirectory>$(MSBuildProjectDirectory)\..\Fixtures\PluginSdkCompatibility\bin\$(Configuration)\net8.0</LegacyPluginBuildDirectory>
-      <PluginSdkCompatibilityOutputDirectory>$(OutDir)PluginSdkCompatibility</PluginSdkCompatibilityOutputDirectory>
-    </PropertyGroup>
-
-    <ItemGroup>
-      <LegacyPluginRuntimeFiles Include="$(LegacyPluginBuildDirectory)\LegacyPlugin.*" />
-    </ItemGroup>
-
-    <MakeDir Directories="$(PluginSdkCompatibilityOutputDirectory)" />
-    <Copy SourceFiles="@(LegacyPluginRuntimeFiles)"
-          DestinationFolder="$(PluginSdkCompatibilityOutputDirectory)"
-          SkipUnchangedFiles="true" />
-    <Copy SourceFiles="$(MSBuildProjectDirectory)\..\Fixtures\PluginSdkCompatibility\manifest.json"
-          DestinationFolder="$(PluginSdkCompatibilityOutputDirectory)"
-          SkipUnchangedFiles="true" />
-  </Target>
 </Project>

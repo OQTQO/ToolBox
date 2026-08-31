@@ -41,7 +41,8 @@ public sealed record PluginPackageInstallResult(
     string Version,
     string VersionDirectory,
     string? PreviousActiveVersion,
-    bool AutomaticRollbackSupported);
+    bool AutomaticRollbackSupported,
+    string PublisherCertificateSha256);
 
 public sealed record PluginPackageUninstallResult(
     string PluginId,
@@ -106,3 +107,15 @@ internal sealed record PluginPackageMetadata(
 internal sealed record PluginPackageFileHash(
     [property: JsonPropertyName("path")] string Path,
     [property: JsonPropertyName("sha256")] string Sha256);
+
+internal sealed record PluginPackageSignature(
+    [property: JsonPropertyName("schemaVersion")] int SchemaVersion,
+    [property: JsonPropertyName("publisherId")] string PublisherId,
+    [property: JsonPropertyName("algorithm")] string Algorithm,
+    [property: JsonPropertyName("payload")] string Payload,
+    [property: JsonPropertyName("certificate")] string Certificate,
+    [property: JsonPropertyName("signature")] string Signature);
+
+internal sealed record VerifiedPluginPublisher(
+    string PublisherId,
+    string CertificateSha256);

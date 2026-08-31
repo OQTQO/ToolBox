@@ -41,6 +41,36 @@ public sealed class LifetimePolicyTests
     }
 
     [Fact]
+    public async Task LifetimeScopeTreatsTrackedTaskCancellationAsNormalShutdown()
+    {
+        using var scope = new PluginLifetimeScope();
+        var backgroundTask = Task.Delay(Timeout.InfiniteTimeSpan, scope.LifetimeToken);
+
+        scope.Track(backgroundTask);
+        scope.Cancel();
+
+        await scope.CleanupAsync();
+
+        Assert.True(backgroundTask.IsCanceled);
+    }
+
+    [Fact]
+    public async Task LifetimeScopeStillReportsTrackedTaskFaultsDuringShutdown()
+    {
+        using var scope = new PluginLifetimeScope();
+        scope.Track(Task.FromException(new InvalidOperationException("background failed")));
+        scope.Cancel();
+
+        var exception = await Assert.ThrowsAsync<AggregateException>(
+            async () => await scope.CleanupAsync());
+
+        Assert.Contains(
+            exception.Flatten().InnerExceptions,
+            inner => inner is InvalidOperationException
+                && inner.Message == "background failed");
+    }
+
+    [Fact]
     public async Task ShutdownDeadlineProvidesOneSharedRemainingBudget()
     {
         using var deadline = ShutdownDeadline.Start(
@@ -83,7 +113,7 @@ public sealed class LifetimePolicyTests
     public void LifecycleFailureStatesRemainExplicitAndQuarantineIsTerminalUntilDisabled()
     {
         var manifest = new PluginManifest(
-            FormatVersion: 1,
+            FormatVersion: 2,
             Id: "com.toolbox.lifecycle-policy",
             Name: "Lifecycle Policy",
             Version: "0.1.0",
@@ -94,6 +124,10 @@ public sealed class LifetimePolicyTests
                 new[] { PluginExecutionMode.InProcess },
                 PluginExecutionMode.InProcess,
                 Background: false),
+            Capabilities: [new PluginCapability(
+                PluginCapabilityContract.BackgroundExecution,
+                Required: true,
+                "Exercises lifecycle state transitions in the test fixture.")],
             EntryPoint: "Lifecycle.Policy, Lifecycle");
         var state = PluginState.CreateInstalled(manifest)
             .TransitionTo(PluginLifecycleState.Disabled)

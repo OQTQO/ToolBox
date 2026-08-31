@@ -30,6 +30,7 @@ public sealed record WorkerMessage(
 public static class WorkerProtocol
 {
     public const int ProtocolMajor = 1;
+    public const int MaxMessageCharacters = 1024 * 1024;
 
     private static readonly JsonSerializerOptions JsonOptions = CreateJsonOptions();
 
@@ -145,6 +146,14 @@ public static class WorkerProtocol
         ArgumentNullException.ThrowIfNull(message);
 
         var json = JsonSerializer.Serialize(message, JsonOptions);
+
+        if (json.Length > MaxMessageCharacters)
+        {
+            throw new WorkerProtocolException(
+                "WORKER_MESSAGE_TOO_LARGE",
+                $"The Worker control message exceeds the {MaxMessageCharacters} character limit.");
+        }
+
         await writer.WriteLineAsync(json.AsMemory(), cancellationToken).ConfigureAwait(false);
         await writer.FlushAsync(cancellationToken).ConfigureAwait(false);
     }
@@ -155,14 +164,7 @@ public static class WorkerProtocol
     {
         ArgumentNullException.ThrowIfNull(reader);
 
-        var line = await reader.ReadLineAsync(cancellationToken).ConfigureAwait(false);
-
-        if (line is null)
-        {
-            throw new WorkerProtocolException(
-                "WORKER_PIPE_CLOSED",
-                "The Worker control channel closed before a complete message was received.");
-        }
+        var line = await ReadBoundedLineAsync(reader, cancellationToken).ConfigureAwait(false);
 
         try
         {
@@ -177,6 +179,45 @@ public static class WorkerProtocol
                 "WORKER_MESSAGE_INVALID",
                 "The Worker control channel returned invalid JSON.",
                 exception);
+        }
+    }
+
+    private static async ValueTask<string> ReadBoundedLineAsync(
+        StreamReader reader,
+        CancellationToken cancellationToken)
+    {
+        var builder = new StringBuilder(capacity: 4096, maxCapacity: MaxMessageCharacters);
+        var character = new char[1];
+
+        while (true)
+        {
+            var read = await reader.ReadAsync(character.AsMemory(), cancellationToken).ConfigureAwait(false);
+
+            if (read == 0)
+            {
+                throw new WorkerProtocolException(
+                    "WORKER_PIPE_CLOSED",
+                    "The Worker control channel closed before a complete message was received.");
+            }
+
+            if (character[0] == '\n')
+            {
+                if (builder.Length > 0 && builder[^1] == '\r')
+                {
+                    builder.Length--;
+                }
+
+                return builder.ToString();
+            }
+
+            if (builder.Length == MaxMessageCharacters)
+            {
+                throw new WorkerProtocolException(
+                    "WORKER_MESSAGE_TOO_LARGE",
+                    $"The Worker control message exceeds the {MaxMessageCharacters} character limit.");
+            }
+
+            builder.Append(character[0]);
         }
     }
 

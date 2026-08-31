@@ -166,6 +166,65 @@ public sealed class PluginManifestParser
             }
         }
 
+        if (manifest.Capabilities is null || manifest.Capabilities.Length == 0)
+        {
+            errors.Add(new PluginManifestValidationError(
+                "MANIFEST_CAPABILITIES_REQUIRED",
+                "capabilities",
+                "At least one capability declaration is required."));
+        }
+        else if (manifest.Capabilities.Length > 32)
+        {
+            errors.Add(new PluginManifestValidationError(
+                "MANIFEST_CAPABILITIES_LIMIT_EXCEEDED",
+                "capabilities",
+                "At most 32 capability declarations are allowed."));
+        }
+        else
+        {
+            var capabilityIds = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var capability in manifest.Capabilities)
+            {
+                if (capability is null || string.IsNullOrWhiteSpace(capability.Id))
+                {
+                    errors.Add(new PluginManifestValidationError(
+                        "MANIFEST_CAPABILITY_INVALID",
+                        "capabilities.id",
+                        "Capability id is required."));
+                    continue;
+                }
+
+                if (!PluginCapabilityContract.IsKnown(capability.Id))
+                {
+                    errors.Add(new PluginManifestValidationError(
+                        "MANIFEST_CAPABILITY_UNKNOWN",
+                        "capabilities.id",
+                        $"Capability '{capability.Id}' is not defined by this ToolBox release."));
+                }
+                if (!capabilityIds.Add(capability.Id))
+                {
+                    errors.Add(new PluginManifestValidationError(
+                        "MANIFEST_CAPABILITY_DUPLICATE",
+                        "capabilities.id",
+                        $"Capability '{capability.Id}' is declared more than once."));
+                }
+                if (!capability.Required.HasValue)
+                {
+                    errors.Add(new PluginManifestValidationError(
+                        "MANIFEST_CAPABILITY_REQUIRED_FLAG_MISSING",
+                        "capabilities.required",
+                        $"Capability '{capability.Id}' must declare whether it is required."));
+                }
+                if (string.IsNullOrWhiteSpace(capability.Reason) || capability.Reason.Length > 512)
+                {
+                    errors.Add(new PluginManifestValidationError(
+                        "MANIFEST_CAPABILITY_REASON_INVALID",
+                        "capabilities.reason",
+                        "Capability reason is required and must be 512 characters or fewer."));
+                }
+            }
+        }
+
         return errors;
     }
 

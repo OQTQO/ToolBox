@@ -76,4 +76,44 @@ public sealed class WorkerProtocolTests
         Assert.Equal("start", message.Operation);
         Assert.Equal("payload", message.Payload);
     }
+
+    [Fact]
+    public async Task WriteRejectsMessageAboveCharacterLimit()
+    {
+        await using var stream = new MemoryStream();
+        await using var writer = new StreamWriter(
+            stream,
+            new UTF8Encoding(encoderShouldEmitUTF8Identifier: false),
+            bufferSize: 1024,
+            leaveOpen: true);
+        var message = WorkerProtocol.CreateRequest(
+            "launch-123",
+            "request-456",
+            "ui.action",
+            new string('a', WorkerProtocol.MaxMessageCharacters));
+
+        var exception = await Assert.ThrowsAsync<WorkerProtocolException>(
+            () => WorkerProtocol.WriteAsync(writer, message).AsTask());
+
+        Assert.Equal("WORKER_MESSAGE_TOO_LARGE", exception.ErrorCode);
+        Assert.Equal(0, stream.Length);
+    }
+
+    [Fact]
+    public async Task ReadRejectsLineAboveCharacterLimitWithoutWaitingForNewline()
+    {
+        var oversizedLine = new string('a', WorkerProtocol.MaxMessageCharacters + 1);
+        await using var stream = new MemoryStream(Encoding.UTF8.GetBytes(oversizedLine));
+        using var reader = new StreamReader(
+            stream,
+            new UTF8Encoding(encoderShouldEmitUTF8Identifier: false),
+            detectEncodingFromByteOrderMarks: false,
+            bufferSize: 1024,
+            leaveOpen: true);
+
+        var exception = await Assert.ThrowsAsync<WorkerProtocolException>(
+            () => WorkerProtocol.ReadAsync(reader).AsTask());
+
+        Assert.Equal("WORKER_MESSAGE_TOO_LARGE", exception.ErrorCode);
+    }
 }

@@ -7,7 +7,7 @@
 插件只引用 SDK。SDK 由 ToolBox GitHub Release 的 `ToolBox-PluginDevKit` 提供，朋友之间不需要发布或依赖 NuGet.org：
 
 ```xml
-<PackageReference Include="ToolBox.PluginSdk" Version="0.2.2" />
+<PackageReference Include="ToolBox.PluginSdk" Version="0.4.0" />
 ```
 
 不要引用 `ToolBox.Host`、`ToolBox.Core` 或 `ToolBox.PluginWorker`。SDK 的公共入口是 `ToolBox.PluginSdk`。
@@ -84,7 +84,7 @@ public sealed class MyPlugin : IPlugin, IPluginUiProvider
 
 ## 4. 编写 Manifest
 
-在项目输出旁放置 `manifest.json`。`entryPoint` 指向实现类型和程序集；完整字段见 [Manifest v1](plugin-manifest.md)。第三方动态插件必须声明并支持 `outOfProcess`。
+在项目输出旁放置 `manifest.json`。`entryPoint` 指向实现类型和程序集；完整字段见 [Manifest v2](plugin-manifest.md)。第三方动态插件必须声明并支持 `outOfProcess`，并从平台能力目录选择至少一个能力 ID。旧 Manifest v1 不会被安装。
 
 当前信任本地和朋友提交的插件。安装后会显示在通用工作区，用户可以在状态卡片中启用、停止或禁用它；如果实现了 `IPluginUiProvider`，启用后还会显示插件自己声明的通用操作入口。`background` 目前只用于描述和诊断。
 
@@ -93,14 +93,16 @@ public sealed class MyPlugin : IPlugin, IPluginUiProvider
 先发布或构建插件，再运行通用脚本：
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\tools\New-PluginPackage.ps1 `
-  -RuntimeDirectory .\bin\Release\net8.0 `
+pwsh -File .\tools\New-PluginPackage.ps1 `
+  -RuntimeDirectory .\bin\Release\net10.0 `
   -ManifestPath .\manifest.json `
   -Version 1.0.0 `
-  -OutputDirectory .\artifacts
+  -OutputDirectory .\artifacts `
+  -SigningCertificatePath .\publisher.cer `
+  -SigningPrivateKeyPath .\publisher.pk8
 ```
 
-脚本生成根目录 `manifest.json`、`package.json` 和 `runtime/` 文件，计算 SHA-256，使用确定性 ZIP，并排除 `ToolBox.PluginSdk.*` 私有副本。Host 安装器会继续执行路径、大小、压缩比、Manifest、API、平台、哈希和事务校验。
+脚本生成根目录 `manifest.json`、`package.json`、`signature.json` 和 `runtime/` 文件，计算 SHA-256，并用 PKCS#8 RSA 私钥签署 package metadata。Host 安装器会继续执行路径、大小、压缩比、Manifest、能力、API、平台、哈希、签名、发布者信任和事务校验。私钥只能保存在受保护的本地/CI secret 中，不能提交到仓库。
 
 ## 6. 在 GitHub 协作
 
@@ -113,7 +115,7 @@ ToolBox 主仓库只维护 Host、Core、Worker、SDK 和文档，不会因为�
 仓库 Sample 的验证命令如下：
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\tools\Validate-PluginSamples.ps1
+pwsh -File .\tools\Validate-PluginSamples.ps1
 ```
 
 验证脚本会先打包 SDK 到本地 feed，再通过 NuGet 构建 HelloPlugin，最后生成 `.tpk`。第三方项目只需要复用这条“SDK → runtime → Manifest → package”路径，不需要将类型加入 Host。

@@ -54,7 +54,7 @@ public sealed class PluginLifecycleTests
     {
         return """
         {
-          "formatVersion": 1,
+          "formatVersion": 2,
           "id": "com.toolbox.keyboard-test",
           "name": "Keyboard Test",
           "version": "0.1.0",
@@ -69,6 +69,11 @@ public sealed class PluginLifecycleTests
             "preferredMode": "inProcess",
             "background": false
           },
+          "capabilities": [{
+            "id": "host.ui.input-events",
+            "required": true,
+            "reason": "Displays input events sent to the plugin UI."
+          }],
           "entryPoint": "ToolBox.KeyboardTest.KeyboardTestPlugin"
         }
         """;

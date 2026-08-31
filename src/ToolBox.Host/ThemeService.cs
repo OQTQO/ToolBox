@@ -9,7 +9,7 @@ namespace ToolBox.Host;
 
 internal static class ThemeService
 {
-    private static readonly IReadOnlyDictionary<string, ThemePalette> Palettes =
+    private static readonly Dictionary<string, ThemePalette> Palettes =
         new Dictionary<string, ThemePalette>(StringComparer.OrdinalIgnoreCase)
         {
             ["violet"] = new(

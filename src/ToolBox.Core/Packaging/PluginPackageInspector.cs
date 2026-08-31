@@ -46,7 +46,8 @@ public sealed class PluginPackageInspector
 
             using var stream = manifestEntries[0].Open();
             using var reader = new StreamReader(stream);
-            return _manifestParser.Parse(reader.ReadToEnd());
+            var manifestJson = reader.ReadToEnd();
+            return _manifestParser.Parse(manifestJson);
         }
         catch (PluginPackageException)
         {

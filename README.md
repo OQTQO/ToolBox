@@ -31,7 +31,7 @@ ToolBox 是一个面向 Windows 的通用插件外壳。Host 不包含具体产�
 仓库会先生成本地 SDK NuGet，再构建 HelloPlugin 并打包：
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\tools\Validate-PluginSamples.ps1
+pwsh -NoProfile -File .\tools\Validate-PluginSamples.ps1
 ```
 
 通用 `.tpk` 打包入口是 `tools/New-PluginPackage.ps1`。
@@ -44,8 +44,8 @@ dotnet build ToolBox.sln --configuration Release
 dotnet test ToolBox.sln --configuration Release
 ```
 
-当前版本是 v0.2 开发方向。ToolBox 的 GitHub Release 同时提供 `ToolBox-PluginDevKit`；历史 v0.1.1 保持不改。维护资料、发布流程和历史上下文位于 [`docs/maintainer/`](docs/maintainer/) 与 [`docs/archive/`](docs/archive/)。
+当前平台与 SDK 版本为 0.4.0，统一基于 .NET 10。ToolBox 的 GitHub Release 同时提供对应版本的 `ToolBox-PluginDevKit`；历史 Release 保持不改。维护资料、发布流程和历史上下文位于 [`docs/maintainer/`](docs/maintainer/) 与 [`docs/archive/`](docs/archive/)。
 
 ## 当前边界
 
-当前版本不提供签名验证、权限 enforcement、沙箱、插件商城或自动更新。插件通过 GitHub Release 以 `.tpk` 文件分发，用户下载后在本地安装；SHA-256 仅用于包完整性校验，不代表发布者身份。
+ToolBox 0.4 强制验证 `.tpk` 的 RSA-SHA256 发布者签名，并以 TOFU 策略绑定发布者 ID 与证书指纹；Manifest v2 还必须声明平台定义的能力。签名提供包真实性与发布者密钥连续性，但 Worker 仍不是操作系统权限沙箱，当前也不提供插件商城或自动更新。

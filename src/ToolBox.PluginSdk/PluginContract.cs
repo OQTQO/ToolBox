@@ -4,7 +4,7 @@ public static class PluginContract
 {
     public const int PluginApiMajor = 1;
 
-    public const int ManifestFormatVersion = 1;
+    public const int ManifestFormatVersion = 2;
 
     public const string SupportedOs = "windows";
 
