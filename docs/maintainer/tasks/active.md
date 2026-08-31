@@ -45,6 +45,8 @@
 - 最终阶段将 Host、Core、Worker、SDK、全部测试夹具和 HelloPlugin 迁移到 .NET 10，使用 `global.json` 固定 SDK 10.0.400，并将 GitHub Actions 切换到 `10.0.x`。
 - 平台与 SDK 升级到 0.4.0；修复 .NET 10 的 `X509CertificateLoader` 迁移和 WPF/WinForms 类型歧义，不通过关闭警告规避。
 - 修复 Release 验证遗漏的强制签名参数；CI 使用一次性测试密钥，正式 Release 强制使用受保护 secret，并在隔离 artifacts 中生成自包含 Host/Worker、签名 HelloPlugin、DevKit 和 SHA-256 清单。
+- 新增工作区与仓库级 `AGENTS.md` 自动恢复入口和统一 `tools/Get-WorkspaceContext.ps1`；默认从现有文档提取任务摘要，`-Full` 才输出完整文档，不维护第二份摘要。
+- 修复软件上下文脚本重复输出 `WORKSPACE.md`/Git HEAD，并显式使用 UTF-8，兼容 Windows PowerShell 5.1 与 PowerShell 7；普通恢复明确排除签名私钥目录。
 
 ## 验证结果
 
@@ -56,6 +58,7 @@
 - `git diff --check`：通过。
 - `tools/Validate-PluginSamples.ps1`：SDK 0.4.0、net10.0 HelloPlugin 和签名包通过。
 - `tools/Invoke-ReleaseValidation.ps1 -Version 0.4.0`：完整自包含 Release 资产、签名示例包、DevKit 和校验清单通过；门禁内真实 Host/Worker 的安装、启用、停用、卸载闭环通过。
+- 新对话上下文验收：根目录、软件仓库、插件仓库的默认摘要与 `-Full` 完整视图均执行通过；全工作区默认输出由 16,221 字符降至 3,136 字符（减少 80.7%），关键区块无重复，双仓库 SDK 0.4.0 一致，UTF-8 中文输出正确。
 
 ## 已知边界
 
@@ -68,4 +71,3 @@
 
 1. 本阶段无剩余实施项；后续需求另建任务。
 2. 妥善离线备份官方插件签名私钥，并在到期或疑似泄露时执行显式换钥流程。
-3. 软件 Release 完成后把插件 CI 的上游引用固定到已验证的完整 commit/tag。
