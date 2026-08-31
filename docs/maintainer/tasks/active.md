@@ -1,6 +1,6 @@
 # 当前任务
 
-状态：全部六个优化阶段完成，等待审查/提交与 ToolBox 0.4.0 发布。
+状态：全部六个优化阶段完成；ToolBox 0.4.0 与配套插件批次均已发布。
 
 ## 任务
 
@@ -51,7 +51,7 @@
 - .NET SDK 10.0.400 严格隔离构建：通过，0 警告、0 错误。
 - .NET 10 测试：Core 64 项、Host 28 项，共 92 项全部通过；新增正常取消与真实故障两类生命周期回归。
 - 配套插件仓库 `tools/Validate-Plugins.ps1`：在 .NET 10 上通过，KeyboardMouse 4 项、AudioRelay 10 项；两个 `.tpk` 的内容校验和可复现打包均通过。
-- 配套插件仓库 `tools/Invoke-ToolBoxHostSmokeTest.ps1`：通过；两个 Manifest v2 签名包均由真实 Host 完成签名/信任校验、安装、Worker 启用/UI 快照、停用和卸载。联合验证基于软件 HEAD `ecb727419e3f85f0c49ef74db14cee93133232d5` 加本任务未提交工作区变更。
+- 配套插件仓库 `tools/Invoke-ToolBoxHostSmokeTest.ps1`：通过；两个 Manifest v2 签名包均由真实 Host 完成签名/信任校验、安装、Worker 启用/UI 快照、停用和卸载。验证内容已作为软件提交 `e6a63a5e2c0471ec4929cf0c84016b7046ad3264` 发布。
 - `tools/Get-ProjectContext.ps1`：执行通过。
 - `git diff --check`：通过。
 - `tools/Validate-PluginSamples.ps1`：SDK 0.4.0、net10.0 HelloPlugin 和签名包通过。
@@ -66,6 +66,6 @@
 
 ## 下一步
 
-1. 分别审查并提交软件、插件两个仓库的现有修改。
-2. 先发布 ToolBox 0.4.0 与 DevKit，再合并/发布依赖 SDK 0.4.0 的插件仓库变更。
+1. 本阶段无剩余实施项；后续需求另建任务。
+2. 妥善离线备份官方插件签名私钥，并在到期或疑似泄露时执行显式换钥流程。
 3. 软件 Release 完成后把插件 CI 的上游引用固定到已验证的完整 commit/tag。
