@@ -17,6 +17,9 @@ namespace ToolBox.Host;
 
 public sealed partial class MainWindowViewModel
 {
+    private int _packageInstallInProgress;
+    private int _packageUninstallInProgress;
+
     public void SetPluginSearchText(string? value)
     {
         var normalized = value?.Trim() ?? string.Empty;
@@ -32,16 +35,33 @@ public sealed partial class MainWindowViewModel
 
     public void SetPluginFilter(string filter)
     {
-        _pluginFilter = filter is "running" or "disabled" or "attention" ? filter : "all";
+        var normalized = HostUiState.PluginFilters.IsKnown(filter)
+            ? filter
+            : HostUiState.PluginFilters.All;
+        if (string.Equals(_pluginFilter, normalized, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        _pluginFilter = normalized;
         RefreshVisiblePluginWorkspaces();
         OnPropertyChanged(nameof(PluginFilter));
     }
 
     public void SetPluginSort(string sort)
     {
-        _pluginSort = sort is "status" or "version" ? sort : "name";
+        var normalized = HostUiState.PluginSorts.IsKnown(sort)
+            ? sort
+            : HostUiState.PluginSorts.Name;
+        if (string.Equals(_pluginSort, normalized, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        _pluginSort = normalized;
         RefreshVisiblePluginWorkspaces();
         OnPropertyChanged(nameof(PluginSort));
+        OnPropertyChanged(nameof(PluginSortLabel));
     }
 
     public async Task ToggleWorkspaceOpenedAsync(PluginWorkspaceViewModel workspace)
@@ -75,27 +95,22 @@ public sealed partial class MainWindowViewModel
         ArgumentNullException.ThrowIfNull(workspace);
         ArgumentException.ThrowIfNullOrWhiteSpace(packagePath);
         EnsureWorkspace(workspace);
+        if (Interlocked.Exchange(ref _packageInstallInProgress, 1) != 0)
+        {
+            return;
+        }
 
         try
         {
-            ClearPluginManagerError();
-            var manifest = _packageInspector.ReadManifest(packagePath);
-            EnsureOutOfProcessSupport(manifest);
-            if (!string.Equals(manifest.Id, workspace.PluginId, StringComparison.Ordinal))
-            {
-                throw new InvalidOperationException(string.Format(
-                    CultureInfo.CurrentCulture,
-                    T("UnsupportedPluginPackage"),
-                    manifest.Id));
-            }
-
-            await workspace.InstallPackageAsync(packagePath).ConfigureAwait(false);
-            _settings.SetPluginOpened(manifest.Id, opened: false);
-            RefreshPluginWorkspaces();
+            await InstallWorkspacePackageCoreAsync(workspace, packagePath).ConfigureAwait(false);
         }
         catch (Exception exception)
         {
             RecordPackageInstallFailure(exception);
+        }
+        finally
+        {
+            Volatile.Write(ref _packageInstallInProgress, 0);
         }
     }
 
@@ -103,6 +118,11 @@ public sealed partial class MainWindowViewModel
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
         ArgumentException.ThrowIfNullOrWhiteSpace(packagePath);
+        if (Interlocked.Exchange(ref _packageInstallInProgress, 1) != 0)
+        {
+            return;
+        }
+
         ClearPluginManagerError();
 
         try
@@ -116,7 +136,7 @@ public sealed partial class MainWindowViewModel
 
             if (existing is not null)
             {
-                await InstallWorkspacePackageAsync(existing, packagePath).ConfigureAwait(false);
+                await InstallWorkspacePackageCoreAsync(existing, packagePath).ConfigureAwait(false);
                 return;
             }
 
@@ -134,12 +154,20 @@ public sealed partial class MainWindowViewModel
         {
             RecordPackageInstallFailure(exception);
         }
+        finally
+        {
+            Volatile.Write(ref _packageInstallInProgress, 0);
+        }
     }
 
     public async Task UninstallWorkspaceAsync(PluginWorkspaceViewModel workspace)
     {
         ArgumentNullException.ThrowIfNull(workspace);
         EnsureWorkspace(workspace);
+        if (Interlocked.Exchange(ref _packageUninstallInProgress, 1) != 0)
+        {
+            return;
+        }
 
         try
         {
@@ -162,6 +190,10 @@ public sealed partial class MainWindowViewModel
                     ? packageException.ErrorCode
                     : "PACKAGE_UNINSTALL_FAILED",
                 exception: exception);
+        }
+        finally
+        {
+            Volatile.Write(ref _packageUninstallInProgress, 0);
         }
     }
 
@@ -240,10 +272,9 @@ public sealed partial class MainWindowViewModel
             ? null
             : _pluginWorkspaces.SingleOrDefault(workspace =>
                 string.Equals(workspace.PluginId, selectedPluginId, StringComparison.Ordinal)
-                && workspace.IsOpened);
+                && workspace.IsInstalled);
         SetSelectedPluginWorkspace(selected);
         RefreshWorkspaceCollections();
-        RefreshVisiblePluginWorkspaces();
     }
 
     private void RefreshWorkspaceCollections()
@@ -258,13 +289,15 @@ public sealed partial class MainWindowViewModel
 
         OnPropertyChanged(nameof(HasInstalledPlugins));
         OnPropertyChanged(nameof(HasNoInstalledPlugins));
-        OnPropertyChanged(nameof(HasOpenedPlugins));
         OnPropertyChanged(nameof(InstalledPluginCount));
-        OnPropertyChanged(nameof(OpenedPluginCount));
+        OnPropertyChanged(nameof(OverviewPluginWorkspaces));
         OnPropertyChanged(nameof(InstalledPluginCountLabel));
-        OnPropertyChanged(nameof(PluginCountSummaryLabel));
         OnPropertyChanged(nameof(RunningPluginCount));
         OnPropertyChanged(nameof(AttentionPluginCount));
+        OnPropertyChanged(nameof(OverviewHealthStatusLabel));
+        OnPropertyChanged(nameof(OverviewHealthHeadline));
+        OnPropertyChanged(nameof(OverviewHealthDescription));
+        OnPropertyChanged(nameof(OverviewHealthStatusBrush));
         OnPropertyChanged(nameof(HasVisiblePlugins));
         OnPropertyChanged(nameof(HasNoVisiblePlugins));
         RefreshVisiblePluginWorkspacesCore();
@@ -285,9 +318,9 @@ public sealed partial class MainWindowViewModel
         IEnumerable<PluginWorkspaceViewModel> items = InstalledPluginWorkspaces;
         items = _pluginFilter switch
         {
-            "running" => items.Where(workspace => workspace.LifecycleState == PluginLifecycleState.Running),
-            "disabled" => items.Where(workspace => workspace.LifecycleState == PluginLifecycleState.Disabled),
-            "attention" => items.Where(workspace => workspace.LifecycleState is PluginLifecycleState.Faulted or PluginLifecycleState.DisableFailed or PluginLifecycleState.RestartRequired or PluginLifecycleState.Quarantined),
+            HostUiState.PluginFilters.Running => items.Where(workspace => workspace.LifecycleState == PluginLifecycleState.Running),
+            HostUiState.PluginFilters.Disabled => items.Where(workspace => workspace.LifecycleState == PluginLifecycleState.Disabled),
+            HostUiState.PluginFilters.Attention => items.Where(workspace => workspace.LifecycleState is PluginLifecycleState.Faulted or PluginLifecycleState.DisableFailed or PluginLifecycleState.RestartRequired or PluginLifecycleState.Quarantined),
             _ => items
         };
 
@@ -300,8 +333,8 @@ public sealed partial class MainWindowViewModel
 
         items = _pluginSort switch
         {
-            "status" => items.OrderBy(workspace => workspace.LifecycleState).ThenBy(workspace => workspace.DisplayName, StringComparer.CurrentCultureIgnoreCase),
-            "version" => items.OrderByDescending(workspace => workspace.InstalledVersion, StringComparer.Ordinal).ThenBy(workspace => workspace.DisplayName, StringComparer.CurrentCultureIgnoreCase),
+            HostUiState.PluginSorts.Status => items.OrderBy(workspace => workspace.LifecycleState).ThenBy(workspace => workspace.DisplayName, StringComparer.CurrentCultureIgnoreCase),
+            HostUiState.PluginSorts.Version => items.OrderByDescending(workspace => workspace.InstalledVersion, StringComparer.Ordinal).ThenBy(workspace => workspace.DisplayName, StringComparer.CurrentCultureIgnoreCase),
             _ => items.OrderBy(workspace => workspace.DisplayName, StringComparer.CurrentCultureIgnoreCase)
         };
 
@@ -374,6 +407,26 @@ public sealed partial class MainWindowViewModel
                 ? packageException.ErrorCode
                 : "PACKAGE_INSTALL_FAILED",
             exception: exception);
+    }
+
+    private async Task InstallWorkspacePackageCoreAsync(
+        PluginWorkspaceViewModel workspace,
+        string packagePath)
+    {
+        ClearPluginManagerError();
+        var manifest = _packageInspector.ReadManifest(packagePath);
+        EnsureOutOfProcessSupport(manifest);
+        if (!string.Equals(manifest.Id, workspace.PluginId, StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException(string.Format(
+                CultureInfo.CurrentCulture,
+                T("UnsupportedPluginPackage"),
+                manifest.Id));
+        }
+
+        await workspace.InstallPackageAsync(packagePath).ConfigureAwait(false);
+        _settings.SetPluginOpened(manifest.Id, opened: false);
+        RefreshPluginWorkspaces();
     }
 
     private static void EnsureOutOfProcessSupport(PluginManifest manifest)

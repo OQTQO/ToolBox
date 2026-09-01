@@ -33,9 +33,9 @@ public enum SettingsSection
 
 public sealed partial class MainWindowViewModel : INotifyPropertyChanged, IDisposable
 {
-    private static readonly Brush HealthyBrush = CreateBrush("#92E6B5");
-    private static readonly Brush WarningBrush = CreateBrush("#F5B85B");
-    private static readonly Brush ErrorBrush = CreateBrush("#FF8F86");
+    private static readonly Brush HealthyBrush = CreateBrush("#CFFF52");
+    private static readonly Brush WarningBrush = CreateBrush("#8C9B51");
+    private static readonly Brush ErrorBrush = CreateBrush("#A94D3E");
 
     private readonly HostDiagnostics _diagnostics;
     private readonly IStructuredLogger _logger;
@@ -55,8 +55,8 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, IDispo
     private PluginWorkspaceViewModel? _selectedPluginWorkspace;
     private string? _pluginManagerError;
     private string _pluginSearchText = string.Empty;
-    private string _pluginFilter = "all";
-    private string _pluginSort = "name";
+    private string _pluginFilter = HostUiState.PluginFilters.All;
+    private string _pluginSort = HostUiState.PluginSorts.Name;
     private SettingsSection _settingsSection = SettingsSection.Appearance;
     private bool _disposed;
 
@@ -106,6 +106,9 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, IDispo
 
     public ReadOnlyObservableCollection<PluginWorkspaceViewModel> VisiblePluginWorkspaces { get; }
 
+    public IReadOnlyList<PluginWorkspaceViewModel> OverviewPluginWorkspaces =>
+        InstalledPluginWorkspaces.Take(4).ToArray();
+
     public string WindowTitle => T("AppTitle");
 
     public bool IsOverviewPage => _selectedPage == ShellPage.Overview;
@@ -120,25 +123,67 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, IDispo
 
     public bool HasSelectedPlugin => _selectedPluginWorkspace is not null;
 
-    public bool HasOpenedPlugins => OpenedPluginCount > 0;
-
-    public int OpenedPluginCount => OpenedPluginWorkspaces.Count;
-
     public int RunningPluginCount => InstalledPluginWorkspaces.Count(workspace => workspace.LifecycleState == PluginLifecycleState.Running);
 
     public int AttentionPluginCount => InstalledPluginWorkspaces.Count(workspace => workspace.LifecycleState is
         PluginLifecycleState.Faulted or PluginLifecycleState.DisableFailed or PluginLifecycleState.RestartRequired or PluginLifecycleState.Quarantined);
 
-    [SuppressMessage("Performance", "CA1822:Mark members as static", Justification = "WPF binds this value through the view-model instance.")]
-    public string DataRetentionLabel => "100%";
-
     public string OverviewTitle => _settings.OverviewTitle ?? T("OverviewDefaultTitle");
 
     public bool HasCustomOverviewTitle => !string.IsNullOrWhiteSpace(_settings.OverviewTitle);
 
-    public string Theme => _settings.Theme;
+    public string OverviewHealthTitle => _settings.OverviewHealthTitle ?? T("OverviewHealthTitleDefault");
 
-    public string DefaultPluginCardSize => _settings.DefaultPluginCardSize;
+    public bool HasCustomOverviewHealthTitle => !string.IsNullOrWhiteSpace(_settings.OverviewHealthTitle);
+
+    public string TitleBarCenterText => _settings.TitleBarCenterText ?? T("DesktopToolManagement");
+
+    public string OverviewHealthStatusLabel => AttentionPluginCount > 0
+        ? T("Attention")
+        : _snapshot.Stage == StartupStage.Healthy
+            ? T("NoActionNeeded")
+            : StatusLabel;
+
+    public string OverviewHealthHeadline => AttentionPluginCount > 0
+        ? T("HealthAttentionHeadline")
+        : _snapshot.Stage == StartupStage.Healthy
+            ? OverviewHealthTitle
+            : StatusLabel;
+
+    public string OverviewHealthDescription => AttentionPluginCount > 0
+        ? string.Format(
+            CultureInfo.CurrentCulture,
+            T("HealthAttentionDescription"),
+            AttentionPluginCount)
+        : _snapshot.Stage == StartupStage.Healthy
+            ? T("HealthCardDescription")
+            : StatusDescription;
+
+    public Brush OverviewHealthStatusBrush => AttentionPluginCount > 0
+        ? ThemeBrush("ErrorBrush", ErrorBrush)
+        : StatusAccentBrush;
+
+    public string PageTitle => _selectedPage switch
+    {
+        ShellPage.Plugin => T("NavPlugins"),
+        ShellPage.Activity => T("NavActivity"),
+        ShellPage.Settings => T("Settings"),
+        _ => OverviewTitle
+    };
+
+    public string PageDescription => _selectedPage switch
+    {
+        ShellPage.Plugin => T("PluginPageDescription"),
+        ShellPage.Activity => T("ActivityPageDescription"),
+        ShellPage.Settings => T("SettingsPageDescription"),
+        _ => T("OverviewPageDescription")
+    };
+
+    public string HeaderStatusLabel => _snapshot.Stage == StartupStage.Healthy
+        ? T("HostConnected")
+        : StatusLabel;
+
+    public string Theme => _settings.Theme;
 
     public bool DynamicGlow => _settings.DynamicGlow;
 
@@ -172,6 +217,16 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, IDispo
 
     public string PluginSort => _pluginSort;
 
+    public string PluginSortLabel => string.Format(
+        CultureInfo.CurrentCulture,
+        T("SortByValue"),
+        _pluginSort switch
+        {
+            HostUiState.PluginSorts.Status => T("SortStatus"),
+            HostUiState.PluginSorts.Version => T("SortVersion"),
+            _ => T("SortName")
+        });
+
     [SuppressMessage("Performance", "CA1822:Mark members as static", Justification = "WPF binds this value through the view-model instance.")]
     public string ConfigDirectory => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "ToolBox");
 
@@ -187,6 +242,10 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, IDispo
 
     public bool CloseDirectly => _settings.CloseBehavior == CloseBehavior.Exit;
 
+    public bool IsChineseLanguage => _localization.CurrentLanguage == AppLanguage.Chinese;
+
+    public bool IsEnglishLanguage => _localization.CurrentLanguage == AppLanguage.English;
+
     public bool HasInstalledPlugins => InstalledPluginCount > 0;
 
     public bool HasNoInstalledPlugins => !HasInstalledPlugins;
@@ -197,12 +256,6 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, IDispo
         CultureInfo.CurrentCulture,
         T("InstalledPluginCount"),
         InstalledPluginCount);
-
-    public string PluginCountSummaryLabel => string.Format(
-        CultureInfo.CurrentCulture,
-        T("PluginCountSummary"),
-        InstalledPluginCount,
-        OpenedPluginCount);
 
     public string CurrentLanguageLabel => _localization.CurrentLanguage == AppLanguage.Chinese
         ? "中文"
@@ -235,10 +288,10 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, IDispo
 
     public Brush StatusAccentBrush => _snapshot.Stage switch
     {
-        StartupStage.Healthy => HealthyBrush,
-        StartupStage.Faulted => ErrorBrush,
-        StartupStage.Stopping or StartupStage.Stopped => WarningBrush,
-        _ => WarningBrush
+        StartupStage.Healthy => ThemeBrush("HealthyBrush", HealthyBrush),
+        StartupStage.Faulted => ThemeBrush("ErrorBrush", ErrorBrush),
+        StartupStage.Stopping or StartupStage.Stopped => ThemeBrush("WarningBrush", WarningBrush),
+        _ => ThemeBrush("WarningBrush", WarningBrush)
     };
 
     public string StageLabel => _snapshot.Stage switch
@@ -264,6 +317,13 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, IDispo
         .ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture);
 
     public int EventCount => RecentEvents.Count;
+
+    public bool HasNoEvents => EventCount == 0;
+
+    public IReadOnlyList<DiagnosticEventViewModel> OverviewEvents =>
+        RecentEvents.Where(entry => entry.IsOverviewRelevant).Take(4).ToArray();
+
+    public bool HasNoOverviewEvents => OverviewEvents.Count == 0;
 
     public string EventCountLabel => string.Format(
         CultureInfo.CurrentCulture,
@@ -311,7 +371,10 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, IDispo
     {
         RecentEvents.Clear();
         OnPropertyChanged(nameof(EventCount));
+        OnPropertyChanged(nameof(HasNoEvents));
         OnPropertyChanged(nameof(EventCountLabel));
+        OnPropertyChanged(nameof(OverviewEvents));
+        OnPropertyChanged(nameof(HasNoOverviewEvents));
     }
 
     public void SetLanguage(AppLanguage language)
@@ -343,26 +406,18 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, IDispo
 
     public void ResetOverviewTitle() => _settings.SetOverviewTitle(null);
 
+    public void SetOverviewHealthTitle(string? title) => _settings.SetOverviewHealthTitle(title);
+
+    public void ResetOverviewHealthTitle() => _settings.SetOverviewHealthTitle(null);
+
+    public void SetTitleBarCenterText(string? text) => _settings.SetTitleBarCenterText(text);
+
+    public void ResetTitleBarCenterText() => _settings.SetTitleBarCenterText(null);
+
     public void SetTheme(string theme)
     {
         _settings.SetTheme(theme);
         ThemeService.Apply(_settings.Theme, _settings.Transparency, _settings.DynamicGlow, _settings.BackgroundBrightness, _settings.CornerRadius);
-    }
-
-    public void SetDefaultPluginCardSize(string size) => _settings.SetDefaultPluginCardSize(size);
-
-    public void SetPluginCardSize(PluginWorkspaceViewModel workspace, string size)
-    {
-        ArgumentNullException.ThrowIfNull(workspace);
-        EnsureWorkspace(workspace);
-        _settings.SetPluginCardSize(workspace.PluginId, size);
-    }
-
-    public void ClearPluginCardSize(PluginWorkspaceViewModel workspace)
-    {
-        ArgumentNullException.ThrowIfNull(workspace);
-        EnsureWorkspace(workspace);
-        _settings.ClearPluginCardSize(workspace.PluginId);
     }
 
     public void SetAppearanceOption(bool? dynamicGlow = null, bool? reduceMotion = null, bool? transparency = null, int? cornerRadius = null, int? backgroundBrightness = null)
@@ -370,6 +425,23 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, IDispo
 
     public void SetPluginManagementOption(bool? confirmEnable = null, bool? confirmUninstall = null, bool? showDiagnostics = null)
         => _settings.SetPluginManagementOption(confirmEnable, confirmUninstall, showDiagnostics);
+
+    internal void ReportUiFailure(string operation, Exception exception)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(operation);
+        ArgumentNullException.ThrowIfNull(exception);
+        if (_disposed)
+        {
+            return;
+        }
+
+        SetPluginManagerError(exception.Message);
+        _logger.Error(
+            "Host UI",
+            $"The UI operation '{operation}' failed.",
+            errorCode: "HOST_UI_OPERATION_FAILED",
+            exception: exception);
+    }
 
     public void ResetAppearance()
     {
@@ -399,8 +471,11 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, IDispo
         {
             RefreshWorkspaceCollections();
         }
-
-        RefreshVisiblePluginWorkspaces();
+        else
+        {
+            RefreshVisiblePluginWorkspaces();
+            NotifyOverviewStateProperties();
+        }
 
         if (ReferenceEquals(_selectedPluginWorkspace, workspace) && !workspace.IsInstalled)
         {
@@ -419,10 +494,12 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, IDispo
 
         _snapshot = snapshot;
         OnPropertyChanged(nameof(StatusLabel));
+        OnPropertyChanged(nameof(HeaderStatusLabel));
         OnPropertyChanged(nameof(StatusDescription));
         OnPropertyChanged(nameof(StatusAccentBrush));
         OnPropertyChanged(nameof(StageLabel));
         OnPropertyChanged(nameof(UpdatedText));
+        NotifyOverviewStateProperties();
     }
 
     private void AddEvent(LogEvent entry)
@@ -439,7 +516,10 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, IDispo
         }
 
         OnPropertyChanged(nameof(EventCount));
+        OnPropertyChanged(nameof(HasNoEvents));
         OnPropertyChanged(nameof(EventCountLabel));
+        OnPropertyChanged(nameof(OverviewEvents));
+        OnPropertyChanged(nameof(HasNoOverviewEvents));
     }
 
     private void OnLanguageChanged(object? sender, EventArgs e)
@@ -448,14 +528,26 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, IDispo
         {
             OnPropertyChanged(nameof(WindowTitle));
             OnPropertyChanged(nameof(CurrentLanguageLabel));
+            OnPropertyChanged(nameof(IsChineseLanguage));
+            OnPropertyChanged(nameof(IsEnglishLanguage));
             OnPropertyChanged(nameof(InstalledPluginCountLabel));
-            OnPropertyChanged(nameof(PluginCountSummaryLabel));
+            OnPropertyChanged(nameof(PluginSortLabel));
             OnPropertyChanged(nameof(StatusLabel));
+            OnPropertyChanged(nameof(HeaderStatusLabel));
             OnPropertyChanged(nameof(StatusDescription));
             OnPropertyChanged(nameof(StageLabel));
             OnPropertyChanged(nameof(EventCountLabel));
             OnPropertyChanged(nameof(OverviewTitle));
             OnPropertyChanged(nameof(HasCustomOverviewTitle));
+            OnPropertyChanged(nameof(OverviewHealthTitle));
+            OnPropertyChanged(nameof(HasCustomOverviewHealthTitle));
+            OnPropertyChanged(nameof(TitleBarCenterText));
+            OnPropertyChanged(nameof(OverviewHealthStatusLabel));
+            OnPropertyChanged(nameof(OverviewHealthHeadline));
+            OnPropertyChanged(nameof(OverviewHealthDescription));
+            OnPropertyChanged(nameof(OverviewHealthStatusBrush));
+            OnPropertyChanged(nameof(PageTitle));
+            OnPropertyChanged(nameof(PageDescription));
         });
     }
 
@@ -465,6 +557,8 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, IDispo
         OnPropertyChanged(nameof(IsPluginPage));
         OnPropertyChanged(nameof(IsActivityPage));
         OnPropertyChanged(nameof(IsSettingsPage));
+        OnPropertyChanged(nameof(PageTitle));
+        OnPropertyChanged(nameof(PageDescription));
     }
 
     private void SetSelectedPluginWorkspace(PluginWorkspaceViewModel? workspace)
@@ -498,8 +592,12 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, IDispo
             OnPropertyChanged(nameof(CloseDirectly));
             OnPropertyChanged(nameof(OverviewTitle));
             OnPropertyChanged(nameof(HasCustomOverviewTitle));
+            OnPropertyChanged(nameof(OverviewHealthTitle));
+            OnPropertyChanged(nameof(HasCustomOverviewHealthTitle));
+            OnPropertyChanged(nameof(TitleBarCenterText));
+            OnPropertyChanged(nameof(PageTitle));
+            OnPropertyChanged(nameof(PageDescription));
             OnPropertyChanged(nameof(Theme));
-            OnPropertyChanged(nameof(DefaultPluginCardSize));
             OnPropertyChanged(nameof(DynamicGlow));
             OnPropertyChanged(nameof(ReduceMotion));
             OnPropertyChanged(nameof(Transparency));
@@ -508,11 +606,16 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, IDispo
             OnPropertyChanged(nameof(ConfirmEnable));
             OnPropertyChanged(nameof(ConfirmUninstall));
             OnPropertyChanged(nameof(ShowDiagnostics));
+            OnPropertyChanged(nameof(StatusAccentBrush));
+            OnPropertyChanged(nameof(OverviewHealthStatusBrush));
+            OnPropertyChanged(nameof(IsChineseLanguage));
+            OnPropertyChanged(nameof(IsEnglishLanguage));
             foreach (var workspace in _pluginWorkspaces)
             {
                 workspace.RefreshPresentationSettings();
             }
             RefreshVisiblePluginWorkspacesCore();
+            NotifyOverviewStateProperties();
         });
     }
 
@@ -522,6 +625,21 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, IDispo
     }
 
     private string T(string key) => _localization[key];
+
+    private static Brush ThemeBrush(string key, Brush fallback)
+    {
+        return System.Windows.Application.Current?.Resources[key] as Brush ?? fallback;
+    }
+
+    private void NotifyOverviewStateProperties()
+    {
+        OnPropertyChanged(nameof(RunningPluginCount));
+        OnPropertyChanged(nameof(AttentionPluginCount));
+        OnPropertyChanged(nameof(OverviewHealthStatusLabel));
+        OnPropertyChanged(nameof(OverviewHealthHeadline));
+        OnPropertyChanged(nameof(OverviewHealthDescription));
+        OnPropertyChanged(nameof(OverviewHealthStatusBrush));
+    }
 
     private static SolidColorBrush CreateBrush(string hex)
     {
@@ -533,35 +651,18 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, IDispo
 
 public sealed class DiagnosticEventViewModel
 {
-    private static readonly Brush InformationBrush = CreateBrush("#A9C7E8");
-    private static readonly Brush WarningBrush = CreateBrush("#F5B85B");
-    private static readonly Brush ErrorBrush = CreateBrush("#FF8F86");
-
     public DiagnosticEventViewModel(LogEvent entry)
     {
         ArgumentNullException.ThrowIfNull(entry);
         TimestampText = entry.Timestamp.ToLocalTime().ToString("HH:mm:ss", CultureInfo.InvariantCulture);
-        LevelText = entry.Level.ToString().ToUpperInvariant();
         Module = entry.Module;
         Message = entry.Message;
-        LevelBrush = entry.Level switch
-        {
-            LogLevel.Warning => WarningBrush,
-            LogLevel.Error or LogLevel.Critical => ErrorBrush,
-            _ => InformationBrush
-        };
+        IsOverviewRelevant = entry.Level >= LogLevel.Warning
+            || !string.Equals(entry.Module, "Host", StringComparison.OrdinalIgnoreCase);
     }
 
     public string TimestampText { get; }
-    public string LevelText { get; }
     public string Module { get; }
     public string Message { get; }
-    public Brush LevelBrush { get; }
-
-    private static SolidColorBrush CreateBrush(string hex)
-    {
-        var brush = new SolidColorBrush((Color)ColorConverter.ConvertFromString(hex)!);
-        brush.Freeze();
-        return brush;
-    }
+    public bool IsOverviewRelevant { get; }
 }

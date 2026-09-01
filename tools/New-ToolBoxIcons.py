@@ -6,47 +6,77 @@ ROOT = Path(__file__).resolve().parents[1]
 ASSETS = ROOT / "src" / "ToolBox.Host" / "Assets"
 SCALE = 4
 CANVAS = 256 * SCALE
+INK = "#16251C"
+ACCENT = "#CFFF52"
 
 
 def scaled_box(box):
     return tuple(int(value * SCALE) for value in box)
 
 
-def rounded_rectangle(draw, box, radius, fill):
-    draw.rounded_rectangle(scaled_box(box), radius=radius * SCALE, fill=fill)
-
-
 def render_app_icon():
     image = Image.new("RGBA", (CANVAS, CANVAS), (0, 0, 0, 0))
-    pixels = image.load()
-    top = (76, 140, 255)
-    bottom = (24, 84, 189)
-    for y in range(CANVAS):
-        mix = y / max(CANVAS - 1, 1)
-        color = tuple(round(top[i] * (1 - mix) + bottom[i] * mix) for i in range(3)) + (255,)
-        for x in range(CANVAS):
-            pixels[x, y] = color
-
-    mask = Image.new("L", (CANVAS, CANVAS), 0)
-    ImageDraw.Draw(mask).rounded_rectangle((0, 0, CANVAS - 1, CANVAS - 1), radius=60 * SCALE, fill=255)
-    image.putalpha(mask)
     draw = ImageDraw.Draw(image)
-    rounded_rectangle(draw, (52, 60, 204, 104), 16, "white")
-    rounded_rectangle(draw, (108, 100, 152, 200), 16, "white")
-    draw.ellipse(scaled_box((52, 156, 84, 188)), fill="#AFCBFF")
-    draw.ellipse(scaled_box((172, 156, 204, 188)), fill="#AFCBFF")
-    draw.line(scaled_box((84, 172, 108, 172)), fill="#AFCBFF", width=12 * SCALE)
-    draw.line(scaled_box((152, 172, 172, 172)), fill="#AFCBFF", width=12 * SCALE)
+    draw.rounded_rectangle(
+        scaled_box((4, 4, 252, 252)),
+        radius=56 * SCALE,
+        fill=ACCENT,
+        outline=INK,
+        width=3 * SCALE,
+    )
+    draw_toolbox(draw, SCALE)
     return image.resize((256, 256), Image.Resampling.LANCZOS)
 
 
 def render_tray_icon():
-    image = Image.new("RGBA", (CANVAS, CANVAS), (0, 0, 0, 0))
-    draw = ImageDraw.Draw(image)
-    rounded_rectangle(draw, (12, 12, 244, 244), 54, "#2868DF")
-    rounded_rectangle(draw, (45, 54, 211, 101), 15, "white")
-    rounded_rectangle(draw, (106, 96, 150, 211), 15, "white")
-    return image.resize((256, 256), Image.Resampling.LANCZOS)
+    return render_app_icon()
+
+
+def draw_toolbox(draw, scale):
+    """Draw the small toolbox mark used by every ToolBox icon size."""
+    # The source geometry uses the SVG viewBox (64 units), while the raster
+    # canvas is 256px at a 4x oversampling factor.
+    geometry_scale = 4 * scale
+
+    def geometry_box(box):
+        return tuple(int(value * geometry_scale) for value in box)
+
+    draw.rounded_rectangle(
+        geometry_box((10, 27, 54, 52)),
+        radius=5 * geometry_scale,
+        outline=INK,
+        width=5 * geometry_scale,
+    )
+    draw.line(
+        geometry_box((22, 27, 22, 16)),
+        fill=INK,
+        width=5 * geometry_scale,
+    )
+    draw.line(
+        geometry_box((42, 27, 42, 16)),
+        fill=INK,
+        width=5 * geometry_scale,
+    )
+    draw.line(
+        geometry_box((22, 16, 42, 16)),
+        fill=INK,
+        width=5 * geometry_scale,
+    )
+    draw.line(
+        geometry_box((10, 37, 54, 37)),
+        fill=INK,
+        width=5 * geometry_scale,
+    )
+    draw.line(
+        geometry_box((20, 44, 28, 44)),
+        fill=INK,
+        width=4 * geometry_scale,
+    )
+    draw.line(
+        geometry_box((36, 44, 44, 44)),
+        fill=INK,
+        width=4 * geometry_scale,
+    )
 
 
 def save_ico(image, path):

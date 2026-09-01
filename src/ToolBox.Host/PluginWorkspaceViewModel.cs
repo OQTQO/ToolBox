@@ -19,10 +19,10 @@ namespace ToolBox.Host;
 /// </summary>
 public sealed partial class PluginWorkspaceViewModel : INotifyPropertyChanged, IDisposable
 {
-    private static readonly Brush HealthyBrush = CreateBrush("#92E6B5");
-    private static readonly Brush WarningBrush = CreateBrush("#F5B85B");
-    private static readonly Brush ErrorBrush = CreateBrush("#FF8F86");
-    private static readonly Brush MutedBrush = CreateBrush("#A9C7E8");
+    private static readonly Brush HealthyBrush = CreateBrush("#CFFF52");
+    private static readonly Brush WarningBrush = CreateBrush("#8C9B51");
+    private static readonly Brush ErrorBrush = CreateBrush("#A94D3E");
+    private static readonly Brush MutedBrush = CreateBrush("#66766B");
     private static readonly Geometry GenericIcon = Geometry.Parse(
         "M 4,3 L 16,3 L 16,7 L 20,7 L 20,17 L 4,17 Z M 7,3 L 7,7 M 10,3 L 10,7 M 13,3 L 13,7 M 8,12 L 16,12 M 8,15 L 13,15");
 
@@ -37,6 +37,7 @@ public sealed partial class PluginWorkspaceViewModel : INotifyPropertyChanged, I
     private readonly bool _isInstalled = true;
     private readonly ObservableCollection<PluginUiActionViewModel> _uiActions = [];
     private readonly ObservableCollection<PluginUiValueViewModel> _uiValues = [];
+    private readonly SemaphoreSlim _lifecycleOperationGate = new(1, 1);
     private readonly SemaphoreSlim _uiOperationGate = new(1, 1);
     private OutOfProcessPluginSession? _session;
     private PluginState _state;
@@ -44,8 +45,8 @@ public sealed partial class PluginWorkspaceViewModel : INotifyPropertyChanged, I
     private string? _errorMessage;
     private string? _uiErrorMessage;
     private bool _isSelected;
-    private bool _operationInProgress;
-    private bool _uiOperationInProgress;
+    private int _operationInProgress;
+    private int _uiOperationInProgress;
     private bool _disposed;
 
     internal PluginWorkspaceViewModel(
@@ -83,6 +84,8 @@ public sealed partial class PluginWorkspaceViewModel : INotifyPropertyChanged, I
 
     public string DisplayName => Manifest.Name;
 
+    public string IconLabel => BuildIconLabel(DisplayName);
+
     public string Publisher => Manifest.Publisher;
 
     public string InstallDialogTitle => _localization["InstallPluginDialogTitle"];
@@ -118,12 +121,12 @@ public sealed partial class PluginWorkspaceViewModel : INotifyPropertyChanged, I
     public string PluginUiStatusMessage => _uiSnapshot?.StatusMessage ?? string.Empty;
 
     public bool IsPluginUiActionEnabled => IsRuntimeEnabled
-        && !_operationInProgress
-        && !_uiOperationInProgress;
+        && !IsOperationInProgress
+        && !IsUiOperationInProgress;
 
     public bool IsPluginInputEnabled => IsRuntimeEnabled
-        && !_operationInProgress
-        && !_uiOperationInProgress;
+        && !IsOperationInProgress
+        && !IsUiOperationInProgress;
 
     public string PluginUiErrorMessage => _uiErrorMessage ?? string.Empty;
 
@@ -139,30 +142,11 @@ public sealed partial class PluginWorkspaceViewModel : INotifyPropertyChanged, I
         ? $"{RuntimeMode} · background metadata"
         : RuntimeMode;
 
-    public string CardSize => _settings.GetPluginCardSize(PluginId);
-
-    public bool HasCardSizeOverride => _settings.HasPluginCardSizeOverride(PluginId);
-
-    public bool IsCompactCard => string.Equals(CardSize, "compact", StringComparison.Ordinal);
-
-    public bool IsStandardCard => string.Equals(CardSize, "standard", StringComparison.Ordinal);
-
-    public bool IsFeaturedCard => string.Equals(CardSize, "featured", StringComparison.Ordinal);
-
-    public bool IsStandardOrFeaturedCard => !IsCompactCard;
-
     public bool IsRunning => LifecycleState == PluginLifecycleState.Running;
 
     public bool IsAttention => LifecycleState is PluginLifecycleState.Faulted or PluginLifecycleState.DisableFailed or PluginLifecycleState.RestartRequired or PluginLifecycleState.Quarantined;
 
-    public bool IsBusy => _operationInProgress || _uiOperationInProgress;
-
-    public string CardSizeLabel => _localization[$"CardSize{CardSize switch
-    {
-        "compact" => "Compact",
-        "featured" => "Featured",
-        _ => "Standard"
-    }}"];
+    public bool IsBusy => IsOperationInProgress || IsUiOperationInProgress;
 
     public PluginLifecycleState LifecycleState => _state.LifecycleState;
 
@@ -181,8 +165,8 @@ public sealed partial class PluginWorkspaceViewModel : INotifyPropertyChanged, I
 
     public bool SupportsOutOfProcess => Manifest.Runtime.SupportedModes.Contains(PluginExecutionMode.OutOfProcess);
 
-    public bool IsRuntimeActionEnabled => !_operationInProgress
-        && !_uiOperationInProgress
+    public bool IsRuntimeActionEnabled => !IsOperationInProgress
+        && !IsUiOperationInProgress
         && (LifecycleState is PluginLifecycleState.Disabled or PluginLifecycleState.Running)
         && SupportsOutOfProcess;
 
@@ -190,8 +174,8 @@ public sealed partial class PluginWorkspaceViewModel : INotifyPropertyChanged, I
         ? _localization["DisablePlugin"]
         : _localization["EnablePlugin"];
 
-    public bool IsInstallEnabled => !_operationInProgress
-        && !_uiOperationInProgress
+    public bool IsInstallEnabled => !IsOperationInProgress
+        && !IsUiOperationInProgress
         && LifecycleState is not PluginLifecycleState.Running
         and not PluginLifecycleState.Starting
         and not PluginLifecycleState.Stopping;
@@ -234,6 +218,10 @@ public sealed partial class PluginWorkspaceViewModel : INotifyPropertyChanged, I
         }
     }
 
+    private bool IsOperationInProgress => Volatile.Read(ref _operationInProgress) != 0;
+
+    private bool IsUiOperationInProgress => Volatile.Read(ref _uiOperationInProgress) != 0;
+
     private void OnLanguageChanged(object? sender, EventArgs e)
     {
         _uiDispatcher.Dispatch(() =>
@@ -258,17 +246,7 @@ public sealed partial class PluginWorkspaceViewModel : INotifyPropertyChanged, I
 
     internal void RefreshPresentationSettings()
     {
-        _uiDispatcher.Dispatch(() =>
-        {
-            OnPropertyChanged(nameof(CardSize));
-            OnPropertyChanged(nameof(HasCardSizeOverride));
-            OnPropertyChanged(nameof(IsCompactCard));
-            OnPropertyChanged(nameof(IsStandardCard));
-            OnPropertyChanged(nameof(IsFeaturedCard));
-            OnPropertyChanged(nameof(IsStandardOrFeaturedCard));
-            OnPropertyChanged(nameof(CardSizeLabel));
-            OnPropertyChanged(nameof(StatusAccentBrush));
-        });
+        OnPropertyChanged(nameof(StatusAccentBrush));
     }
 
     private void RefreshState()
@@ -296,7 +274,8 @@ public sealed partial class PluginWorkspaceViewModel : INotifyPropertyChanged, I
             OnPropertyChanged(nameof(HasUiActions));
             OnPropertyChanged(nameof(HasUiValues));
             OnPropertyChanged(nameof(HasInputSurface));
-            RefreshUiState();
+            OnPropertyChanged(nameof(IsBusy));
+            RefreshUiStateCore();
         });
     }
 
@@ -335,7 +314,8 @@ public sealed partial class PluginWorkspaceViewModel : INotifyPropertyChanged, I
             OnPropertyChanged(nameof(PluginUiStatusMessage));
             OnPropertyChanged(nameof(HasPluginUiError));
             OnPropertyChanged(nameof(PluginUiErrorMessage));
-            RefreshUiState();
+            OnPropertyChanged(nameof(IsBusy));
+            RefreshUiStateCore();
         });
     }
 
@@ -346,6 +326,7 @@ public sealed partial class PluginWorkspaceViewModel : INotifyPropertyChanged, I
 
     private void RefreshUiStateCore()
     {
+        OnPropertyChanged(nameof(IsBusy));
         OnPropertyChanged(nameof(IsPluginUiActionEnabled));
         OnPropertyChanged(nameof(IsPluginInputEnabled));
         foreach (var action in _uiActions)
@@ -377,6 +358,27 @@ public sealed partial class PluginWorkspaceViewModel : INotifyPropertyChanged, I
         return brush;
     }
 
+    private static string BuildIconLabel(string value)
+    {
+        var trimmed = value.Trim();
+        var capitals = trimmed
+            .Where(char.IsUpper)
+            .Take(2)
+            .ToArray();
+        if (capitals.Length == 2)
+        {
+            return new string(capitals);
+        }
+
+        var letters = trimmed
+            .Where(char.IsLetter)
+            .Take(2)
+            .ToArray();
+        return letters.Length == 0
+            ? "T"
+            : new string(letters).ToUpperInvariant();
+    }
+
     private static Brush ThemeBrush(string key, Brush fallback)
     {
         return System.Windows.Application.Current?.Resources[key] as Brush ?? fallback;
@@ -406,6 +408,8 @@ public sealed class PluginUiActionViewModel : INotifyPropertyChanged
     public bool HasDescription => !string.IsNullOrWhiteSpace(Descriptor.Description);
 
     public bool IsEnabled => Descriptor.IsEnabled && _workspace.IsPluginUiActionEnabled;
+
+    internal string OperationKey => $"{_workspace.PluginId}:{Descriptor.Id}";
 
     internal void RefreshEnabled()
     {

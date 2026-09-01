@@ -18,19 +18,63 @@ public sealed partial class PluginWorkspaceViewModel
     internal async Task<bool> SetOpenedAsync(bool opened)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
-        if (!opened && IsRuntimeEnabled && !await SetRuntimeEnabledAsync(false).ConfigureAwait(false))
+        var entered = false;
+        try
+        {
+            await _lifecycleOperationGate.WaitAsync().ConfigureAwait(false);
+            entered = true;
+            if (_disposed)
+            {
+                return false;
+            }
+
+            if (!opened && IsRuntimeEnabled && !await DisableAsync().ConfigureAwait(false))
+            {
+                return false;
+            }
+
+            _settings.SetPluginOpened(PluginId, opened);
+            RefreshState();
+            return true;
+        }
+        catch (ObjectDisposedException)
         {
             return false;
         }
-
-        _settings.SetPluginOpened(PluginId, opened);
-        RefreshState();
-        return true;
+        finally
+        {
+            if (entered)
+            {
+                ReleaseSemaphore(_lifecycleOperationGate);
+            }
+        }
     }
 
-    internal Task<bool> SetRuntimeEnabledAsync(bool enabled)
+    internal async Task<bool> SetRuntimeEnabledAsync(bool enabled)
     {
-        return enabled ? EnableAsync() : DisableAsync();
+        var entered = false;
+        try
+        {
+            await _lifecycleOperationGate.WaitAsync().ConfigureAwait(false);
+            entered = true;
+            if (_disposed)
+            {
+                return false;
+            }
+
+            return enabled ? await EnableAsync().ConfigureAwait(false) : await DisableAsync().ConfigureAwait(false);
+        }
+        catch (ObjectDisposedException)
+        {
+            return false;
+        }
+        finally
+        {
+            if (entered)
+            {
+                ReleaseSemaphore(_lifecycleOperationGate);
+            }
+        }
     }
 
     internal async Task<PluginPackageInstallResult> InstallPackageAsync(string packagePath)
@@ -97,6 +141,7 @@ public sealed partial class PluginWorkspaceViewModel
             _session = null;
         }
 
+        _lifecycleOperationGate.Dispose();
         _uiOperationGate.Dispose();
     }
 
@@ -127,10 +172,11 @@ public sealed partial class PluginWorkspaceViewModel
             ClearError();
             _state = _state.TransitionTo(PluginLifecycleState.Starting);
             RefreshState();
-            _session = await _runtime.StartAsync(VersionDirectory).ConfigureAwait(false);
-            await _session.StartPluginAsync().ConfigureAwait(false);
+            var session = await _runtime.StartAsync(VersionDirectory).ConfigureAwait(false);
+            _session = session;
+            await session.StartPluginAsync().ConfigureAwait(false);
             await RefreshUiAsync().ConfigureAwait(false);
-            _state = _session.State;
+            _state = session.State;
             _logger.Log(
                 LogLevel.Information,
                 "Plugin",
@@ -141,12 +187,13 @@ public sealed partial class PluginWorkspaceViewModel
         }
         catch (Exception exception)
         {
-            if (_session is not null)
+            var session = _session;
+            if (session is not null)
             {
-                _state = _session.State;
+                _state = session.State;
                 try
                 {
-                    await _session.DisposeAsync().ConfigureAwait(false);
+                    await session.DisposeAsync().ConfigureAwait(false);
                 }
                 catch
                 {
@@ -191,15 +238,16 @@ public sealed partial class PluginWorkspaceViewModel
 
         try
         {
-            if (_session is null)
+            var session = _session;
+            if (session is null)
             {
                 return !IsRuntimeEnabled;
             }
 
             try
             {
-                await _session.StopAsync().ConfigureAwait(false);
-                _state = _session.State;
+                await session.StopAsync().ConfigureAwait(false);
+                _state = session.State;
                 _logger.Log(
                     LogLevel.Information,
                     "Plugin",
@@ -210,7 +258,7 @@ public sealed partial class PluginWorkspaceViewModel
             }
             catch (Exception exception)
             {
-                _state = _session.State;
+                _state = session.State;
                 SetError(exception);
                 _logger.Error(
                     "Plugin",
@@ -221,7 +269,20 @@ public sealed partial class PluginWorkspaceViewModel
             }
             finally
             {
-                await _session.DisposeAsync().ConfigureAwait(false);
+                try
+                {
+                    await session.DisposeAsync().ConfigureAwait(false);
+                }
+                catch (Exception exception)
+                {
+                    SetError(exception);
+                    _logger.Error(
+                        "Plugin",
+                        $"Plugin '{PluginId}' cleanup after disable failed.",
+                        errorCode: "PLUGIN_DISABLE_CLEANUP_FAILED",
+                        exception: exception);
+                }
+
                 _session = null;
                 ApplyUiSnapshot(null);
             }
@@ -235,19 +296,18 @@ public sealed partial class PluginWorkspaceViewModel
 
     private bool BeginOperation()
     {
-        if (_operationInProgress)
+        if (Interlocked.CompareExchange(ref _operationInProgress, 1, 0) != 0)
         {
             return false;
         }
 
-        _operationInProgress = true;
         RefreshState();
         return true;
     }
 
     private void EndOperationIfStarted()
     {
-        _operationInProgress = false;
+        Interlocked.Exchange(ref _operationInProgress, 0);
         RefreshState();
     }
 
@@ -292,15 +352,26 @@ public sealed partial class PluginWorkspaceViewModel
             return;
         }
 
-        await _uiOperationGate.WaitAsync().ConfigureAwait(false);
-        var session = _session;
-        if (session is null || !IsRuntimeEnabled)
+        try
         {
-            _uiOperationGate.Release();
+            if (!await _uiOperationGate.WaitAsync(0).ConfigureAwait(false))
+            {
+                return;
+            }
+        }
+        catch (ObjectDisposedException)
+        {
             return;
         }
 
-        _uiOperationInProgress = true;
+        var session = _session;
+        if (session is null || !IsRuntimeEnabled)
+        {
+            ReleaseSemaphore(_uiOperationGate);
+            return;
+        }
+
+        Interlocked.Exchange(ref _uiOperationInProgress, 1);
         RefreshUiState();
 
         try
@@ -320,9 +391,9 @@ public sealed partial class PluginWorkspaceViewModel
         }
         finally
         {
-            _uiOperationInProgress = false;
+            Interlocked.Exchange(ref _uiOperationInProgress, 0);
             RefreshUiState();
-            _uiOperationGate.Release();
+            ReleaseSemaphore(_uiOperationGate);
         }
     }
 
@@ -333,15 +404,23 @@ public sealed partial class PluginWorkspaceViewModel
             return;
         }
 
-        await _uiOperationGate.WaitAsync().ConfigureAwait(false);
-        var session = _session;
-        if (session is null || !IsRuntimeEnabled)
+        try
         {
-            _uiOperationGate.Release();
+            await _uiOperationGate.WaitAsync().ConfigureAwait(false);
+        }
+        catch (ObjectDisposedException)
+        {
             return;
         }
 
-        _uiOperationInProgress = true;
+        var session = _session;
+        if (session is null || !IsRuntimeEnabled)
+        {
+            ReleaseSemaphore(_uiOperationGate);
+            return;
+        }
+
+        Interlocked.Exchange(ref _uiOperationInProgress, 1);
         RefreshUiState();
 
         try
@@ -357,9 +436,9 @@ public sealed partial class PluginWorkspaceViewModel
         }
         finally
         {
-            _uiOperationInProgress = false;
+            Interlocked.Exchange(ref _uiOperationInProgress, 0);
             RefreshUiState();
-            _uiOperationGate.Release();
+            ReleaseSemaphore(_uiOperationGate);
         }
     }
 
@@ -395,5 +474,21 @@ public sealed partial class PluginWorkspaceViewModel
             OnPropertyChanged(nameof(PluginUiErrorMessage));
             RefreshUiStateCore();
         });
+    }
+
+    private static void ReleaseSemaphore(SemaphoreSlim semaphore)
+    {
+        try
+        {
+            semaphore.Release();
+        }
+        catch (ObjectDisposedException)
+        {
+            // Shutdown can dispose the workspace while an input task is unwinding.
+        }
+        catch (SemaphoreFullException)
+        {
+            // A cancelled/retried UI task must not surface a second dispatcher error.
+        }
     }
 }

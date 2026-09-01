@@ -5,10 +5,12 @@
     <EnableWindowsTargeting>true</EnableWindowsTargeting>
     <UseWPF>true</UseWPF>
     <UseWindowsForms>true</UseWindowsForms>
+    <ApplicationHighDpiMode>PerMonitorV2</ApplicationHighDpiMode>
     <RootNamespace>ToolBox.Host</RootNamespace>
     <AssemblyName>ToolBox.Host</AssemblyName>
     <Version>0.4.0</Version>
     <ApplicationIcon>Assets\ToolBox.ico</ApplicationIcon>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
   </PropertyGroup>
 
   <ItemGroup>
@@ -19,6 +21,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Resource Include="Assets\ToolBox.ico" />
     <Resource Include="Assets\ToolBox.Tray.ico" />
     <Resource Include="Assets\ToolBox.svg" />
   </ItemGroup>

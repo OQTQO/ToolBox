@@ -6,7 +6,7 @@ namespace ToolBox.Host;
 
 /// <summary>
 /// 通用插件卡片面板。
-/// 两列时按列独立布局，避免 UniformGrid 因某一张卡片较高而把整行拉出大片空白。
+/// 两列时按行统一高度布局，保证 1–4 张卡片组成可预测的 2×2 工作区。
 /// </summary>
 internal sealed class ResponsiveCardPanel : WpfPanel
 {
@@ -51,33 +51,49 @@ internal sealed class ResponsiveCardPanel : WpfPanel
 
     protected override WpfSize MeasureOverride(WpfSize availableSize)
     {
-        var width = ResolveWidth(availableSize.Width);
-        var columns = GetColumnCount(width);
-        var itemWidth = GetItemWidth(width, columns);
-        var columnHeights = MeasureChildren(itemWidth, columns);
+        var columnGap = ResponsiveCardLayout.NormalizeGap(ColumnGap);
+        var rowGap = ResponsiveCardLayout.NormalizeGap(RowGap);
+        var minColumnWidth = ResponsiveCardLayout.NormalizeMinColumnWidth(MinColumnWidth);
+        var width = ResponsiveCardLayout.ResolveWidth(availableSize.Width, minColumnWidth, columnGap);
+        var columns = Math.Max(1, ResponsiveCardLayout.GetColumnCount(width, minColumnWidth, columnGap));
+        var itemWidth = ResponsiveCardLayout.GetItemWidth(width, columns, columnGap);
+        var rowHeights = MeasureChildren(itemWidth, columns);
 
+        var measuredWidth = double.IsPositiveInfinity(availableSize.Width)
+            ? width
+            : double.IsFinite(availableSize.Width)
+                ? Math.Max(0d, availableSize.Width)
+                : 0d;
         return new WpfSize(
-            double.IsInfinity(availableSize.Width) ? width : availableSize.Width,
-            GetPanelHeight(columnHeights));
+            measuredWidth,
+            ResponsiveCardLayout.GetPanelHeight(rowHeights, rowGap));
     }
 
     protected override WpfSize ArrangeOverride(WpfSize finalSize)
     {
-        var width = ResolveWidth(finalSize.Width);
-        var columns = GetColumnCount(width);
-        var itemWidth = GetItemWidth(width, columns);
-        var columnY = new double[columns];
+        var columnGap = ResponsiveCardLayout.NormalizeGap(ColumnGap);
+        var rowGap = ResponsiveCardLayout.NormalizeGap(RowGap);
+        var minColumnWidth = ResponsiveCardLayout.NormalizeMinColumnWidth(MinColumnWidth);
+        var width = ResponsiveCardLayout.ResolveWidth(finalSize.Width, minColumnWidth, columnGap);
+        var columns = Math.Max(1, ResponsiveCardLayout.GetColumnCount(width, minColumnWidth, columnGap));
+        var itemWidth = ResponsiveCardLayout.GetItemWidth(width, columns, columnGap);
+        var rowHeights = MeasureChildren(itemWidth, columns);
+        var rowY = 0d;
 
         for (var index = 0; index < InternalChildren.Count; index++)
         {
             var child = InternalChildren[index];
             var column = index % columns;
-            var x = column * (itemWidth + ColumnGap);
-            var y = columnY[column];
-            var height = child.DesiredSize.Height;
+            var row = index / columns;
+            var x = column * (itemWidth + columnGap);
+            var y = rowY;
+            var height = rowHeights[row];
 
             child.Arrange(new Rect(x, y, itemWidth, height));
-            columnY[column] = y + height + RowGap;
+            if (column == columns - 1 || index == InternalChildren.Count - 1)
+            {
+                rowY += height + rowGap;
+            }
         }
 
         return finalSize;
@@ -85,7 +101,8 @@ internal sealed class ResponsiveCardPanel : WpfPanel
 
     private double[] MeasureChildren(double itemWidth, int columns)
     {
-        var columnHeights = new double[columns];
+        var rowCount = ResponsiveCardLayout.GetRowCount(InternalChildren.Count, columns);
+        var rowHeights = new double[rowCount];
         foreach (UIElement child in InternalChildren)
         {
             child.Measure(new WpfSize(itemWidth, double.PositiveInfinity));
@@ -93,43 +110,14 @@ internal sealed class ResponsiveCardPanel : WpfPanel
 
         for (var index = 0; index < InternalChildren.Count; index++)
         {
-            var column = index % columns;
-            var rowInColumn = index / columns;
-            if (rowInColumn > 0)
-            {
-                columnHeights[column] += RowGap;
-            }
-
-            columnHeights[column] += InternalChildren[index].DesiredSize.Height;
+            var row = index / columns;
+            rowHeights[row] = Math.Max(
+                rowHeights[row],
+                double.IsFinite(InternalChildren[index].DesiredSize.Height)
+                    ? Math.Max(0d, InternalChildren[index].DesiredSize.Height)
+                    : 0d);
         }
 
-        return columnHeights;
-    }
-
-    private double ResolveWidth(double availableWidth)
-    {
-        if (double.IsNaN(availableWidth) || double.IsInfinity(availableWidth) || availableWidth <= 0)
-        {
-            return MinColumnWidth * 2 + ColumnGap;
-        }
-
-        return availableWidth;
-    }
-
-    private int GetColumnCount(double width) =>
-        width >= MinColumnWidth * 2 + ColumnGap ? 2 : 1;
-
-    private double GetItemWidth(double width, int columns) =>
-        columns == 1 ? width : Math.Max(0, (width - ColumnGap) / 2);
-
-    private static double GetPanelHeight(IReadOnlyList<double> columnHeights)
-    {
-        var height = 0d;
-        foreach (var columnHeight in columnHeights)
-        {
-            height = Math.Max(height, columnHeight);
-        }
-
-        return Math.Max(0, height);
+        return rowHeights;
     }
 }
