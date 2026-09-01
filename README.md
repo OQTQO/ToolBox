@@ -44,7 +44,7 @@ dotnet build ToolBox.sln --configuration Release
 dotnet test ToolBox.sln --configuration Release
 ```
 
-当前平台与 SDK 版本为 0.4.0，统一基于 .NET 10。ToolBox 的 GitHub Release 同时提供对应版本的 `ToolBox-PluginDevKit`；历史 Release 保持不改。维护资料、发布流程和历史上下文位于 [`docs/maintainer/`](docs/maintainer/) 与 [`docs/archive/`](docs/archive/)。
+当前平台与 SDK 版本为 0.5.0，统一基于 .NET 10。ToolBox 的 GitHub Release 同时提供对应版本的 `ToolBox-PluginDevKit`；历史 Release 保持不改。维护资料、发布流程和历史上下文位于 [`docs/maintainer/`](docs/maintainer/) 与 [`docs/archive/`](docs/archive/)。
 
 ## 当前边界
 

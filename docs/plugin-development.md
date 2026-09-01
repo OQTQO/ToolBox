@@ -7,7 +7,7 @@
 插件只引用 SDK。SDK 由 ToolBox GitHub Release 的 `ToolBox-PluginDevKit` 提供，朋友之间不需要发布或依赖 NuGet.org：
 
 ```xml
-<PackageReference Include="ToolBox.PluginSdk" Version="0.4.0" />
+<PackageReference Include="ToolBox.PluginSdk" Version="0.5.0" />
 ```
 
 不要引用 `ToolBox.Host`、`ToolBox.Core` 或 `ToolBox.PluginWorker`。SDK 的公共入口是 `ToolBox.PluginSdk`。

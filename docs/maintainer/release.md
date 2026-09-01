@@ -1,4 +1,4 @@
-# v0.4 发布与验证
+# v0.5 发布与验证
 
 构建机必须安装 `global.json` 指定的 .NET 10 SDK。CI 使用 `actions/setup-dotnet` 的 `10.0.x` 通道；Release 中的示例签名包必须从受保护 secret 获取稳定证书和 PKCS#8 私钥。
 
