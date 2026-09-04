@@ -48,4 +48,4 @@ dotnet test ToolBox.sln --configuration Release
 
 ## 当前边界
 
-ToolBox 0.4 强制验证 `.tpk` 的 RSA-SHA256 发布者签名，并以 TOFU 策略绑定发布者 ID 与证书指纹；Manifest v2 还必须声明平台定义的能力。签名提供包真实性与发布者密钥连续性，但 Worker 仍不是操作系统权限沙箱，当前也不提供插件商城或自动更新。
+ToolBox v0.5.0 强制验证 `.tpk` 的 RSA-SHA256 发布者签名，并以 TOFU 策略绑定发布者 ID 与证书指纹；Manifest v2 还必须声明平台定义的能力。签名提供包真实性与发布者密钥连续性，但 Worker 仍不是操作系统权限沙箱，当前也不提供插件商城或自动更新。

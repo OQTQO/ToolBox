@@ -2,7 +2,20 @@
 
 所有重要版本变更都记录在这里。GitHub Release 会以版本 Tag 为准生成对应发布记录。
 
-## [Unreleased]
+## [0.5.0] - 2026-09-01
+
+### Changed
+
+- 完成原生 WPF Host UI 04：使用 Windows 原生标题栏和窗口边框，统一通用插件卡片、插件页工具栏、详情抽屉、设置和托盘图标。
+- 增加 PerMonitorV2 高 DPI 感知、响应式卡片布局、平滑滚动和通用 UI 回归测试。
+- 将 Host、Core、PluginSdk、PluginWorker 和 HelloPlugin 发布版本统一为 0.5.0。
+- 发布对应的 Windows x64 Host、HelloPlugin、PluginDevKit 和 SHA-256 校验清单。
+
+### Verification
+
+- 发布前通过版本一致性检查、Release 构建和 Host/Core 测试；GitHub Release 资产已生成。
+
+## [0.4.0] - 2026-08-31
 
 ### Changed
 
@@ -11,6 +24,8 @@
 - `ToolBox.PluginSdk` 可打包为 NuGet；新增 `HelloPlugin`、通用 `.tpk` 打包脚本和 Sample 验证入口。
 - KeyboardMouse 和 AudioRelay 从主仓库迁移到独立的 `ToolBox-Plugins` 仓库，插件通过 GitHub Release 交换 `.tpk`。
 - 历史维护资料迁移到 `docs/maintainer/`，第三方开发文档集中到 `docs/`。
+- `.tpk` 升级为 Manifest v2 / package format 2，增加平台能力声明、RSA-SHA256 发布者签名、证书指纹 TOFU 信任和完整包校验。
+- 插件运行和控制协议统一通过进程外 Worker，补齐取消、Heartbeat、消息大小限制、崩溃、超时和卸载测试。
 
 ## [0.2.2] - 2026-08-29
 

@@ -1,6 +1,6 @@
 # 插件包安全契约
 
-ToolBox 0.4 只安装 Manifest v2、package format 2 的已签名 `.tpk`。插件必须使用目标软件发布的 .NET 10 SDK/DevKit 重新构建，旧包不兼容。
+ToolBox v0.5.0 只安装 Manifest v2、package format 2 的已签名 `.tpk`。插件必须使用目标软件发布的 .NET 10 SDK/DevKit 重新构建，旧包不兼容。
 
 ## 包结构
 
