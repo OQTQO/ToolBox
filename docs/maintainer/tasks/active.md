@@ -8,7 +8,7 @@
 - 补充 DevKit 内容说明、项目/`NuGet.config` 示例、Manifest 最小模板、平台能力 ID、版本一致性、签名私钥边界、插件仓库结构、Pull Request 清单和通用 UI 命令/控件提交语义。
 - 明确插件只依赖 `ToolBox.PluginSdk`，不引用 Host/Core/Worker；明确插件运行文件、`Data\Plugins`、`Data\PluginData` 和 UI 默认页行为。
 - 本次仅修改文档，不改变 SDK、Host、Worker 或安装器实现；前序 0.6.0 实现及其未提交修改将与文档一起形成提交。
-- 本地提交：`3fa69a8`（`feat: 完善通用插件 UI 与开发文档`）。已创建待推送分支 `codex/toolbox-0.6.0-plugin-docs`；推送目标为 `origin` 的同名分支，尚未完成远端推送。
+- GitHub 交接：提交 `3fa69a8` 与任务记录提交 `3115802` 已推送到 `origin/codex/toolbox-0.6.0-plugin-docs`；后续若合并到 `main`，插件开发者应以合并后的 0.6.0 DevKit/Host 为准。
 
 ## 本次文档验证
 
