@@ -56,9 +56,17 @@ public sealed class OutOfProcessPluginRuntimeTests
             Assert.NotNull(initial);
             Assert.Contains(initial!.Actions, action => action.Id == "touch");
             Assert.Equal("0", Assert.Single(initial.Values).Value);
+            Assert.Contains(initial.Elements, element => element.Command == PluginUiCommand.Refresh);
+            Assert.Equal(PluginUiStatusKind.Success, initial.Status!.Kind);
+
+            var pushedUpdate = new TaskCompletionSource<PluginUiSnapshot>(
+                TaskCreationOptions.RunContinuationsAsynchronously);
+            session.UiSnapshotUpdated += (_, args) => pushedUpdate.TrySetResult(args.Snapshot);
 
             var afterAction = await session.ExecuteUiActionAsync("touch");
             Assert.Equal("1", Assert.Single(afterAction.Values).Value);
+            var unsolicited = await pushedUpdate.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            Assert.Equal("1", Assert.Single(unsolicited.Values).Value);
 
             var afterInput = await session.SendUiInputAsync(
                 new PluginInputEvent(PluginInputEventType.KeyDown, Key: "A"));

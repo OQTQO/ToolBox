@@ -4,7 +4,7 @@ param(
     [string]$Configuration = 'Release',
 
     [ValidatePattern('^\d+\.\d+\.\d+$')]
-    [string]$Version = '0.5.0'
+    [string]$Version = '0.6.0'
 )
 
 Set-StrictMode -Version Latest

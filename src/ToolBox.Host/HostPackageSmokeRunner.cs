@@ -42,7 +42,8 @@ internal static class HostPackageSmokeRunner
             installer,
             new OutOfProcessPluginRuntime(workerPath),
             localization,
-            settings);
+            settings,
+            dataRoot: workingRoot);
 
         var results = new List<HostSmokePackageResult>();
         foreach (var packagePath in command.PackagePaths)

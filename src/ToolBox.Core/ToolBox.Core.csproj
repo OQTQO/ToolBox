@@ -3,7 +3,7 @@
     <TargetFramework>net10.0</TargetFramework>
     <RootNamespace>ToolBox.Core</RootNamespace>
     <AssemblyName>ToolBox.Core</AssemblyName>
-    <Version>0.5.0</Version>
+    <Version>0.6.0</Version>
   </PropertyGroup>
 
   <ItemGroup>

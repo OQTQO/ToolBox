@@ -4,12 +4,14 @@ using ToolBox.PluginSdk;
 
 namespace WorkerChildProcessPlugin;
 
-public sealed class WorkerChildProcessPlugin : IPlugin, IPluginUiProvider
+public sealed class WorkerChildProcessPlugin : IPlugin, IPluginUiProvider, IPluginUiUpdateSource
 {
     private Process? _childProcess;
     private int _actionCount;
 
     public string Id => "com.toolbox.worker-child-process";
+
+    public event EventHandler<PluginUiSnapshotUpdatedEventArgs>? SnapshotUpdated;
 
     public ValueTask StartAsync(IPluginContext context, CancellationToken cancellationToken)
     {
@@ -62,7 +64,53 @@ public sealed class WorkerChildProcessPlugin : IPlugin, IPluginUiProvider
                 new PluginUiAction("touch", "Touch plugin"),
                 new PluginUiAction("hang", "Hang plugin")
             ],
-            null);
+            null)
+        {
+            Elements =
+            [
+                new PluginUiElement
+                {
+                    Id = "refresh",
+                    Kind = PluginUiElementKind.Action,
+                    ActionId = "touch",
+                    Command = PluginUiCommand.Refresh,
+                    Style = PluginUiActionStyle.Primary
+                },
+                new PluginUiElement
+                {
+                    Id = "mode",
+                    Kind = PluginUiElementKind.Select,
+                    Label = "Mode",
+                    ActionId = "mode",
+                    Value = "a",
+                    Options = [new PluginUiOption("a", "A"), new PluginUiOption("b", "B")]
+                },
+                new PluginUiElement
+                {
+                    Id = "enabled",
+                    Kind = PluginUiElementKind.Toggle,
+                    Label = "Enabled",
+                    ActionId = "enabled",
+                    Value = "true"
+                },
+                new PluginUiElement
+                {
+                    Id = "volume",
+                    Kind = PluginUiElementKind.Slider,
+                    Label = "Volume",
+                    ActionId = "volume",
+                    Value = "50",
+                    Minimum = 0,
+                    Maximum = 100,
+                    Step = 5
+                }
+            ],
+            Status = new PluginUiStatus
+            {
+                Kind = PluginUiStatusKind.Success,
+                Message = "Ready"
+            }
+        };
     }
 
     public ValueTask<PluginUiSnapshot> ExecuteAsync(
@@ -82,7 +130,9 @@ public sealed class WorkerChildProcessPlugin : IPlugin, IPluginUiProvider
         }
 
         _actionCount++;
-        return ValueTask.FromResult(GetSnapshot());
+        var snapshot = GetSnapshot();
+        SnapshotUpdated?.Invoke(this, new PluginUiSnapshotUpdatedEventArgs(snapshot));
+        return ValueTask.FromResult(snapshot);
     }
 
     private static async Task<PluginUiSnapshot> HangAsync(CancellationToken cancellationToken)

@@ -386,6 +386,23 @@ private static async Task<WorkerRequestResult> HandleRequestAsync(
         }
     }
 
+    private static async Task TryWriteErrorAsync(
+        WorkerMessageWriter writer,
+        string launchId,
+        string? requestId,
+        WorkerProtocolException exception)
+    {
+        try
+        {
+            await WriteErrorAsync(writer, launchId, requestId, exception.ErrorCode, exception.Message)
+                .ConfigureAwait(false);
+        }
+        catch
+        {
+            // The channel may already be closed; the process exit is the fallback signal.
+        }
+    }
+
     private static Task WriteErrorAsync(
         StreamWriter writer,
         string launchId,
@@ -395,6 +412,18 @@ private static async Task<WorkerRequestResult> HandleRequestAsync(
     {
         return WorkerProtocol.WriteAsync(
                 writer,
+                WorkerProtocol.CreateError(launchId, requestId, errorCode, errorMessage))
+            .AsTask();
+    }
+
+    private static Task WriteErrorAsync(
+        WorkerMessageWriter writer,
+        string launchId,
+        string? requestId,
+        string errorCode,
+        string errorMessage)
+    {
+        return writer.EnqueueAsync(
                 WorkerProtocol.CreateError(launchId, requestId, errorCode, errorMessage))
             .AsTask();
     }

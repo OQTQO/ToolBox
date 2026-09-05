@@ -1,6 +1,7 @@
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using ToolBox.PluginSdk;
 
 namespace ToolBox.Core.Plugins.Worker;
 
@@ -223,11 +224,108 @@ public static class WorkerProtocol
 
     private static JsonSerializerOptions CreateJsonOptions()
     {
-        return new JsonSerializerOptions(JsonSerializerDefaults.General)
+        var options = new JsonSerializerOptions(JsonSerializerDefaults.General)
         {
             PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-            Converters = { new JsonStringEnumConverter(JsonNamingPolicy.CamelCase) }
+            Converters = { new PluginUiEnumJsonConverterFactory() }
         };
+
+        options.Converters.Add(new JsonStringEnumConverter(JsonNamingPolicy.CamelCase));
+        return options;
+    }
+}
+
+internal sealed class PluginUiEnumJsonConverterFactory : JsonConverterFactory
+{
+    public override bool CanConvert(Type typeToConvert)
+    {
+        return typeToConvert == typeof(PluginUiElementKind)
+            || typeToConvert == typeof(PluginUiCommand)
+            || typeToConvert == typeof(PluginUiActionStyle)
+            || typeToConvert == typeof(PluginUiUpdateMode)
+            || typeToConvert == typeof(PluginUiStatusKind)
+            || typeToConvert == typeof(PluginUiDialogKind);
+    }
+
+    public override JsonConverter CreateConverter(
+        Type typeToConvert,
+        JsonSerializerOptions options)
+    {
+        if (typeToConvert == typeof(PluginUiElementKind))
+        {
+            return new PluginUiEnumJsonConverter<PluginUiElementKind>(PluginUiElementKind.Unknown);
+        }
+
+        if (typeToConvert == typeof(PluginUiCommand))
+        {
+            return new PluginUiEnumJsonConverter<PluginUiCommand>(PluginUiCommand.Custom);
+        }
+
+        if (typeToConvert == typeof(PluginUiActionStyle))
+        {
+            return new PluginUiEnumJsonConverter<PluginUiActionStyle>(PluginUiActionStyle.Default);
+        }
+
+        if (typeToConvert == typeof(PluginUiUpdateMode))
+        {
+            return new PluginUiEnumJsonConverter<PluginUiUpdateMode>(PluginUiUpdateMode.Default);
+        }
+
+        if (typeToConvert == typeof(PluginUiStatusKind))
+        {
+            return new PluginUiEnumJsonConverter<PluginUiStatusKind>(PluginUiStatusKind.Information);
+        }
+
+        if (typeToConvert == typeof(PluginUiDialogKind))
+        {
+            return new PluginUiEnumJsonConverter<PluginUiDialogKind>(PluginUiDialogKind.Information);
+        }
+
+        throw new NotSupportedException($"Unsupported Plugin UI enum '{typeToConvert}'.");
+    }
+}
+
+internal sealed class PluginUiEnumJsonConverter<TEnum>(TEnum unknownValue) : JsonConverter<TEnum>
+    where TEnum : struct, Enum
+{
+    private static readonly JsonNamingPolicy NamingPolicy = JsonNamingPolicy.CamelCase;
+
+    public override TEnum Read(
+        ref Utf8JsonReader reader,
+        Type typeToConvert,
+        JsonSerializerOptions options)
+    {
+        if (reader.TokenType == JsonTokenType.String)
+        {
+            var text = reader.GetString();
+            if (Enum.TryParse<TEnum>(text, ignoreCase: true, out var value)
+                && Enum.IsDefined(value)
+                && !value.Equals(default(TEnum)))
+            {
+                return value;
+            }
+
+            return unknownValue;
+        }
+
+        if (reader.TokenType == JsonTokenType.Number
+            && reader.TryGetInt32(out var numericValue))
+        {
+            var value = (TEnum)Enum.ToObject(typeof(TEnum), numericValue);
+            return Enum.IsDefined(value) && !value.Equals(default(TEnum))
+                ? value
+                : unknownValue;
+        }
+
+        throw new JsonException($"Expected a string or integer value for {typeof(TEnum).Name}.");
+    }
+
+    public override void Write(
+        Utf8JsonWriter writer,
+        TEnum value,
+        JsonSerializerOptions options)
+    {
+        writer.WriteStringValue(NamingPolicy.ConvertName(value.ToString()));
     }
 }
 

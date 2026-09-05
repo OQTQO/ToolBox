@@ -1,5 +1,6 @@
 using System.Text;
 using ToolBox.Core.Plugins.Worker;
+using ToolBox.PluginSdk;
 using Xunit;
 
 namespace ToolBox.Core.Tests;
@@ -75,6 +76,35 @@ public sealed class WorkerProtocolTests
         Assert.Equal("request-456", message.RequestId);
         Assert.Equal("start", message.Operation);
         Assert.Equal("payload", message.Payload);
+    }
+
+    [Fact]
+    public void UiUpdatedEventCarriesTheDataOnlySnapshot()
+    {
+        var snapshot = new PluginUiSnapshot("updated", [], [], null)
+        {
+            Elements =
+            [
+                new PluginUiElement
+                {
+                    Id = "refresh",
+                    Kind = PluginUiElementKind.Action,
+                    ActionId = "refresh",
+                    Command = PluginUiCommand.Refresh
+                }
+            ]
+        };
+
+        var message = WorkerProtocol.CreateEvent(
+            "launch-123",
+            "ui.updated",
+            WorkerProtocol.SerializePayload(snapshot));
+        var payload = WorkerProtocol.DeserializePayload<PluginUiSnapshot>(message.Payload);
+
+        Assert.Equal(WorkerMessageType.Event, message.Type);
+        Assert.Equal("ui.updated", message.Operation);
+        Assert.Equal("refresh", Assert.Single(payload.Elements).ActionId);
+        Assert.Equal(PluginUiCommand.Refresh, payload.Elements[0].Command);
     }
 
     [Fact]

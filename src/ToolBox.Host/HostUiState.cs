@@ -41,6 +41,10 @@ internal static class HostUiState
         public const string About = "about";
 
         public static bool IsKnown(string? value) => value is Overview or Operations or Logs or About;
+
+        public static string GetDefault(bool hasPluginUi) => hasPluginUi
+            ? Operations
+            : Overview;
     }
 
     internal static class SettingsSections

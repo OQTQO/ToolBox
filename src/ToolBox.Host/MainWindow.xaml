@@ -291,6 +291,272 @@
                     Style="{StaticResource QuietButtonStyle}"
                     ToolTip="{Binding Description}" />
         </DataTemplate>
+
+        <DataTemplate x:Key="PluginUiElementValueTemplate">
+            <Border Margin="0,0,0,8"
+                    Padding="12"
+                    Style="{StaticResource SoftSurfaceBorderStyle}">
+                <StackPanel>
+                    <TextBlock Style="{StaticResource MutedLabel}"
+                               Text="{Binding DisplayLabel}" />
+                    <TextBlock Margin="0,5,0,0"
+                               FontSize="13"
+                               FontWeight="Bold"
+                               Text="{Binding Value}"
+                               TextWrapping="Wrap" />
+                </StackPanel>
+            </Border>
+        </DataTemplate>
+
+        <DataTemplate x:Key="PluginUiElementActionTemplate">
+            <Button Margin="0,0,8,8"
+                    MinWidth="110"
+                    MinHeight="36"
+                    HorizontalAlignment="Left"
+                    HorizontalContentAlignment="Center"
+                    IsEnabled="{Binding IsEnabled}"
+                    Click="OnPluginUiElementActionClick"
+                    Style="{StaticResource PluginUiButtonStyle}"
+                    ToolTip="{Binding AccessibleName}"
+                    AutomationProperties.Name="{Binding AccessibleName}">
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock Margin="0,0,6,0"
+                               VerticalAlignment="Center"
+                               FontSize="13"
+                               Foreground="{Binding RelativeSource={RelativeSource AncestorType={x:Type Button}}, Path=Foreground}"
+                               Text="{Binding DisplayIcon}"
+                               Visibility="{Binding HasIcon, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                    <TextBlock VerticalAlignment="Center"
+                               Foreground="{Binding RelativeSource={RelativeSource AncestorType={x:Type Button}}, Path=Foreground}"
+                               Text="{Binding DisplayLabel}"
+                               TextWrapping="NoWrap"
+                               Visibility="{Binding HasVisibleText, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                </StackPanel>
+            </Button>
+        </DataTemplate>
+
+        <DataTemplate x:Key="PluginUiOptionTemplate">
+            <TextBlock Text="{Binding Label}"
+                       Foreground="{DynamicResource TextBrush}"
+                       TextTrimming="CharacterEllipsis" />
+        </DataTemplate>
+
+        <HierarchicalDataTemplate x:Key="PluginUiMenuItemTemplate"
+                                  ItemsSource="{Binding Children}">
+            <StackPanel Orientation="Horizontal">
+                <TextBlock Margin="0,0,6,0"
+                           Text="{Binding DisplayIcon}"
+                           Visibility="{Binding HasIcon, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                <TextBlock Text="{Binding DisplayLabel}" />
+            </StackPanel>
+        </HierarchicalDataTemplate>
+
+        <Style x:Key="PluginUiMenuItemStyle" TargetType="{x:Type MenuItem}">
+            <EventSetter Event="Click" Handler="OnPluginUiMenuItemClick" />
+            <Setter Property="IsEnabled" Value="{Binding IsEnabled}" />
+            <Setter Property="ToolTip" Value="{Binding DisplayLabel}" />
+        </Style>
+
+        <DataTemplate x:Key="PluginUiElementMenuTemplate">
+            <Menu Margin="0,0,0,8"
+                  IsEnabled="{Binding IsEnabled}">
+                <MenuItem Header="{Binding DisplayLabel}"
+                          ItemsSource="{Binding MenuItems}"
+                          ItemTemplate="{StaticResource PluginUiMenuItemTemplate}"
+                          ItemContainerStyle="{StaticResource PluginUiMenuItemStyle}"
+                          ToolTip="{Binding Description}">
+                    <MenuItem.Icon>
+                        <TextBlock Text="{Binding DisplayIcon}"
+                                   Visibility="{Binding HasIcon, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                    </MenuItem.Icon>
+                </MenuItem>
+            </Menu>
+        </DataTemplate>
+
+        <DataTemplate x:Key="PluginUiElementSelectTemplate">
+            <StackPanel Margin="0,0,0,14">
+                <TextBlock Style="{StaticResource PluginUiFieldLabelStyle}"
+                           Text="{Binding DisplayLabel}" />
+                <TextBlock Style="{StaticResource PluginUiFieldDescriptionStyle}"
+                           Text="{Binding Description}"
+                           Visibility="{Binding HasDescription, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                <ComboBox Margin="0,8,0,0"
+                          ItemsSource="{Binding Options}"
+                          ItemTemplate="{StaticResource PluginUiOptionTemplate}"
+                          SelectedValuePath="Value"
+                          SelectedValue="{Binding Value, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                          Style="{StaticResource PluginUiComboBoxStyle}"
+                          IsEnabled="{Binding IsEnabled}"
+                          ToolTip="{Binding Description}" />
+            </StackPanel>
+        </DataTemplate>
+
+        <DataTemplate x:Key="PluginUiElementMultiSelectTemplate">
+            <StackPanel Margin="0,0,0,14">
+                <TextBlock Style="{StaticResource PluginUiFieldLabelStyle}"
+                           Text="{Binding DisplayLabel}" />
+                <TextBlock Style="{StaticResource PluginUiFieldDescriptionStyle}"
+                           Text="{Binding Description}"
+                           Visibility="{Binding HasDescription, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                <ItemsControl Margin="0,7,0,0"
+                              ItemsSource="{Binding Options}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <CheckBox Margin="0,1,0,1"
+                                      Content="{Binding Label}"
+                                      IsChecked="{Binding IsSelected, Mode=TwoWay}"
+                                      IsEnabled="{Binding IsEnabled}"
+                                      Style="{StaticResource PluginUiCheckBoxStyle}"
+                                      ToolTip="{Binding Description}" />
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </StackPanel>
+        </DataTemplate>
+
+        <DataTemplate x:Key="PluginUiElementToggleTemplate">
+            <CheckBox Margin="0,0,0,12"
+                      Content="{Binding DisplayLabel}"
+                      IsChecked="{Binding IsChecked, Mode=TwoWay}"
+                      IsEnabled="{Binding IsEnabled}"
+                      Style="{StaticResource PluginUiCheckBoxStyle}"
+                      ToolTip="{Binding Description}" />
+        </DataTemplate>
+
+        <DataTemplate x:Key="PluginUiElementCheckBoxTemplate">
+            <CheckBox Margin="0,0,0,12"
+                      Content="{Binding DisplayLabel}"
+                      IsChecked="{Binding IsChecked, Mode=TwoWay}"
+                      IsEnabled="{Binding IsEnabled}"
+                      Style="{StaticResource PluginUiCheckBoxStyle}"
+                      ToolTip="{Binding Description}" />
+        </DataTemplate>
+
+        <DataTemplate x:Key="PluginUiElementRadioGroupTemplate">
+            <StackPanel Margin="0,0,0,14">
+                <TextBlock Style="{StaticResource PluginUiFieldLabelStyle}"
+                           Text="{Binding DisplayLabel}" />
+                <TextBlock Style="{StaticResource PluginUiFieldDescriptionStyle}"
+                           Text="{Binding Description}"
+                           Visibility="{Binding HasDescription, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                <ItemsControl Margin="0,7,0,0"
+                              ItemsSource="{Binding Options}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <RadioButton Margin="0,1,0,1"
+                                         GroupName="{Binding GroupName}"
+                                         Content="{Binding Label}"
+                                         IsChecked="{Binding IsSelected, Mode=TwoWay}"
+                                         IsEnabled="{Binding IsEnabled}"
+                                         Style="{StaticResource PluginUiRadioButtonStyle}"
+                                         ToolTip="{Binding Description}" />
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </StackPanel>
+        </DataTemplate>
+
+        <DataTemplate x:Key="PluginUiElementTextBoxTemplate">
+            <StackPanel Margin="0,0,0,14">
+                <TextBlock Style="{StaticResource PluginUiFieldLabelStyle}"
+                           Text="{Binding DisplayLabel}" />
+                <TextBlock Style="{StaticResource PluginUiFieldDescriptionStyle}"
+                           Text="{Binding Description}"
+                           Visibility="{Binding HasDescription, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                <TextBox Margin="0,8,0,0"
+                          Text="{Binding Value, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"
+                          IsEnabled="{Binding IsEnabled}"
+                          ToolTip="{Binding Description}"
+                         LostFocus="OnPluginUiTextBoxLostFocus"
+                         KeyDown="OnPluginUiTextBoxKeyDown" />
+            </StackPanel>
+        </DataTemplate>
+
+        <DataTemplate x:Key="PluginUiElementNumberBoxTemplate">
+            <StackPanel Margin="0,0,0,14">
+                <TextBlock Style="{StaticResource PluginUiFieldLabelStyle}"
+                           Text="{Binding DisplayLabel}" />
+                <TextBlock Style="{StaticResource PluginUiFieldDescriptionStyle}"
+                           Text="{Binding Description}"
+                           Visibility="{Binding HasDescription, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                <TextBox Margin="0,8,0,0"
+                          Text="{Binding Value, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"
+                          IsEnabled="{Binding IsEnabled}"
+                          ToolTip="{Binding Description}"
+                         LostFocus="OnPluginUiTextBoxLostFocus"
+                         KeyDown="OnPluginUiTextBoxKeyDown" />
+            </StackPanel>
+        </DataTemplate>
+
+        <DataTemplate x:Key="PluginUiElementSliderTemplate">
+            <StackPanel Margin="0,0,0,14">
+                    <DockPanel>
+                    <TextBlock Style="{StaticResource PluginUiFieldLabelStyle}"
+                               Text="{Binding DisplayLabel}" />
+                    <StackPanel DockPanel.Dock="Right"
+                                Orientation="Horizontal">
+                        <TextBlock Foreground="{DynamicResource TextBrush}"
+                                   FontSize="11"
+                                   FontWeight="Bold"
+                                   Text="{Binding NumericValue, StringFormat={}{0:0.##}}" />
+                        <TextBlock Margin="4,0,0,0"
+                                   Foreground="{DynamicResource MutedTextBrush}"
+                                   FontSize="11"
+                                   Text="{Binding Unit}" />
+                    </StackPanel>
+                </DockPanel>
+                <TextBlock Style="{StaticResource PluginUiFieldDescriptionStyle}"
+                           Text="{Binding Description}"
+                           Visibility="{Binding HasDescription, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                <Slider Margin="0,6,0,0"
+                        Minimum="{Binding Minimum}"
+                        Maximum="{Binding Maximum}"
+                        TickFrequency="{Binding Step}"
+                        IsSnapToTickEnabled="True"
+                        Value="{Binding NumericValue, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                        IsEnabled="{Binding IsEnabled}"
+                        Style="{StaticResource PluginUiSliderStyle}"
+                        ToolTip="{Binding Description}" />
+            </StackPanel>
+        </DataTemplate>
+
+        <local:PluginUiElementTemplateSelector x:Key="PluginUiElementTemplateSelector"
+                                               ValueTemplate="{StaticResource PluginUiElementValueTemplate}"
+                                               ActionTemplate="{StaticResource PluginUiElementActionTemplate}"
+                                               MenuTemplate="{StaticResource PluginUiElementMenuTemplate}"
+                                               SelectControlTemplate="{StaticResource PluginUiElementSelectTemplate}"
+                                               MultiSelectTemplate="{StaticResource PluginUiElementMultiSelectTemplate}"
+                                               ToggleTemplate="{StaticResource PluginUiElementToggleTemplate}"
+                                               CheckBoxTemplate="{StaticResource PluginUiElementCheckBoxTemplate}"
+                                               RadioGroupTemplate="{StaticResource PluginUiElementRadioGroupTemplate}"
+                                               TextBoxTemplate="{StaticResource PluginUiElementTextBoxTemplate}"
+                                               NumberBoxTemplate="{StaticResource PluginUiElementNumberBoxTemplate}"
+                                               SliderTemplate="{StaticResource PluginUiElementSliderTemplate}" />
+
+        <DataTemplate x:Key="PluginUiElementItemTemplate">
+            <StackPanel>
+                <Border Margin="0,2,0,11"
+                        Padding="0,0,0,8"
+                        BorderBrush="{DynamicResource LineBrush}"
+                        BorderThickness="0,0,0,1"
+                        Visibility="{Binding ShowGroupHeader, Converter={StaticResource BooleanToVisibilityConverter}}">
+                    <DockPanel>
+                        <Border Width="4"
+                                Height="16"
+                                Margin="0,0,8,0"
+                                Background="{DynamicResource AccentBrush}"
+                                CornerRadius="2" />
+                        <TextBlock VerticalAlignment="Center"
+                                   FontSize="11"
+                                   FontWeight="Bold"
+                                   Foreground="{DynamicResource AccentTextBrush}"
+                                   Text="{Binding Group}" />
+                    </DockPanel>
+                </Border>
+                <ContentControl Content="{Binding}"
+                                ContentTemplateSelector="{StaticResource PluginUiElementTemplateSelector}" />
+            </StackPanel>
+        </DataTemplate>
     </Window.Resources>
 
     <Grid x:Name="WindowContent"
@@ -1389,6 +1655,37 @@
                                                    Text="{Binding PluginUiStatusMessage}"
                                                    TextWrapping="Wrap"
                                                    Visibility="{Binding HasPluginUi, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                                        <Border Margin="0,12,0,0"
+                                                Padding="12"
+                                                Style="{StaticResource SoftSurfaceBorderStyle}"
+                                                Visibility="{Binding HasPluginUiStatus, Converter={StaticResource BooleanToVisibilityConverter}}">
+                                            <StackPanel>
+                                                <DockPanel>
+                                                    <TextBlock FontSize="10"
+                                                               FontWeight="Bold"
+                                                               Foreground="{DynamicResource MutedTextBrush}"
+                                                               Text="{Binding PluginUiStatusKindLabel}" />
+                                                    <Button DockPanel.Dock="Right"
+                                                            Padding="9,5"
+                                                            Content="{DynamicResource PluginCommandCancel}"
+                                                            IsEnabled="{Binding IsPluginUiActionEnabled}"
+                                                            Click="OnPluginUiProgressCancelClick"
+                                                            Visibility="{Binding HasPluginUiProgressCancel, Converter={StaticResource BooleanToVisibilityConverter}}"
+                                                            Style="{StaticResource QuietButtonStyle}" />
+                                                </DockPanel>
+                                                <TextBlock Margin="0,5,0,0"
+                                                           FontSize="12"
+                                                           Text="{Binding PluginUiStatusText}"
+                                                           TextWrapping="Wrap" />
+                                                <ProgressBar Margin="0,10,0,0"
+                                                             Height="6"
+                                                             Minimum="0"
+                                                             Maximum="{Binding PluginUiProgressMaximum}"
+                                                             Value="{Binding PluginUiProgressValue, Mode=OneWay}"
+                                                             IsIndeterminate="{Binding IsPluginUiProgressIndeterminate}"
+                                                             Visibility="{Binding HasPluginUiProgress, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                                            </StackPanel>
+                                        </Border>
                                         <Border Margin="0,15,0,0"
                                                 Padding="14"
                                                 Background="{DynamicResource SurfaceRaisedBrush}"
@@ -1450,6 +1747,13 @@
                                                            Text="{Binding InputSurface.Description}"
                                                            TextWrapping="Wrap" />
                                             </StackPanel>
+                                        </Border>
+                                        <Border Margin="0,15,0,0"
+                                                Padding="16,15,16,2"
+                                                Style="{StaticResource SurfaceBorderStyle}"
+                                                Visibility="{Binding HasUiElements, Converter={StaticResource BooleanToVisibilityConverter}}">
+                                            <ItemsControl ItemsSource="{Binding UiElements}"
+                                                          ItemTemplate="{StaticResource PluginUiElementItemTemplate}" />
                                         </Border>
                                         <Border Margin="0,15,0,0"
                                                 Padding="14"

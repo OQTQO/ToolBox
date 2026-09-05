@@ -2,6 +2,24 @@
 
 所有重要版本变更都记录在这里。GitHub Release 会以版本 Tag 为准生成对应发布记录。
 
+## [0.6.0] - development
+
+### Added
+
+- 增量扩展稳定的 Plugin API v1 UI 契约：通用控件、菜单、标准命令、状态、确定/不确定进度、取消动作和 Host 模态对话框。
+- 新增 `IPluginUiUpdateSource` 与 `ui.updated` Worker 事件，使用单一出站写入队列和 Host 单一读取泵，支持主动状态/进度更新并保持旧响应语义。
+- WPF Host 支持旧版 `Values`/`Actions` 与新版 `Elements` 合并渲染、中文标准命令、控件值编码、分组标题、无障碍名称和详情页默认操作入口。
+- 新增契约序列化、未知枚举回退、Worker 主动更新和示例 UI 兼容性测试。
+
+### Compatibility
+
+- 保留 `PluginContract.PluginApiMajor = 1`、原有 `IPluginUiProvider` 成员、四参数 `PluginUiSnapshot` 构造函数和 Worker 协议主版本 `1`。
+- 新增 SDK 类型只使用数据对象，不引用 WPF、XAML 或 HTML；旧版纯后台插件和旧版 UI JSON 继续可用。
+
+### Verification
+
+- 本阶段只修改软件仓库，未提交、推送或发布；插件仓库待契约稳定后另行适配。
+
 ## [0.5.0] - 2026-09-01
 
 ### Changed

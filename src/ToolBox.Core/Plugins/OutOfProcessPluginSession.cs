@@ -1,4 +1,4 @@
-using System.Diagnostics;
+using System.Collections.Concurrent;
 using System.Globalization;
 using System.IO.Pipes;
 using System.Runtime.Versioning;
@@ -17,8 +17,12 @@ public sealed class OutOfProcessPluginSession : IAsyncDisposable
     private readonly StreamWriter _writer;
     private readonly SemaphoreSlim _writeGate = new(1, 1);
     private readonly SemaphoreSlim _requestGate = new(1, 1);
+    private readonly CancellationTokenSource _readerCancellation = new();
+    private readonly ConcurrentDictionary<string, TaskCompletionSource<WorkerMessage>> _pendingRequests = new(StringComparer.Ordinal);
     private readonly TimeSpan _uiRequestTimeout;
+    private readonly Task _readerTask;
     private PluginState _state;
+    private Exception? _readerFailure;
     private bool _channelClosed;
     private bool _workerDisposed;
     private bool _disposed;
@@ -42,7 +46,10 @@ public sealed class OutOfProcessPluginSession : IAsyncDisposable
         _writer = writer ?? throw new ArgumentNullException(nameof(writer));
         _uiRequestTimeout = uiRequestTimeout;
         _state = PluginState.CreateInstalled(Manifest).TransitionTo(PluginLifecycleState.Disabled);
+        _readerTask = ReadLoopAsync();
     }
+
+    public event EventHandler<PluginUiSnapshotUpdatedEventArgs>? UiSnapshotUpdated;
 
     public DiscoveredPlugin Discovered { get; }
 
@@ -147,9 +154,11 @@ public sealed class OutOfProcessPluginSession : IAsyncDisposable
         EnsureChannelOpen();
         await _requestGate.WaitAsync(cancellationToken).ConfigureAwait(false);
 
+        var requestId = Guid.NewGuid().ToString("N");
+        var completion = RegisterPendingRequest(requestId);
+
         try
         {
-            var requestId = Guid.NewGuid().ToString("N");
             await WriteAsync(
                     new WorkerMessage(
                         WorkerMessageType.Heartbeat,
@@ -160,69 +169,39 @@ public sealed class OutOfProcessPluginSession : IAsyncDisposable
                     cancellationToken)
                 .ConfigureAwait(false);
 
-            while (true)
+            WorkerMessage message;
+            try
             {
-                var pendingRead = WorkerProtocol.ReadAsync(_reader, CancellationToken.None).AsTask();
-                WorkerMessage message;
+                message = await completion.Task.WaitAsync(cancellationToken).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException)
+            {
+                await DrainCancelledPendingAsync(
+                        requestId,
+                        completion.Task,
+                        "WORKER_HEARTBEAT_CANCEL_TIMEOUT",
+                        "The Worker did not finish the cancelled heartbeat within 1 second.")
+                    .ConfigureAwait(false);
+                throw;
+            }
 
-                try
-                {
-                    message = await pendingRead.WaitAsync(cancellationToken).ConfigureAwait(false);
-                }
-                catch (OperationCanceledException)
-                {
-                    await DrainHeartbeatAsync(requestId, pendingRead).ConfigureAwait(false);
-                    throw;
-                }
+            ValidateEnvelope(message);
+            if (message.Type == WorkerMessageType.Error)
+            {
+                throw CreateProtocolError(message);
+            }
 
-                ValidateEnvelope(message);
-
-                if (message.Type == WorkerMessageType.Error
-                    && string.Equals(message.RequestId, requestId, StringComparison.Ordinal))
-                {
-                    throw CreateProtocolError(message);
-                }
-
-                if (message.Type == WorkerMessageType.Heartbeat
-                    && string.Equals(message.RequestId, requestId, StringComparison.Ordinal))
-                {
-                    return;
-                }
+            if (message.Type != WorkerMessageType.Heartbeat)
+            {
+                throw new WorkerProtocolException(
+                    "WORKER_HEARTBEAT_INVALID",
+                    $"Expected a heartbeat response but received '{message.Type}'.");
             }
         }
         finally
         {
+            _pendingRequests.TryRemove(requestId, out _);
             _requestGate.Release();
-        }
-    }
-
-    private async Task DrainHeartbeatAsync(
-        string requestId,
-        Task<WorkerMessage> pendingRead)
-    {
-        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(1));
-
-        try
-        {
-            while (true)
-            {
-                var message = await pendingRead.WaitAsync(timeout.Token).ConfigureAwait(false);
-                ValidateEnvelope(message);
-
-                if (message.Type == WorkerMessageType.Heartbeat
-                    && string.Equals(message.RequestId, requestId, StringComparison.Ordinal))
-                {
-                    return;
-                }
-
-                pendingRead = WorkerProtocol.ReadAsync(_reader).AsTask();
-            }
-        }
-        catch (OperationCanceledException) when (timeout.IsCancellationRequested)
-        {
-            FailUnresponsiveWorker(
-                "WORKER_HEARTBEAT_CANCEL_TIMEOUT",
-                "The Worker did not finish the cancelled heartbeat within 1 second.");
         }
     }
 
@@ -262,7 +241,6 @@ public sealed class OutOfProcessPluginSession : IAsyncDisposable
 
     private async Task StopCoreAsync(ShutdownDeadline deadline)
     {
-
         if (_channelClosed)
         {
             return;
@@ -420,6 +398,20 @@ public sealed class OutOfProcessPluginSession : IAsyncDisposable
         {
             CloseChannel();
             DisposeWorker(deadline);
+            try
+            {
+                await _readerTask.WaitAsync(TimeSpan.FromSeconds(1)).ConfigureAwait(false);
+            }
+            catch (Exception exception) when (exception is TimeoutException
+                or OperationCanceledException
+                or ObjectDisposedException
+                or IOException
+                or WorkerProtocolException)
+            {
+                // The process and pipe are already owned by the shutdown boundary.
+            }
+
+            _readerCancellation.Dispose();
             _writeGate.Dispose();
             _requestGate.Dispose();
             _disposed = true;
@@ -435,78 +427,72 @@ public sealed class OutOfProcessPluginSession : IAsyncDisposable
 
         await _requestGate.WaitAsync(cancellationToken).ConfigureAwait(false);
 
+        var requestId = Guid.NewGuid().ToString("N");
+        var completion = RegisterPendingRequest(requestId);
+
         try
         {
-            var requestId = Guid.NewGuid().ToString("N");
             await WriteAsync(
                     WorkerProtocol.CreateRequest(LaunchId, requestId, operation, payload),
                     cancellationToken)
                 .ConfigureAwait(false);
 
-            while (true)
+            WorkerMessage message;
+            try
             {
-                var pendingRead = WorkerProtocol.ReadAsync(_reader, CancellationToken.None).AsTask();
-                WorkerMessage message;
-
-                try
-                {
-                    message = await pendingRead.WaitAsync(cancellationToken).ConfigureAwait(false);
-                }
-                catch (OperationCanceledException)
-                {
-                    await TryCancelRequestAsync(requestId).ConfigureAwait(false);
-                    await DrainCancelledRequestAsync(requestId, pendingRead).ConfigureAwait(false);
-                    throw;
-                }
-
-                ValidateEnvelope(message);
-
-                if (message.Type == WorkerMessageType.Error
-                    && string.Equals(message.RequestId, requestId, StringComparison.Ordinal))
-                {
-                    throw CreateProtocolError(message);
-                }
-
-                if (message.Type == WorkerMessageType.Response
-                    && string.Equals(message.RequestId, requestId, StringComparison.Ordinal))
-                {
-                    return message;
-                }
+                message = await completion.Task.WaitAsync(cancellationToken).ConfigureAwait(false);
             }
+            catch (OperationCanceledException)
+            {
+                await TryCancelRequestAsync(requestId).ConfigureAwait(false);
+                await DrainCancelledPendingAsync(
+                        requestId,
+                        completion.Task,
+                        "WORKER_CANCEL_TIMEOUT",
+                        "The plugin request did not acknowledge cancellation within 1 second.")
+                    .ConfigureAwait(false);
+                throw;
+            }
+
+            ValidateEnvelope(message);
+            if (message.Type == WorkerMessageType.Error)
+            {
+                throw CreateProtocolError(message);
+            }
+
+            if (message.Type != WorkerMessageType.Response)
+            {
+                throw new WorkerProtocolException(
+                    "WORKER_RESPONSE_INVALID",
+                    $"Expected a response but received '{message.Type}'.");
+            }
+
+            return message;
         }
         finally
         {
+            _pendingRequests.TryRemove(requestId, out _);
             _requestGate.Release();
         }
     }
 
-    private async Task DrainCancelledRequestAsync(
+    private async Task DrainCancelledPendingAsync(
         string requestId,
-        Task<WorkerMessage> pendingRead)
+        Task<WorkerMessage> pendingTask,
+        string errorCode,
+        string errorMessage)
     {
-        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(1));
-
         try
         {
-            while (true)
-            {
-                var message = await pendingRead.WaitAsync(timeout.Token).ConfigureAwait(false);
-                ValidateEnvelope(message);
-
-                if (message.Type is WorkerMessageType.Response or WorkerMessageType.Error
-                    && string.Equals(message.RequestId, requestId, StringComparison.Ordinal))
-                {
-                    return;
-                }
-
-                pendingRead = WorkerProtocol.ReadAsync(_reader).AsTask();
-            }
+            await pendingTask.WaitAsync(TimeSpan.FromSeconds(1)).ConfigureAwait(false);
         }
-        catch (OperationCanceledException) when (timeout.IsCancellationRequested)
+        catch (TimeoutException)
         {
-            FailUnresponsiveWorker(
-                "WORKER_CANCEL_TIMEOUT",
-                "The plugin request did not acknowledge cancellation within 1 second.");
+            FailUnresponsiveWorker(errorCode, errorMessage);
+        }
+        catch (Exception) when (_readerFailure is not null)
+        {
+            // The reader already surfaced the Worker failure to the request.
         }
     }
 
@@ -579,6 +565,105 @@ public sealed class OutOfProcessPluginSession : IAsyncDisposable
             TerminateWorker();
             CloseChannel();
             throw exception;
+        }
+    }
+
+    private TaskCompletionSource<WorkerMessage> RegisterPendingRequest(string requestId)
+    {
+        if (_readerFailure is not null)
+        {
+            throw _readerFailure;
+        }
+
+        var completion = new TaskCompletionSource<WorkerMessage>(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        if (!_pendingRequests.TryAdd(requestId, completion))
+        {
+            throw new WorkerProtocolException(
+                "WORKER_REQUEST_ID_DUPLICATE",
+                "The Host generated a duplicate Worker request id.");
+        }
+
+        return completion;
+    }
+
+    private async Task ReadLoopAsync()
+    {
+        try
+        {
+            while (!_readerCancellation.IsCancellationRequested)
+            {
+                var message = await WorkerProtocol.ReadAsync(
+                        _reader,
+                        _readerCancellation.Token)
+                    .ConfigureAwait(false);
+                ValidateEnvelope(message);
+
+                if (message.Type is (WorkerMessageType.Response
+                    or WorkerMessageType.Error
+                    or WorkerMessageType.Heartbeat)
+                    && !string.IsNullOrWhiteSpace(message.RequestId)
+                    && _pendingRequests.TryRemove(message.RequestId, out var completion))
+                {
+                    completion.TrySetResult(message);
+                    continue;
+                }
+
+                if (message.Type == WorkerMessageType.Event
+                    && string.Equals(message.Operation, "ui.updated", StringComparison.Ordinal))
+                {
+                    DispatchUiSnapshotUpdate(message.Payload);
+                }
+            }
+        }
+        catch (OperationCanceledException) when (_readerCancellation.IsCancellationRequested)
+        {
+        }
+        catch (Exception exception)
+        {
+            _readerFailure = exception;
+            FailPendingRequests(exception);
+        }
+        finally
+        {
+            if (!_readerCancellation.IsCancellationRequested && _readerFailure is null)
+            {
+                _readerFailure = new WorkerProtocolException(
+                    "WORKER_PIPE_CLOSED",
+                    "The PluginWorker control channel closed.");
+                FailPendingRequests(_readerFailure);
+            }
+        }
+    }
+
+    private void DispatchUiSnapshotUpdate(string? payload)
+    {
+        try
+        {
+            var snapshot = DeserializeUiSnapshot(payload);
+            if (snapshot is null)
+            {
+                return;
+            }
+
+            UiSnapshotUpdated?.Invoke(
+                this,
+                new PluginUiSnapshotUpdatedEventArgs(snapshot));
+        }
+        catch (Exception)
+        {
+            // A malformed unsolicited update must not kill the Host read pump.
+        }
+    }
+
+    private void FailPendingRequests(Exception exception)
+    {
+        foreach (var pair in _pendingRequests)
+        {
+            if (_pendingRequests.TryRemove(pair.Key, out var completion))
+            {
+                completion.TrySetException(exception);
+            }
         }
     }
 
@@ -718,6 +803,7 @@ public sealed class OutOfProcessPluginSession : IAsyncDisposable
         }
 
         _channelClosed = true;
+        _readerCancellation.Cancel();
 
         try
         {

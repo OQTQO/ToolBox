@@ -64,8 +64,10 @@ public static partial class WorkerEntryPoint
                 WorkerProtocol.CreateHelloAck(arguments.LaunchId))
             .ConfigureAwait(false);
 
+        await using var outbound = new WorkerMessageWriter(writer);
         var pluginRuntime = new InProcessPluginRuntime();
         LoadedInProcessPlugin? loadedPlugin = null;
+        UiUpdateSubscription? uiUpdateSubscription = null;
 
         try
         {
@@ -76,12 +78,23 @@ public static partial class WorkerEntryPoint
             {
                 if (activeRequest is not null && activeRequest.Task.IsCompleted)
                 {
+                    var previousPlugin = loadedPlugin;
                     var completion = await CompleteRequestAsync(
-                            writer,
+                            outbound,
                             activeRequest,
                             loadedPlugin)
                         .ConfigureAwait(false);
                     loadedPlugin = completion.LoadedPlugin;
+                    if (!ReferenceEquals(previousPlugin, loadedPlugin))
+                    {
+                        uiUpdateSubscription?.Dispose();
+                        uiUpdateSubscription = loadedPlugin is null
+                            ? null
+                            : UiUpdateSubscription.Attach(
+                                loadedPlugin,
+                                arguments.LaunchId,
+                                outbound);
+                    }
                     activeRequest = null;
 
                     if (completion.ShouldShutdown)
@@ -113,7 +126,7 @@ public static partial class WorkerEntryPoint
                 catch (WorkerProtocolException exception)
                 {
                     activeRequest?.Cancellation.Cancel();
-                    await TryWriteErrorAsync(writer, arguments.LaunchId, null, exception).ConfigureAwait(false);
+                    await TryWriteErrorAsync(outbound, arguments.LaunchId, null, exception).ConfigureAwait(false);
                     return 11;
                 }
 
@@ -123,7 +136,7 @@ public static partial class WorkerEntryPoint
                         if (activeRequest is not null)
                         {
                             await WriteErrorAsync(
-                                    writer,
+                                    outbound,
                                     arguments.LaunchId,
                                     message.RequestId,
                                     "WORKER_REQUEST_BUSY",
@@ -135,13 +148,22 @@ public static partial class WorkerEntryPoint
                         if (string.IsNullOrWhiteSpace(message.RequestId))
                         {
                             await WriteErrorAsync(
-                                    writer,
+                                    outbound,
                                     arguments.LaunchId,
                                     message.RequestId,
                                     "WORKER_REQUEST_ID_REQUIRED",
                                     "Worker requests require a non-empty requestId.")
                                 .ConfigureAwait(false);
                             break;
+                        }
+
+                        if (message.Operation is "stop" or "shutdown")
+                        {
+                            // Detach before the plugin AssemblyLoadContext starts
+                            // unloading; the event source otherwise keeps the
+                            // plugin instance rooted during its unload deadline.
+                            uiUpdateSubscription?.Dispose();
+                            uiUpdateSubscription = null;
                         }
 
                         activeRequest = StartRequest(
@@ -152,8 +174,7 @@ public static partial class WorkerEntryPoint
                         break;
 
                     case WorkerMessageType.Heartbeat:
-                        await WorkerProtocol.WriteAsync(
-                                writer,
+                        await outbound.EnqueueAsync(
                                 WorkerProtocol.CreateHeartbeat(arguments.LaunchId, message.RequestId))
                             .ConfigureAwait(false);
                         break;
@@ -170,7 +191,7 @@ public static partial class WorkerEntryPoint
                         else
                         {
                             await WriteErrorAsync(
-                                    writer,
+                                    outbound,
                                     arguments.LaunchId,
                                     message.RequestId,
                                     "WORKER_REQUEST_NOT_FOUND",
@@ -182,7 +203,7 @@ public static partial class WorkerEntryPoint
 
                     default:
                         await WriteErrorAsync(
-                                writer,
+                                outbound,
                                 arguments.LaunchId,
                                 message.RequestId,
                                 "WORKER_MESSAGE_UNEXPECTED",
@@ -194,6 +215,7 @@ public static partial class WorkerEntryPoint
         }
         finally
         {
+            uiUpdateSubscription?.Dispose();
             if (loadedPlugin is not null)
             {
                 try
@@ -235,7 +257,7 @@ public static partial class WorkerEntryPoint
     }
 
     private static async Task<WorkerRequestCompletion> CompleteRequestAsync(
-        StreamWriter writer,
+        WorkerMessageWriter writer,
         ActiveWorkerRequest activeRequest,
         LoadedInProcessPlugin? loadedPlugin)
     {
@@ -246,10 +268,10 @@ public static partial class WorkerEntryPoint
 
             if (result.Event is not null)
             {
-                await WorkerProtocol.WriteAsync(writer, result.Event).ConfigureAwait(false);
+                await writer.EnqueueAsync(result.Event).ConfigureAwait(false);
             }
 
-            await WorkerProtocol.WriteAsync(writer, result.Response).ConfigureAwait(false);
+            await writer.EnqueueAsync(result.Response).ConfigureAwait(false);
             return new WorkerRequestCompletion(
                 loadedPlugin,
                 result.ShouldShutdown,

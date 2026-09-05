@@ -37,6 +37,7 @@ public sealed partial class PluginWorkspaceViewModel : INotifyPropertyChanged, I
     private readonly bool _isInstalled = true;
     private readonly ObservableCollection<PluginUiActionViewModel> _uiActions = [];
     private readonly ObservableCollection<PluginUiValueViewModel> _uiValues = [];
+    private readonly ObservableCollection<PluginUiElementViewModel> _uiElements = [];
     private readonly SemaphoreSlim _lifecycleOperationGate = new(1, 1);
     private readonly SemaphoreSlim _uiOperationGate = new(1, 1);
     private OutOfProcessPluginSession? _session;
@@ -76,9 +77,12 @@ public sealed partial class PluginWorkspaceViewModel : INotifyPropertyChanged, I
 
         UiActions = new ReadOnlyObservableCollection<PluginUiActionViewModel>(_uiActions);
         UiValues = new ReadOnlyObservableCollection<PluginUiValueViewModel>(_uiValues);
+        UiElements = new ReadOnlyObservableCollection<PluginUiElementViewModel>(_uiElements);
     }
 
     public event PropertyChangedEventHandler? PropertyChanged;
+
+    internal event EventHandler<PluginUiDialogRequestedEventArgs>? UiDialogRequested;
 
     public string PluginId => Manifest.Id;
 
@@ -104,9 +108,13 @@ public sealed partial class PluginWorkspaceViewModel : INotifyPropertyChanged, I
 
     public ReadOnlyObservableCollection<PluginUiValueViewModel> UiValues { get; }
 
+    public ReadOnlyObservableCollection<PluginUiElementViewModel> UiElements { get; }
+
     public PluginInputSurface? InputSurface => _uiSnapshot?.InputSurface;
 
-    public bool HasPluginUi => IsRuntimeEnabled && _uiSnapshot is not null;
+    public bool HasPluginUi => IsRuntimeEnabled
+        && _uiSnapshot is not null
+        && HasUiContent(_uiSnapshot);
 
     public bool HasPluginUiUnavailable => IsRuntimeEnabled && _uiSnapshot is null;
 
@@ -116,9 +124,65 @@ public sealed partial class PluginWorkspaceViewModel : INotifyPropertyChanged, I
 
     public bool HasUiValues => HasPluginUi && UiValues.Count > 0;
 
+    public bool HasUiElements => HasPluginUi && UiElements.Count > 0;
+
     public bool HasInputSurface => HasPluginUi && InputSurface is not null;
 
-    public string PluginUiStatusMessage => _uiSnapshot?.StatusMessage ?? string.Empty;
+    public string PluginUiStatusMessage => _uiSnapshot?.Status is null
+        ? (_uiSnapshot?.StatusMessage ?? string.Empty)
+        : string.Empty;
+
+    public bool HasPluginUiStatus => HasPluginUi && _uiSnapshot?.Status is not null;
+
+    public string PluginUiStatusText => _uiSnapshot?.Status?.Message
+        ?? _uiSnapshot?.StatusMessage
+        ?? string.Empty;
+
+    public PluginUiStatusKind PluginUiStatusKind => _uiSnapshot?.Status?.Kind switch
+    {
+        PluginUiStatusKind.Warning => PluginUiStatusKind.Warning,
+        PluginUiStatusKind.Error => PluginUiStatusKind.Error,
+        PluginUiStatusKind.Success => PluginUiStatusKind.Success,
+        PluginUiStatusKind.Busy => PluginUiStatusKind.Busy,
+        PluginUiStatusKind.Progress => PluginUiStatusKind.Progress,
+        PluginUiStatusKind.Cancelled => PluginUiStatusKind.Cancelled,
+        _ => PluginUiStatusKind.Information
+    };
+
+    public string PluginUiStatusKindLabel => _localization[
+        PluginUiStatusKind switch
+        {
+            PluginUiStatusKind.Warning => "PluginUiStatusWarning",
+            PluginUiStatusKind.Error => "PluginUiStatusError",
+            PluginUiStatusKind.Success => "PluginUiStatusSuccess",
+            PluginUiStatusKind.Busy => "PluginUiStatusBusy",
+            PluginUiStatusKind.Progress => "PluginUiStatusProgress",
+            PluginUiStatusKind.Cancelled => "PluginUiStatusCancelled",
+            _ => "PluginUiStatusInformation"
+        }];
+
+    public bool HasPluginUiProgress => HasPluginUi
+        && _uiSnapshot?.Status?.Progress is not null;
+
+    public bool IsPluginUiProgressIndeterminate => _uiSnapshot?.Status?.Progress?.IsIndeterminate == true;
+
+    public double PluginUiProgressValue => Math.Clamp(
+        _uiSnapshot?.Status?.Progress?.Value ?? 0,
+        0,
+        PluginUiProgressMaximum);
+
+    public double PluginUiProgressMaximum => _uiSnapshot?.Status?.Progress?.Maximum is > 0
+        ? _uiSnapshot.Status.Progress.Maximum.Value
+        : 1;
+
+    public bool HasPluginUiProgressCancel => HasPluginUiProgress
+        && !string.IsNullOrWhiteSpace(_uiSnapshot?.Status?.Progress?.CancelActionId);
+
+    public string? PluginUiProgressCancelActionId => _uiSnapshot?.Status?.Progress?.CancelActionId;
+
+    public string? PluginUiProgressCancelArgument => _uiSnapshot?.Status?.Progress?.CancelArgument;
+
+    public bool HasPluginUiDialog => HasPluginUi && _uiSnapshot?.Dialog is not null;
 
     public bool IsPluginUiActionEnabled => IsRuntimeEnabled
         && !IsOperationInProgress
@@ -231,6 +295,7 @@ public sealed partial class PluginWorkspaceViewModel : INotifyPropertyChanged, I
             OnPropertyChanged(nameof(StatusDescription));
             OnPropertyChanged(nameof(RuntimeActionLabel));
             OnPropertyChanged(nameof(OpenedStateLabel));
+            RefreshPluginUiPresentation();
         });
     }
 
@@ -273,7 +338,20 @@ public sealed partial class PluginWorkspaceViewModel : INotifyPropertyChanged, I
             OnPropertyChanged(nameof(IsPluginUiDisabled));
             OnPropertyChanged(nameof(HasUiActions));
             OnPropertyChanged(nameof(HasUiValues));
+            OnPropertyChanged(nameof(HasUiElements));
             OnPropertyChanged(nameof(HasInputSurface));
+            OnPropertyChanged(nameof(HasPluginUiStatus));
+            OnPropertyChanged(nameof(PluginUiStatusText));
+            OnPropertyChanged(nameof(PluginUiStatusKind));
+            OnPropertyChanged(nameof(PluginUiStatusKindLabel));
+            OnPropertyChanged(nameof(HasPluginUiProgress));
+            OnPropertyChanged(nameof(IsPluginUiProgressIndeterminate));
+            OnPropertyChanged(nameof(PluginUiProgressValue));
+            OnPropertyChanged(nameof(PluginUiProgressMaximum));
+            OnPropertyChanged(nameof(HasPluginUiProgressCancel));
+            OnPropertyChanged(nameof(PluginUiProgressCancelActionId));
+            OnPropertyChanged(nameof(PluginUiProgressCancelArgument));
+            OnPropertyChanged(nameof(HasPluginUiDialog));
             OnPropertyChanged(nameof(IsBusy));
             RefreshUiStateCore();
         });
@@ -289,8 +367,13 @@ public sealed partial class PluginWorkspaceViewModel : INotifyPropertyChanged, I
             }
 
             _uiSnapshot = snapshot;
+            if (snapshot is null)
+            {
+                _lastShownDialogId = null;
+            }
             _uiActions.Clear();
             _uiValues.Clear();
+            _uiElements.Clear();
 
             if (snapshot is not null)
             {
@@ -303,25 +386,81 @@ public sealed partial class PluginWorkspaceViewModel : INotifyPropertyChanged, I
                 {
                     _uiValues.Add(new PluginUiValueViewModel(value));
                 }
+
+                var elementIds = new HashSet<string>(StringComparer.Ordinal);
+                string? previousGroup = null;
+                foreach (var element in snapshot.Elements ?? Array.Empty<PluginUiElement>())
+                {
+                    if (element is null)
+                    {
+                        LogUiWarning(
+                            "Plugin UI contained a null element.",
+                            "PLUGIN_UI_ELEMENT_INVALID");
+                        continue;
+                    }
+
+                    if (string.IsNullOrWhiteSpace(element.Id)
+                        || element.Kind == PluginUiElementKind.Unknown
+                        || !elementIds.Add(element.Id))
+                    {
+                        LogUiWarning(
+                            $"Plugin UI element '{element.Id}' was ignored because its id or kind was invalid, or its id was duplicated.",
+                            "PLUGIN_UI_ELEMENT_INVALID");
+                        continue;
+                    }
+
+                    var elementViewModel = new PluginUiElementViewModel(this, element)
+                    {
+                        ShowGroupHeader = !string.IsNullOrWhiteSpace(element.Group)
+                            && !string.Equals(previousGroup, element.Group, StringComparison.Ordinal)
+                    };
+                    _uiElements.Add(elementViewModel);
+                    previousGroup = element.Group;
+                }
             }
 
             OnPropertyChanged(nameof(HasPluginUi));
             OnPropertyChanged(nameof(HasPluginUiUnavailable));
             OnPropertyChanged(nameof(HasUiActions));
             OnPropertyChanged(nameof(HasUiValues));
+            OnPropertyChanged(nameof(HasUiElements));
             OnPropertyChanged(nameof(HasInputSurface));
             OnPropertyChanged(nameof(InputSurface));
             OnPropertyChanged(nameof(PluginUiStatusMessage));
+            OnPropertyChanged(nameof(HasPluginUiStatus));
+            OnPropertyChanged(nameof(PluginUiStatusText));
+            OnPropertyChanged(nameof(PluginUiStatusKind));
+            OnPropertyChanged(nameof(PluginUiStatusKindLabel));
+            OnPropertyChanged(nameof(HasPluginUiProgress));
+            OnPropertyChanged(nameof(IsPluginUiProgressIndeterminate));
+            OnPropertyChanged(nameof(PluginUiProgressValue));
+            OnPropertyChanged(nameof(PluginUiProgressMaximum));
+            OnPropertyChanged(nameof(HasPluginUiProgressCancel));
+            OnPropertyChanged(nameof(PluginUiProgressCancelActionId));
+            OnPropertyChanged(nameof(PluginUiProgressCancelArgument));
+            OnPropertyChanged(nameof(HasPluginUiDialog));
             OnPropertyChanged(nameof(HasPluginUiError));
             OnPropertyChanged(nameof(PluginUiErrorMessage));
             OnPropertyChanged(nameof(IsBusy));
             RefreshUiStateCore();
+            RaisePendingUiDialog();
         });
     }
 
     private void RefreshUiState()
     {
         _uiDispatcher.Dispatch(RefreshUiStateCore);
+    }
+
+    private void LogUiWarning(string message, string errorCode)
+    {
+        _logger.Log(
+            LogLevel.Warning,
+            "PluginUi",
+            $"Plugin '{PluginId}' UI warning: {message}",
+            errorCode: errorCode,
+            pluginId: PluginId,
+            pluginVersion: InstalledVersion);
     }
 
     private void RefreshUiStateCore()
@@ -333,6 +472,19 @@ public sealed partial class PluginWorkspaceViewModel : INotifyPropertyChanged, I
         {
             action.RefreshEnabled();
         }
+
+        foreach (var element in _uiElements)
+        {
+            element.RefreshEnabled();
+        }
+    }
+
+    internal string LocalizePluginUiCommand(
+        PluginUiCommand command,
+        string? target,
+        string? fallback)
+    {
+        return _localization.GetPluginUiCommandLabel(command, target, fallback);
     }
 
     private void OnPropertyChanged([CallerMemberName] string? propertyName = null)

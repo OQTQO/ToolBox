@@ -13,7 +13,7 @@ namespace ToolBox.Host;
 [SuppressMessage("Design", "CA1001:TypesThatOwnDisposableFieldsShouldBeDisposable", Justification = "WPF Application owns and closes runtime resources in OnExit.")]
 public partial class App : Application, IHostApplicationCommands
 {
-    private readonly string _hostVersion = typeof(App).Assembly.GetName().Version?.ToString(3) ?? "0.5.0";
+    private readonly string _hostVersion = typeof(App).Assembly.GetName().Version?.ToString(3) ?? "0.6.0";
     private readonly HostLifetimeState _lifetime = new();
     private readonly HostRestartService _restartService = new();
     private StructuredLogger? _logger;
@@ -43,7 +43,7 @@ public partial class App : Application, IHostApplicationCommands
 
         try
         {
-            StartHost();
+            StartHost(HostLaunchOptions.Parse(e.Args));
         }
         catch (Exception exception)
         {
@@ -76,24 +76,61 @@ public partial class App : Application, IHostApplicationCommands
         base.OnExit(e);
     }
 
-    private void StartHost()
+    private void StartHost(HostLaunchOptions launchOptions)
     {
-        _settings = new HostSettingsService();
+        ArgumentNullException.ThrowIfNull(launchOptions);
+        var storage = HostStoragePaths.Create(launchOptions.UiAcceptanceRoot);
+        var migration = HostDataMigration.Migrate(storage);
+        var acceptancePluginId = (string?)null;
+
+        _settings = new HostSettingsService(storage.SettingsPath);
         _localization = new LocalizationService(_settings);
         ThemeService.Apply(_settings.Theme, _settings.Transparency, _settings.DynamicGlow, _settings.BackgroundBrightness, _settings.CornerRadius);
         var sessionId = Guid.NewGuid().ToString("N");
         var launchAttemptId = Guid.NewGuid().ToString("N");
 
         _diagnostics = new HostDiagnostics(launchAttemptId, sessionId, _hostVersion);
-        _logger = new StructuredLogger(new LoggerOptions(), sessionId, _hostVersion);
+        _logger = new StructuredLogger(
+            new LoggerOptions { DirectoryPath = storage.LogsRoot },
+            sessionId,
+            _hostVersion);
+        foreach (var warning in migration.Warnings)
+        {
+            _logger.Warning("HostStorage", warning, errorCode: "HOST_DATA_MIGRATION_FAILED");
+        }
+        if (migration.CopiedFileCount > 0)
+        {
+            _logger.Info(
+                "HostStorage",
+                $"Migrated {migration.CopiedFileCount} legacy data file(s) into '{storage.DataRoot}'.");
+        }
 
-        var pluginsRoot = Path.Combine(AppContext.BaseDirectory, "Plugins");
-        var pluginDataRoot = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "ToolBox",
-            "Plugins");
+        var pluginsRoot = storage.PluginsRoot;
+        var pluginDataRoot = storage.PluginDataRoot;
 
         _packageInstaller = new PluginPackageInstaller(pluginsRoot, pluginDataRoot);
+        if (launchOptions.UiAcceptancePackage is not null)
+        {
+            var manifest = new PluginPackageInspector().ReadManifest(launchOptions.UiAcceptancePackage);
+            var activeVersionDirectory = _packageInstaller.GetActiveVersionDirectory(manifest.Id);
+            if (activeVersionDirectory is null
+                || !string.Equals(
+                    Path.GetFileName(activeVersionDirectory),
+                    manifest.Version,
+                    StringComparison.Ordinal))
+            {
+                var installResult = _packageInstaller
+                    .InstallAsync(launchOptions.UiAcceptancePackage)
+                    .GetAwaiter()
+                    .GetResult();
+                acceptancePluginId = installResult.PluginId;
+            }
+            else
+            {
+                acceptancePluginId = manifest.Id;
+            }
+        }
+
         var pluginCatalog = new InstalledPluginCatalog(_packageInstaller);
         var pluginRuntime = new OutOfProcessPluginRuntime(
             Path.Combine(AppContext.BaseDirectory, "ToolBox.PluginWorker.exe"));
@@ -106,7 +143,8 @@ public partial class App : Application, IHostApplicationCommands
             pluginRuntime,
             _localization,
             _settings,
-            new WpfHostUiDispatcher(Dispatcher));
+            new WpfHostUiDispatcher(Dispatcher),
+            storage.DataRoot);
 
         _mainWindow = new MainWindow(_viewModel, this);
         MainWindow = _mainWindow;
@@ -114,11 +152,56 @@ public partial class App : Application, IHostApplicationCommands
         _trayIcon.OpenRequested += OnTrayOpenRequested;
         _trayIcon.ExitRequested += OnTrayExitRequested;
         _mainWindow.Show();
+        if (acceptancePluginId is not null)
+        {
+            _ = PrepareUiAcceptancePluginAsync(acceptancePluginId);
+        }
 
         Advance(StartupStage.LoggingReady, "Structured logging is online.");
         Advance(StartupStage.CoreReady, "Host core services are initialized.");
         Advance(StartupStage.ShellReady, "WPF shell is displayed.");
         Advance(StartupStage.Healthy, "Host is ready for the next platform phase.");
+    }
+
+    private async Task PrepareUiAcceptancePluginAsync(string pluginId)
+    {
+        try
+        {
+            if (_viewModel is null || _mainWindow is null)
+            {
+                return;
+            }
+
+            var workspace = _viewModel.PluginWorkspaces.SingleOrDefault(candidate =>
+                string.Equals(candidate.PluginId, pluginId, StringComparison.Ordinal));
+            if (workspace is null)
+            {
+                throw new InvalidOperationException(
+                    $"The UI acceptance plugin '{pluginId}' was not discovered after installation.");
+            }
+
+            _viewModel.SelectPluginWorkspace(workspace);
+            if (!workspace.IsRuntimeEnabled)
+            {
+                await _viewModel.ToggleWorkspaceRuntimeAsync(workspace);
+                if (!workspace.IsRuntimeEnabled)
+                {
+                    throw new InvalidOperationException(
+                        $"The UI acceptance plugin '{pluginId}' could not be enabled.");
+                }
+            }
+
+            _mainWindow.ShowPluginDetailsForAcceptance();
+        }
+        catch (Exception exception)
+        {
+            RecordException("HOST_UI_ACCEPTANCE_START_FAILED", exception);
+            MessageBox.Show(
+                $"验收插件启动失败：{exception.Message}",
+                _localization?["AppTitle"] ?? "ToolBox Host",
+                MessageBoxButton.OK,
+                MessageBoxImage.Error);
+        }
     }
 
     internal void HideMainWindowToTray()

@@ -9,7 +9,9 @@ param(
 
     [string]$SigningCertificatePath,
 
-    [string]$SigningPrivateKeyPath
+    [string]$SigningPrivateKeyPath,
+
+    [switch]$SkipInstaller
 )
 
 Set-StrictMode -Version Latest
@@ -25,6 +27,7 @@ $helloProjectPath = Join-Path $repositoryRoot 'samples\HelloPlugin\HelloPlugin.c
 $helloManifestPath = Join-Path $repositoryRoot 'samples\HelloPlugin\manifest.json'
 $packageScript = Join-Path $PSScriptRoot 'New-PluginPackage.ps1'
 $packageToolsModule = Join-Path $PSScriptRoot 'ToolBox.PackageTools.psm1'
+$installerBuildScript = Join-Path $PSScriptRoot 'Invoke-InstallerBuild.ps1'
 $usesDefaultOutputDirectory = [string]::IsNullOrWhiteSpace($OutputDirectory)
 $OutputDirectory = if ($usesDefaultOutputDirectory) {
     Join-Path $PSScriptRoot '..\artifacts\release-validation'
@@ -301,6 +304,7 @@ if ([string]::IsNullOrWhiteSpace($Version)) { $Version = Get-ProjectVersion -Pro
 
 $releaseTag = "v$Version"
 $toolBoxAssetName = "ToolBox-$releaseTag-win-x64.zip"
+$setupAssetName = "ToolBox-Setup-v$Version.exe"
 $helloAssetName = "HelloPlugin-$Version.tpk"
 $devKitAssetName = "ToolBox-PluginDevKit-$Version.zip"
 $checksumAssetName = "SHA256SUMS-$releaseTag.txt"
@@ -381,6 +385,18 @@ try {
         -PackagePath (Join-Path $assetDirectory $helloAssetName) `
         -WorkingRoot (Join-Path $stagingRoot 'host-smoke')
 
+    if (-not $SkipInstaller) {
+        & $installerBuildScript `
+            -Version $Version `
+            -Configuration $Configuration `
+            -HostPublishDirectory $publishDirectory `
+            -WorkerPublishDirectory $workerPublishDirectory `
+            -OutputDirectory $assetDirectory
+        if ($LASTEXITCODE -ne 0) {
+            throw "Installer build failed with exit code $LASTEXITCODE."
+        }
+    }
+
     Copy-Item -LiteralPath $publishedHostPath -Destination (Join-Path $bundleDirectory 'ToolBox.Host.exe')
     Copy-Item -LiteralPath $publishedWorkerPath -Destination (Join-Path $bundleDirectory 'ToolBox.PluginWorker.exe')
 
@@ -410,8 +426,19 @@ try {
     Assert-PluginPackage -PackagePath $helloAssetPath -ExpectedPluginId 'com.toolbox.hello' -ExpectedVersion $Version -ExpectedEntries (Get-ExpectedPackageEntries -RuntimeDirectory $helloRuntimeDirectory)
 
     $releaseArtifactPaths = @($toolBoxAssetPath, $helloAssetPath, $devKitPath)
+    if (-not $SkipInstaller) {
+        $setupAssetPath = Join-Path $assetDirectory $setupAssetName
+        if (-not (Test-Path -LiteralPath $setupAssetPath -PathType Leaf)) {
+            throw "Installer artifact is missing: '$setupAssetPath'."
+        }
+        $releaseArtifactPaths = @($toolBoxAssetPath, $setupAssetPath, $helloAssetPath, $devKitPath)
+    }
     Write-AndValidateChecksums -ArtifactPaths $releaseArtifactPaths -ChecksumPath $checksumAssetPath
-    Assert-ExactSet -Actual @(Get-ChildItem -LiteralPath $assetDirectory -File | ForEach-Object { $_.Name }) -Expected @($toolBoxAssetName, $helloAssetName, $devKitAssetName, $checksumAssetName) -Label 'Release artifact files'
+    $expectedArtifactNames = @($toolBoxAssetName, $helloAssetName, $devKitAssetName, $checksumAssetName)
+    if (-not $SkipInstaller) {
+        $expectedArtifactNames = @($toolBoxAssetName, $setupAssetName, $helloAssetName, $devKitAssetName, $checksumAssetName)
+    }
+    Assert-ExactSet -Actual @(Get-ChildItem -LiteralPath $assetDirectory -File | ForEach-Object { $_.Name }) -Expected $expectedArtifactNames -Label 'Release artifact files'
 
     if ($usesDefaultOutputDirectory -and (Test-Path -LiteralPath $outputRoot)) {
         Remove-DirectoryWithRetry -Path $outputRoot
@@ -422,7 +449,7 @@ try {
     if ($usesDefaultOutputDirectory) {
         Assert-ExactSet `
             -Actual @(Get-ChildItem -LiteralPath $outputRoot -File | ForEach-Object { $_.Name }) `
-            -Expected @($toolBoxAssetName, $helloAssetName, $devKitAssetName, $checksumAssetName) `
+            -Expected $expectedArtifactNames `
             -Label 'Default release-validation output files'
     }
 

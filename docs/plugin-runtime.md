@@ -14,7 +14,11 @@ Worker 的控制消息读取与插件请求执行相互独立，但同一 Worker
 
 `IPluginContext.LifetimeScope` 的 Token 会在插件卸载时取消。通过 `Track(Task)` 追踪后台任务，通过 `Register(IDisposable)` 或 `Register(IAsyncDisposable)` 注册资源释放。独占资源使用 `IResourceManager.Acquire` 获取 `IResourceLease`；服务使用 `IServiceBroker` 获取 `IServiceLease<T>`。
 
-运行文件位于 `Plugins/<pluginId>/versions/<version>/`，只有安装器提交并写入 `state.json` 的 active version 才会被发现。插件 Config/State 数据与运行文件分离，卸载运行文件不会默认删除用户数据；`.staging`、未提交版本、无效 Manifest 和损坏状态不会进入工作区。
+运行文件位于 Host 数据目录的 `Plugins/<pluginId>/versions/<version>/`，正常安装目录布局为 `<安装目录>\Data\Plugins\...`；只有安装器提交并写入 `state.json` 的 active version 才会被发现。插件 Config/State 数据位于 `<安装目录>\Data\PluginData\...`，与运行文件分离，卸载运行文件不会默认删除用户数据；`.staging`、未提交版本、无效 Manifest 和损坏状态不会进入工作区。
+
+Host 会在首次启动时把旧安装目录和 `%LocalAppData%\ToolBox` 中的插件、日志及设置复制到新的 `Data` 目录。迁移以目标文件为准，不删除旧目录；插件不得把用户数据写到运行程序集目录，应使用 SDK 提供的插件上下文和数据服务。
+
+实现 `IPluginUiProvider` 后，详情页默认进入“操作”页；纯后台插件默认进入“概览”页。插件只返回 SDK 数据契约，不能传递 WPF、XAML、HTML 或自定义页面。
 
 安装前必须通过 Manifest v2 能力校验、package format 2 哈希和发布者签名验证，并满足本地 TOFU 信任绑定。进程外运行降低 Host 进程耦合，但仍不是完整权限沙箱；当前不提供商城或自动更新。
 

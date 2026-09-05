@@ -46,6 +46,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, IDispo
     private readonly LocalizationService _localization;
     private readonly HostSettingsService _settings;
     private readonly IHostUiDispatcher _uiDispatcher;
+    private readonly string _dataRoot;
     private readonly ObservableCollection<PluginWorkspaceViewModel> _pluginWorkspaces = [];
     private readonly ObservableCollection<PluginWorkspaceViewModel> _installedPluginWorkspaces = [];
     private readonly ObservableCollection<PluginWorkspaceViewModel> _openedPluginWorkspaces = [];
@@ -68,7 +69,8 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, IDispo
         OutOfProcessPluginRuntime runtime,
         LocalizationService localization,
         HostSettingsService settings,
-        IHostUiDispatcher? uiDispatcher = null)
+        IHostUiDispatcher? uiDispatcher = null,
+        string? dataRoot = null)
     {
         _diagnostics = diagnostics ?? throw new ArgumentNullException(nameof(diagnostics));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
@@ -79,6 +81,10 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, IDispo
         _localization = localization ?? throw new ArgumentNullException(nameof(localization));
         _settings = settings ?? throw new ArgumentNullException(nameof(settings));
         _uiDispatcher = uiDispatcher ?? ImmediateHostUiDispatcher.Instance;
+        _dataRoot = Path.GetFullPath(
+            string.IsNullOrWhiteSpace(dataRoot)
+                ? Path.Combine(AppContext.BaseDirectory, "Data")
+                : dataRoot);
         _snapshot = _diagnostics.Snapshot();
 
         RecentEvents = new ObservableCollection<DiagnosticEventViewModel>();
@@ -228,9 +234,9 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, IDispo
         });
 
     [SuppressMessage("Performance", "CA1822:Mark members as static", Justification = "WPF binds this value through the view-model instance.")]
-    public string ConfigDirectory => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "ToolBox");
+    public string ConfigDirectory => _dataRoot;
 
-    public string StateDirectory => Path.Combine(ConfigDirectory, "Plugins");
+    public string StateDirectory => Path.Combine(ConfigDirectory, "PluginData");
 
     public string LogsDirectory => Path.Combine(ConfigDirectory, "Logs");
 

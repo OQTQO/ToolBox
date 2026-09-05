@@ -1,5 +1,6 @@
 using System.Reflection;
 using System.Text.Json.Serialization;
+using ToolBox.Core.Plugins.Worker;
 using ToolBox.PluginSdk;
 using Xunit;
 
@@ -43,6 +44,24 @@ public sealed class PluginApiV1CompatibilityTests
         "ToolBox.PluginSdk.ResourceKey"
     ];
 
+    private static readonly string[] AddedUiTypeNames =
+    [
+        "ToolBox.PluginSdk.IPluginUiUpdateSource",
+        "ToolBox.PluginSdk.PluginUiActionStyle",
+        "ToolBox.PluginSdk.PluginUiCommand",
+        "ToolBox.PluginSdk.PluginUiDialog",
+        "ToolBox.PluginSdk.PluginUiDialogKind",
+        "ToolBox.PluginSdk.PluginUiElement",
+        "ToolBox.PluginSdk.PluginUiElementKind",
+        "ToolBox.PluginSdk.PluginUiMenuItem",
+        "ToolBox.PluginSdk.PluginUiOption",
+        "ToolBox.PluginSdk.PluginUiProgress",
+        "ToolBox.PluginSdk.PluginUiSnapshotUpdatedEventArgs",
+        "ToolBox.PluginSdk.PluginUiStatus",
+        "ToolBox.PluginSdk.PluginUiStatusKind",
+        "ToolBox.PluginSdk.PluginUiUpdateMode"
+    ];
+
     [Fact]
     public void StableExportedTypeSetMatchesV1Baseline()
     {
@@ -53,7 +72,12 @@ public sealed class PluginApiV1CompatibilityTests
             .OrderBy(name => name, StringComparer.Ordinal)
             .ToArray();
 
-        Assert.Equal(FrozenStableTypeNames, actual);
+        var expected = FrozenStableTypeNames
+            .Concat(AddedUiTypeNames)
+            .OrderBy(name => name, StringComparer.Ordinal)
+            .ToArray();
+
+        Assert.Equal(expected, actual);
     }
 
     [Fact]
@@ -67,6 +91,26 @@ public sealed class PluginApiV1CompatibilityTests
             .ToArray();
 
         Assert.Empty(actual);
+    }
+
+    [Fact]
+    public void SdkUiContractDoesNotReferenceHostMarkupOrWpf()
+    {
+        var assembly = typeof(IPlugin).Assembly;
+        var forbiddenReferences = assembly
+            .GetReferencedAssemblies()
+            .Select(reference => reference.Name ?? string.Empty)
+            .Where(name => name.Contains("Presentation", StringComparison.OrdinalIgnoreCase)
+                || name.Contains("WindowsBase", StringComparison.OrdinalIgnoreCase)
+                || name.Contains("Html", StringComparison.OrdinalIgnoreCase))
+            .ToArray();
+
+        Assert.Empty(forbiddenReferences);
+        Assert.DoesNotContain(
+            assembly.GetExportedTypes(),
+            type => type.FullName?.Contains("System.Windows", StringComparison.Ordinal) == true
+                || type.FullName?.Contains("System.Xaml", StringComparison.Ordinal) == true
+                || type.FullName?.Contains("System.Web", StringComparison.Ordinal) == true);
     }
 
     [Fact]
@@ -220,6 +264,131 @@ public sealed class PluginApiV1CompatibilityTests
         Assert.Equal(serviceLeaseTypeParameter, typeof(IServiceLease<>).GetProperty("Service")!.PropertyType);
         Assert.Contains(typeof(IDisposable), typeof(IServiceLease<>).GetInterfaces());
         Assert.Contains(typeof(IAsyncDisposable), typeof(IServiceLease<>).GetInterfaces());
+    }
+
+    [Fact]
+    public void LegacyPluginUiSnapshotConstructionRemainsCompatible()
+    {
+        var snapshot = new PluginUiSnapshot(
+            "legacy",
+            [new PluginUiValue("count", "1")],
+            [new PluginUiAction("refresh", "Refresh")],
+            null);
+
+        Assert.Equal("legacy", snapshot.StatusMessage);
+        Assert.Single(snapshot.Values);
+        Assert.Single(snapshot.Actions);
+        Assert.Empty(snapshot.Elements);
+        Assert.Null(snapshot.Status);
+        Assert.Null(snapshot.Dialog);
+    }
+
+    [Fact]
+    public void LegacyPluginUiJsonDefaultsNewFieldsWithoutChangingThePayload()
+    {
+        var snapshot = WorkerProtocol.DeserializePayload<PluginUiSnapshot>("""
+            {
+              "statusMessage": "legacy",
+              "values": [{ "label": "count", "value": "1" }],
+              "actions": [{ "id": "refresh", "label": "Refresh" }],
+              "inputSurface": null
+            }
+            """);
+
+        Assert.Equal("legacy", snapshot.StatusMessage);
+        Assert.Single(snapshot.Values);
+        Assert.Single(snapshot.Actions);
+        Assert.Empty(snapshot.Elements);
+        Assert.Null(snapshot.Status);
+        Assert.Null(snapshot.Dialog);
+    }
+
+    [Fact]
+    public void NewPluginUiContractRoundTripsEveryElementKind()
+    {
+        var snapshot = new PluginUiSnapshot("ready", [], [], null)
+        {
+            Elements =
+            [
+                new PluginUiElement { Id = "value", Kind = PluginUiElementKind.Value, Label = "Value", Value = "x" },
+                new PluginUiElement { Id = "action", Kind = PluginUiElementKind.Action, ActionId = "save", Command = PluginUiCommand.Save },
+                new PluginUiElement { Id = "menu", Kind = PluginUiElementKind.Menu, MenuItems = [new PluginUiMenuItem { Id = "more", Label = "More", ActionId = "more" }] },
+                new PluginUiElement { Id = "select", Kind = PluginUiElementKind.Select, ActionId = "select", Options = [new PluginUiOption("a", "A")] },
+                new PluginUiElement { Id = "multi", Kind = PluginUiElementKind.MultiSelect, ActionId = "multi", Values = ["a"] },
+                new PluginUiElement { Id = "toggle", Kind = PluginUiElementKind.Toggle, ActionId = "toggle", Value = "true" },
+                new PluginUiElement { Id = "check", Kind = PluginUiElementKind.CheckBox, ActionId = "check" },
+                new PluginUiElement { Id = "radio", Kind = PluginUiElementKind.RadioGroup, ActionId = "radio" },
+                new PluginUiElement { Id = "text", Kind = PluginUiElementKind.TextBox, ActionId = "text" },
+                new PluginUiElement { Id = "number", Kind = PluginUiElementKind.NumberBox, ActionId = "number", Minimum = 0, Maximum = 10 },
+                new PluginUiElement { Id = "slider", Kind = PluginUiElementKind.Slider, ActionId = "slider", Minimum = 0, Maximum = 100, Step = 5 }
+            ],
+            Status = new PluginUiStatus
+            {
+                Kind = PluginUiStatusKind.Progress,
+                Message = "Scanning",
+                Progress = new PluginUiProgress
+                {
+                    Value = 5,
+                    Maximum = 10,
+                    CancelActionId = "cancel"
+                }
+            },
+            Dialog = new PluginUiDialog
+            {
+                Id = "confirm-1",
+                Kind = PluginUiDialogKind.Confirmation,
+                Title = "Confirm",
+                Message = "Continue?",
+                Actions = [new PluginUiAction("yes", "Yes")],
+                DefaultActionId = "yes",
+                CancelActionId = "no"
+            }
+        };
+
+        var roundTrip = WorkerProtocol.DeserializePayload<PluginUiSnapshot>(
+            WorkerProtocol.SerializePayload(snapshot));
+
+        Assert.Equal(snapshot.StatusMessage, roundTrip.StatusMessage);
+        Assert.Equal(snapshot.Elements.Count, roundTrip.Elements.Count);
+        Assert.Equal(snapshot.Elements.Select(element => element.Id), roundTrip.Elements.Select(element => element.Id));
+        Assert.Equal(snapshot.Status!.Kind, roundTrip.Status!.Kind);
+        Assert.Equal(snapshot.Status.Message, roundTrip.Status.Message);
+        Assert.Equal(snapshot.Status.Progress!.Value, roundTrip.Status.Progress!.Value);
+        Assert.Equal(snapshot.Dialog!.Id, roundTrip.Dialog!.Id);
+        Assert.Equal(snapshot.Dialog.Kind, roundTrip.Dialog.Kind);
+        Assert.Equal(snapshot.Dialog.Actions.Select(action => action.Id), roundTrip.Dialog.Actions.Select(action => action.Id));
+        Assert.Equal(11, roundTrip.Elements.Count);
+        Assert.Equal(PluginUiCommand.Save, roundTrip.Elements[1].Command);
+        Assert.Equal(PluginUiStatusKind.Progress, roundTrip.Status!.Kind);
+        Assert.Equal(PluginUiDialogKind.Confirmation, roundTrip.Dialog!.Kind);
+    }
+
+    [Fact]
+    public void UnknownPluginUiValuesFallBackWithoutBreakingTheSnapshot()
+    {
+        var snapshot = WorkerProtocol.DeserializePayload<PluginUiSnapshot>("""
+            {
+              "statusMessage": "legacy",
+              "values": [],
+              "actions": [],
+              "inputSurface": null,
+              "elements": [{
+                "id": "future",
+                "kind": "futureControl",
+                "command": "futureCommand",
+                "style": "futureStyle",
+                "updateMode": "futureMode"
+              }],
+              "status": { "kind": "futureStatus", "message": "still readable" }
+            }
+            """);
+
+        var element = Assert.Single(snapshot.Elements);
+        Assert.Equal(PluginUiElementKind.Unknown, element.Kind);
+        Assert.Equal(PluginUiCommand.Custom, element.Command);
+        Assert.Equal(PluginUiActionStyle.Default, element.Style);
+        Assert.Equal(PluginUiUpdateMode.Default, element.UpdateMode);
+        Assert.Equal(PluginUiStatusKind.Information, snapshot.Status!.Kind);
     }
 
     [Fact]

@@ -124,6 +124,11 @@ public sealed partial class PluginWorkspaceViewModel
         _localization.LanguageChanged -= OnLanguageChanged;
         _settings.Changed -= OnSettingsChanged;
 
+        if (_session is not null)
+        {
+            _session.UiSnapshotUpdated -= OnUiSnapshotUpdated;
+        }
+
         try
         {
             _session?.DisposeAsync().AsTask().GetAwaiter().GetResult();
@@ -174,6 +179,7 @@ public sealed partial class PluginWorkspaceViewModel
             RefreshState();
             var session = await _runtime.StartAsync(VersionDirectory).ConfigureAwait(false);
             _session = session;
+            session.UiSnapshotUpdated += OnUiSnapshotUpdated;
             await session.StartPluginAsync().ConfigureAwait(false);
             await RefreshUiAsync().ConfigureAwait(false);
             _state = session.State;
@@ -190,6 +196,7 @@ public sealed partial class PluginWorkspaceViewModel
             var session = _session;
             if (session is not null)
             {
+                session.UiSnapshotUpdated -= OnUiSnapshotUpdated;
                 _state = session.State;
                 try
                 {
@@ -269,6 +276,7 @@ public sealed partial class PluginWorkspaceViewModel
             }
             finally
             {
+                session.UiSnapshotUpdated -= OnUiSnapshotUpdated;
                 try
                 {
                     await session.DisposeAsync().ConfigureAwait(false);
@@ -314,7 +322,10 @@ public sealed partial class PluginWorkspaceViewModel
     internal Task ExecuteUiActionAsync(PluginUiActionViewModel action)
     {
         ArgumentNullException.ThrowIfNull(action);
-        return ExecuteUiActionCoreAsync(action);
+        return ExecuteUiActionCoreAsync(
+            action.Descriptor.Id,
+            action.Descriptor.Argument,
+            action.Descriptor.IsEnabled);
     }
 
     internal Task HandleUiInputAsync(PluginInputEvent input)
@@ -345,9 +356,19 @@ public sealed partial class PluginWorkspaceViewModel
         }
     }
 
-    private async Task ExecuteUiActionCoreAsync(PluginUiActionViewModel action)
+    internal Task EnsurePluginUiSnapshotLoadedAsync()
     {
-        if (!IsPluginUiActionEnabled || !action.Descriptor.IsEnabled)
+        return _uiSnapshot is null && IsRuntimeEnabled
+            ? RefreshUiAsync()
+            : Task.CompletedTask;
+    }
+
+    private async Task ExecuteUiActionCoreAsync(
+        string actionId,
+        string? argument,
+        bool descriptorEnabled = true)
+    {
+        if (!IsPluginUiActionEnabled || !descriptorEnabled)
         {
             return;
         }
@@ -378,8 +399,8 @@ public sealed partial class PluginWorkspaceViewModel
         {
             ClearUiError();
             var snapshot = await session.ExecuteUiActionAsync(
-                    action.Descriptor.Id,
-                    action.Descriptor.Argument)
+                    actionId,
+                    argument)
                 .ConfigureAwait(false);
             ApplyUiSnapshot(snapshot);
         }

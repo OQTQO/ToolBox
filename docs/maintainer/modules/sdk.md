@@ -15,11 +15,12 @@
 
 ## 不变量
 
-- 当前发布使用 `PluginApiMajor = 1`；跨平台版本升级时插件必须按目标 SDK 重建，不维护旧 SDK 二进制加载夹具。
+- 当前开发版本为 0.6.0，仍使用 `PluginApiMajor = 1`；跨平台版本升级时插件必须按目标 SDK 重建，不维护旧 SDK 二进制加载夹具。
 - SDK 不引用 Host、WPF、Core 或具体插件。
 - 插件通过 LifetimeScope 管理资源和服务 Lease。
-- 通用 UI 只传输协议数据，不允许插件注入 WPF 页面。
+- 通用 UI 只传输协议数据，不允许插件注入 WPF、XAML、HTML 或脚本页面。
+- 新 UI 通过 `PluginUiSnapshot.Elements`、`Status`、`Dialog` 和可选的 `IPluginUiUpdateSource` 扩展，原有 v1 UI 成员必须保持可用。
 
 ## 修改时检查
 
-先更新兼容性测试和开发文档，再考虑 SDK 版本变更；必须验证 HelloPlugin 和独立插件仓库仅通过 NuGet 构建。
+先更新兼容性测试和开发文档，再考虑 SDK 版本变更；必须验证旧版 UI JSON、0.6.0 HelloPlugin 和独立插件仓库仅通过 NuGet 构建。

@@ -40,7 +40,9 @@ public partial class MainWindow : Window
     private bool _hasPendingTitleBarCenterText;
     private bool _hasPendingBackgroundBrightness;
     private bool _hasPendingCornerRadius;
+    private bool _pluginDetailsTabWasManuallySelected;
     private IInputElement? _pluginDetailsReturnFocus;
+    private PluginWorkspaceViewModel? _pluginDialogWorkspace;
     private string? _pendingOverviewTitle;
     private string? _pendingOverviewHealthTitle;
     private string? _pendingTitleBarCenterText;
@@ -378,6 +380,115 @@ public partial class MainWindow : Window
         }
     }
 
+    private async void OnPluginUiElementActionClick(object sender, RoutedEventArgs e)
+    {
+        if (sender is not FrameworkElement { DataContext: PluginUiElementViewModel element }
+            || !element.IsEnabled)
+        {
+            return;
+        }
+
+        var operationKey = $"ui-element:{element.Workspace.PluginId}:{element.Id}";
+        if (!TryBeginUiOperation(operationKey))
+        {
+            return;
+        }
+
+        try
+        {
+            await RunUiOperationAsync(
+                "run plugin control",
+                () => element.Workspace.ExecuteUiElementAsync(element, element.StaticArgument));
+        }
+        finally
+        {
+            EndUiOperation(operationKey);
+        }
+    }
+
+    private async void OnPluginUiMenuItemClick(object sender, RoutedEventArgs e)
+    {
+        if (sender is not MenuItem { DataContext: PluginUiMenuItemViewModel item }
+            || !item.IsEnabled
+            || string.IsNullOrWhiteSpace(item.ActionId))
+        {
+            return;
+        }
+
+        e.Handled = true;
+        var operationKey = $"ui-menu:{item.Workspace.PluginId}:{item.ActionId}";
+        if (!TryBeginUiOperation(operationKey))
+        {
+            return;
+        }
+
+        try
+        {
+            await RunUiOperationAsync(
+                "run plugin menu command",
+                () => item.Workspace.ExecuteUiMenuItemAsync(item));
+        }
+        finally
+        {
+            EndUiOperation(operationKey);
+        }
+    }
+
+    private void OnPluginUiTextBoxKeyDown(object sender, WpfKeyEventArgs e)
+    {
+        if (e.Key != Key.Enter
+            || sender is not WpfTextBox textBox
+            || textBox.DataContext is not PluginUiElementViewModel element)
+        {
+            return;
+        }
+
+        textBox.GetBindingExpression(WpfTextBox.TextProperty)?.UpdateSource();
+        element.CommitValue();
+        e.Handled = true;
+    }
+
+    private void OnPluginUiTextBoxLostFocus(object sender, RoutedEventArgs e)
+    {
+        if (sender is not WpfTextBox textBox
+            || textBox.DataContext is not PluginUiElementViewModel element)
+        {
+            return;
+        }
+
+        textBox.GetBindingExpression(WpfTextBox.TextProperty)?.UpdateSource();
+        element.CommitValue();
+    }
+
+    private async void OnPluginUiProgressCancelClick(object sender, RoutedEventArgs e)
+    {
+        if (sender is not FrameworkElement { DataContext: PluginWorkspaceViewModel workspace }
+            || !workspace.HasPluginUiProgressCancel
+            || string.IsNullOrWhiteSpace(workspace.PluginUiProgressCancelActionId))
+        {
+            return;
+        }
+
+        var operationKey = $"ui-progress-cancel:{workspace.PluginId}";
+        if (!TryBeginUiOperation(operationKey))
+        {
+            return;
+        }
+
+        try
+        {
+            await RunUiOperationAsync(
+                "cancel plugin operation",
+                () => workspace.ExecuteUiActionAsync(
+                    workspace.PluginUiProgressCancelActionId!,
+                    workspace.PluginUiProgressCancelArgument));
+        }
+        finally
+        {
+            EndUiOperation(operationKey);
+        }
+    }
+
     private async void OnPluginInputKeyDown(object sender, WpfKeyEventArgs e)
     {
         if (sender is not FrameworkElement { DataContext: PluginWorkspaceViewModel workspace }
@@ -518,6 +629,7 @@ public partial class MainWindow : Window
 
     private void OnClosePluginDetailsClick(object sender, RoutedEventArgs e)
     {
+        UnbindPluginDialogWorkspace();
         if (DataContext is MainWindowViewModel viewModel)
         {
             viewModel.ClearSelectedPlugin();
@@ -536,7 +648,17 @@ public partial class MainWindow : Window
         PluginDetailsOverlay.BeginAnimation(UIElement.OpacityProperty, null);
         PluginDetailsTranslate.BeginAnimation(TranslateTransform.XProperty, null);
         PluginDetailsOverlay.Visibility = Visibility.Visible;
-        SetPluginDetailsTab(HostUiState.PluginDetailsTabs.Overview);
+        BindPluginDialogWorkspace();
+        _pluginDetailsTabWasManuallySelected = false;
+        var workspace = DataContext is MainWindowViewModel viewModel
+            ? viewModel.SelectedPluginWorkspace
+            : null;
+        SetPluginDetailsTab(
+            HostUiState.PluginDetailsTabs.GetDefault(workspace?.HasPluginUi == true));
+        if (workspace?.HasPluginUiUnavailable == true)
+        {
+            _ = LoadPluginUiBeforeChoosingDetailsTabAsync(workspace);
+        }
         PluginDetailsCloseButton.Focus();
 
         if (DataContext is MainWindowViewModel { ReduceMotion: true })
@@ -576,8 +698,14 @@ public partial class MainWindow : Window
             });
     }
 
+    internal void ShowPluginDetailsForAcceptance()
+    {
+        ShowPluginDetails();
+    }
+
     private void HidePluginDetails()
     {
+        UnbindPluginDialogWorkspace();
         if (PluginDetailsOverlay.Visibility != Visibility.Visible)
         {
             return;
@@ -652,8 +780,210 @@ public partial class MainWindow : Window
     {
         if (sender is FrameworkElement { Tag: string tab })
         {
+            _pluginDetailsTabWasManuallySelected = true;
             SetPluginDetailsTab(tab);
         }
+    }
+
+    private async Task LoadPluginUiBeforeChoosingDetailsTabAsync(
+        PluginWorkspaceViewModel workspace)
+    {
+        try
+        {
+            await workspace.EnsurePluginUiSnapshotLoadedAsync().ConfigureAwait(true);
+        }
+        catch
+        {
+            // The workspace exposes the UI error; the safe default is the
+            // overview tab when the snapshot cannot be loaded.
+        }
+
+        if (_pluginDetailsTabWasManuallySelected
+            || PluginDetailsOverlay.Visibility != Visibility.Visible
+            || DataContext is not MainWindowViewModel { SelectedPluginWorkspace: var selected }
+            || !ReferenceEquals(selected, workspace))
+        {
+            return;
+        }
+
+        SetPluginDetailsTab(HostUiState.PluginDetailsTabs.GetDefault(workspace.HasPluginUi));
+    }
+
+    private void BindPluginDialogWorkspace()
+    {
+        if (DataContext is not MainWindowViewModel { SelectedPluginWorkspace: { } workspace })
+        {
+            return;
+        }
+
+        if (ReferenceEquals(_pluginDialogWorkspace, workspace))
+        {
+            workspace.RaisePendingUiDialogForHost();
+            return;
+        }
+
+        UnbindPluginDialogWorkspace();
+        _pluginDialogWorkspace = workspace;
+        workspace.UiDialogRequested += OnPluginUiDialogRequested;
+        workspace.RaisePendingUiDialogForHost();
+    }
+
+    private void UnbindPluginDialogWorkspace()
+    {
+        if (_pluginDialogWorkspace is null)
+        {
+            return;
+        }
+
+        _pluginDialogWorkspace.UiDialogRequested -= OnPluginUiDialogRequested;
+        _pluginDialogWorkspace = null;
+    }
+
+    private async void OnPluginUiDialogRequested(
+        object? sender,
+        PluginUiDialogRequestedEventArgs e)
+    {
+        if (sender is not PluginWorkspaceViewModel workspace)
+        {
+            return;
+        }
+
+        var action = ShowPluginUiDialog(e.Dialog);
+        if (action is null)
+        {
+            return;
+        }
+
+        var operationKey = $"ui-dialog:{workspace.PluginId}:{e.Dialog.Id}";
+        if (!TryBeginUiOperation(operationKey))
+        {
+            return;
+        }
+
+        try
+        {
+            await RunUiOperationAsync(
+                "confirm plugin dialog",
+                () => workspace.ExecuteUiActionAsync(action.Id, action.Argument));
+        }
+        finally
+        {
+            EndUiOperation(operationKey);
+        }
+    }
+
+    private PluginUiAction? ShowPluginUiDialog(PluginUiDialog dialog)
+    {
+        PluginUiAction? selectedAction = null;
+        var actions = dialog.Actions ?? Array.Empty<PluginUiAction>();
+        var defaultAction = string.IsNullOrWhiteSpace(dialog.DefaultActionId)
+            ? null
+            : actions.FirstOrDefault(action => string.Equals(
+                action.Id,
+                dialog.DefaultActionId,
+                StringComparison.Ordinal));
+        var cancelAction = string.IsNullOrWhiteSpace(dialog.CancelActionId)
+            ? null
+            : actions.FirstOrDefault(action => string.Equals(
+                action.Id,
+                dialog.CancelActionId,
+                StringComparison.Ordinal));
+        var window = new Window
+        {
+            Owner = this,
+            Title = dialog.Title ?? string.Empty,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            SizeToContent = SizeToContent.WidthAndHeight,
+            Width = 420,
+            MinWidth = 320,
+            MaxWidth = 620,
+            ResizeMode = ResizeMode.NoResize,
+            ShowInTaskbar = false,
+            WindowStyle = WindowStyle.SingleBorderWindow,
+            Background = System.Windows.Media.Brushes.White
+        };
+
+        var root = new StackPanel { Margin = new Thickness(22) };
+        var kindLabelKey = dialog.Kind switch
+        {
+            PluginUiDialogKind.Warning => "PluginUiDialogWarning",
+            PluginUiDialogKind.Error => "PluginUiDialogError",
+            PluginUiDialogKind.Confirmation => "PluginUiDialogConfirmation",
+            _ => "PluginUiDialogInformation"
+        };
+        var kindLabel = DataContext is MainWindowViewModel viewModel
+            ? viewModel.Localize(kindLabelKey)
+            : kindLabelKey;
+        var kindText = new TextBlock
+        {
+            Text = kindLabel,
+            FontSize = 10,
+            FontWeight = FontWeights.Bold,
+            Margin = new Thickness(0, 0, 0, 8)
+        };
+        kindText.SetResourceReference(
+            TextBlock.ForegroundProperty,
+            dialog.Kind == PluginUiDialogKind.Error ? "ErrorBrush" : "MutedTextBrush");
+        root.Children.Add(kindText);
+        root.Children.Add(new TextBlock
+        {
+            Text = dialog.Message ?? string.Empty,
+            TextWrapping = TextWrapping.Wrap,
+            Margin = new Thickness(0, 0, 0, 18),
+            FontSize = 13
+        });
+
+        var buttons = new StackPanel
+        {
+            Orientation = System.Windows.Controls.Orientation.Horizontal,
+            HorizontalAlignment = System.Windows.HorizontalAlignment.Right
+        };
+        foreach (var action in actions)
+        {
+            var button = new WpfButton
+            {
+                Content = action.Label,
+                Tag = action,
+                IsEnabled = action.IsEnabled,
+                IsDefault = defaultAction is not null && ReferenceEquals(defaultAction, action),
+                IsCancel = cancelAction is not null && ReferenceEquals(cancelAction, action),
+                Margin = new Thickness(8, 0, 0, 0),
+                Padding = new Thickness(14, 8, 14, 8)
+            };
+            button.SetResourceReference(FrameworkElement.StyleProperty, "QuietButtonStyle");
+            button.Click += (_, _) =>
+            {
+                selectedAction = action;
+                window.DialogResult = true;
+            };
+            buttons.Children.Add(button);
+        }
+
+        root.Children.Add(buttons);
+        window.Content = root;
+        window.PreviewKeyDown += (_, e) =>
+        {
+            if (e.Key == Key.Escape && cancelAction is not null && cancelAction.IsEnabled)
+            {
+                selectedAction = cancelAction;
+                window.DialogResult = true;
+                e.Handled = true;
+            }
+            else if (e.Key == Key.Enter && defaultAction is not null && defaultAction.IsEnabled)
+            {
+                selectedAction = defaultAction;
+                window.DialogResult = true;
+                e.Handled = true;
+            }
+        };
+        window.ShowDialog();
+
+        if (selectedAction is not null)
+        {
+            return selectedAction;
+        }
+
+        return cancelAction;
     }
 
     private void SetPluginDetailsTab(string? tab)
@@ -965,9 +1295,8 @@ public partial class MainWindow : Window
         {
             await RunUiOperationAsync("open data directory", () =>
             {
-                var path = Path.Combine(
-                    Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                    "ToolBox");
+                var path = (DataContext as MainWindowViewModel)?.ConfigDirectory
+                    ?? throw new InvalidOperationException("The Host data directory is unavailable.");
                 Directory.CreateDirectory(path);
                 Process.Start(new ProcessStartInfo
                 {

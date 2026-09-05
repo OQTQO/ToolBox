@@ -23,6 +23,8 @@
 - 控制管道只允许当前用户连接。
 - 插件 UI 请求必须有上限；超时后终止 Worker 并保留 `RestartRequired` 状态。
 - 控制循环必须持续读取 `Cancel` 和 `Heartbeat`，不得被正在执行的插件请求占住；插件请求仍保持单请求串行执行。
+- Worker 出站消息必须经过单一写入队列；响应、错误和取消结果按 FIFO 保留，`ui.updated` 高频事件采用最新值覆盖。
+- Host 读取必须使用单一读取泵，将响应、错误、心跳和 `ui.updated` 分别路由，不能让多个请求直接竞争管道读取。
 - `Cancel` 只取消相同 `requestId` 的活动请求，并把令牌传入可取消的插件 API；Host 必须排空该请求的终止响应后再复用读取器。
 - 单条 JSON Lines 消息的读写上限固定为 1,048,576 个字符，超限使用 `WORKER_MESSAGE_TOO_LARGE`，不得先无界读取再检查。
 - 插件不配合取消时，Host 在 1 秒确认窗口后终止 Worker 并进入 `RestartRequired`；进程边界仍是最终兜底。

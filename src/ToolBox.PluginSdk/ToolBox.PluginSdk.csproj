@@ -4,8 +4,8 @@
     <RootNamespace>ToolBox.PluginSdk</RootNamespace>
     <AssemblyName>ToolBox.PluginSdk</AssemblyName>
     <PackageId>ToolBox.PluginSdk</PackageId>
-    <Version>0.5.0</Version>
-    <PackageVersion>0.5.0</PackageVersion>
+    <Version>0.6.0</Version>
+    <PackageVersion>0.6.0</PackageVersion>
     <Authors>ToolBox</Authors>
     <Description>Stable Plugin API v1 for ToolBox out-of-process plugins.</Description>
     <PackageTags>ToolBox;plugin;sdk</PackageTags>

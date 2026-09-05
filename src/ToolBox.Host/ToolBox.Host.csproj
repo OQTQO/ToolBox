@@ -8,7 +8,7 @@
     <ApplicationHighDpiMode>PerMonitorV2</ApplicationHighDpiMode>
     <RootNamespace>ToolBox.Host</RootNamespace>
     <AssemblyName>ToolBox.Host</AssemblyName>
-    <Version>0.5.0</Version>
+    <Version>0.6.0</Version>
     <ApplicationIcon>Assets\ToolBox.ico</ApplicationIcon>
     <ApplicationManifest>app.manifest</ApplicationManifest>
   </PropertyGroup>
@@ -28,7 +28,9 @@
 
   <Target Name="CopyPluginWorkerRuntime" AfterTargets="Build">
     <PropertyGroup>
-      <PluginWorkerBuildDirectory>$(MSBuildProjectDirectory)\..\ToolBox.PluginWorker\bin\$(Configuration)\net10.0</PluginWorkerBuildDirectory>
+      <LowercaseConfiguration>$([System.String]::Copy('$(Configuration)').ToLowerInvariant())</LowercaseConfiguration>
+      <PluginWorkerBuildDirectory Condition="'$(UseArtifactsOutput)' != 'true'">$(MSBuildProjectDirectory)\..\ToolBox.PluginWorker\bin\$(Configuration)\net10.0</PluginWorkerBuildDirectory>
+      <PluginWorkerBuildDirectory Condition="'$(UseArtifactsOutput)' == 'true'">$(ArtifactsPath)\$(ArtifactsBinOutputName)\ToolBox.PluginWorker\$(LowercaseConfiguration)</PluginWorkerBuildDirectory>
     </PropertyGroup>
 
     <ItemGroup>

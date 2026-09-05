@@ -36,6 +36,22 @@ pwsh -NoProfile -File .\tools\Validate-PluginSamples.ps1
 
 通用 `.tpk` 打包入口是 `tools/New-PluginPackage.ps1`。
 
+### 给插件作者的快速路径
+
+插件作者不需要引用或修改 `ToolBox.Host`。从 ToolBox GitHub Release 下载与目标 Host 相同版本的 `ToolBox-PluginDevKit-<version>.zip`，解压后使用其中的本地 `sdk/`、`tools/` 和 `NuGet.config` 创建插件项目：
+
+```powershell
+Expand-Archive .\ToolBox-PluginDevKit-0.6.0.zip -DestinationPath .\toolbox-devkit
+Copy-Item .\toolbox-devkit\samples\HelloPlugin .\MyPlugin -Recurse
+Set-Location .\MyPlugin
+dotnet restore --configfile ..\toolbox-devkit\NuGet.config
+dotnet build --configuration Release
+```
+
+然后按 [插件开发教程](docs/plugin-development.md) 修改 `IPlugin`、`manifest.json` 和可选的通用 UI，使用 DevKit 中的 `tools\New-PluginPackage.ps1` 生成 `.tpk`。插件包必须由插件发布者签名；不要把 PKCS#8 私钥提交到 GitHub。
+
+版本必须保持一致：插件的 `ToolBox.PluginSdk`、Manifest 的 `pluginApiMajor`、`formatVersion` 和目标 Host/DevKit 版本分别遵循 [Plugin API v1](docs/plugin-api-v1.md) 与 [Manifest v2](docs/plugin-manifest.md)。0.6.0 插件目标为 .NET 10、Windows x64 和 `outOfProcess`。
+
 ## 本地构建
 
 ```powershell
@@ -44,8 +60,22 @@ dotnet build ToolBox.sln --configuration Release
 dotnet test ToolBox.sln --configuration Release
 ```
 
-当前平台与 SDK 版本为 0.5.0，统一基于 .NET 10。ToolBox 的 GitHub Release 同时提供对应版本的 `ToolBox-PluginDevKit`；历史 Release 保持不改。维护资料、发布流程和历史上下文位于 [`docs/maintainer/`](docs/maintainer/) 与 [`docs/archive/`](docs/archive/)。
+## 一键 UI 验收
+
+使用长期可复用的验收入口准备并启动隔离 Host：
+
+```powershell
+pwsh -NoProfile -ExecutionPolicy Bypass -File .\tools\Start-UiAcceptance.ps1
+```
+
+也可以直接双击 `tools\Start-UiAcceptance.cmd`。
+
+脚本会构建并验证 0.6.0 Host/Worker、生成 HelloPlugin 测试包，将测试包自动安装并启用，然后打开插件详情的“操作”页。验收数据、插件目录和日志默认位于 `artifacts\ui-acceptance`，不会使用正式插件数据。
+
+需要从干净状态重新验收时使用 `-ResetAcceptanceData`；只启动上一次已经准备好的验收资源时使用 `-SkipBuild`。脚本只生成本地验收资产，不提交、推送或发布；双击 `tools\Start-UiAcceptance.cmd` 也会调用同一入口。
+
+当前开发版本与 SDK 版本为 0.6.0，统一基于 .NET 10。ToolBox 的正式 Release 资产仍保持历史版本不变；维护资料、发布流程和历史上下文位于 [`docs/maintainer/`](docs/maintainer/) 与 [`docs/archive/`](docs/archive/)。
 
 ## 当前边界
 
-ToolBox v0.5.0 强制验证 `.tpk` 的 RSA-SHA256 发布者签名，并以 TOFU 策略绑定发布者 ID 与证书指纹；Manifest v2 还必须声明平台定义的能力。签名提供包真实性与发布者密钥连续性，但 Worker 仍不是操作系统权限沙箱，当前也不提供插件商城或自动更新。
+ToolBox 0.6.0 延续 Manifest v2 和 `.tpk` 的 RSA-SHA256 发布者签名校验，并以 TOFU 策略绑定发布者 ID 与证书指纹；Manifest v2 还必须声明平台定义的能力。签名提供包真实性与发布者密钥连续性，但 Worker 仍不是操作系统权限沙箱，当前也不提供插件商城或自动更新。
